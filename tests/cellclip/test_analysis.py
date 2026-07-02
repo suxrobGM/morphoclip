@@ -1,7 +1,5 @@
 """Tests for reusable CellCLIP run analysis helpers."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pytest

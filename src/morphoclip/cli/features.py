@@ -1,6 +1,5 @@
 """`morphoclip features` command group: extract, pipeline, upload, download."""
 
-import tarfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
@@ -10,7 +9,7 @@ import torch
 import typer
 import yaml
 from dotenv import load_dotenv
-from huggingface_hub import HfApi, hf_hub_download, login
+from huggingface_hub import HfApi
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -27,13 +26,20 @@ from morphoclip.data.image_loader import discover_sites, load_site_as_tensor
 from morphoclip.data.perturbation import extract_plate_barcode
 from morphoclip.data.pipeline import PlateExtractionPipeline
 from morphoclip.data.pipeline import setup_logging as setup_pipeline_logging
+from morphoclip.utils.hf_features import (
+    DEFAULT_REPO_ID,
+    download_and_extract_archive,
+    list_local_archives,
+    list_repo_archives,
+    partition_pending_archives,
+    upload_folder,
+)
 from morphoclip.utils.s3 import choose_backend
 
 app = typer.Typer(no_args_is_help=True, help="DINOv3 feature extraction and transfer.")
 console = Console()
 
 CONFIG_PATH = Path("configs/dataset.yml")
-DEFAULT_REPO_ID = "suxrobgm/cpjump1-dinov3-features"
 
 
 # --------------------------------------------------------------------------- #
@@ -289,11 +295,6 @@ def pipeline(
 # --------------------------------------------------------------------------- #
 
 
-def _get_archives(features_dir: Path) -> list[Path]:
-    """Return sorted list of .tar.gz archives in the directory."""
-    return sorted(features_dir.glob("*.tar.gz"))
-
-
 @app.command()
 def upload(
     features_dir: Annotated[Path, typer.Option(help="Directory of .tar.gz plate archives.")] = Path(
@@ -315,7 +316,7 @@ def upload(
         )
         raise typer.Exit(1)
 
-    archives = _get_archives(features_dir)
+    archives = list_local_archives(features_dir)
     if not archives:
         console.print(f"[red]No .tar.gz archives found in {features_dir}[/red]")
         raise typer.Exit(1)
@@ -333,20 +334,11 @@ def upload(
         return
 
     load_dotenv()
-    login()
-    api = HfApi()
-    api.create_repo(repo_id=repo_id, repo_type="dataset", exist_ok=True)
     console.print(f"[green]Repository:[/green] https://huggingface.co/datasets/{repo_id}")
     console.print(f"[cyan]Starting upload with {num_workers} workers (resumable)...[/cyan]")
 
     try:
-        api.upload_large_folder(
-            repo_id=repo_id,
-            repo_type="dataset",
-            folder_path=str(features_dir),
-            revision=revision,
-            num_workers=num_workers,
-        )
+        upload_folder(features_dir, repo_id=repo_id, revision=revision, num_workers=num_workers)
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted. Re-run to resume automatically.[/yellow]")
         raise typer.Exit(130) from None
@@ -358,30 +350,6 @@ def upload(
 # --------------------------------------------------------------------------- #
 # download
 # --------------------------------------------------------------------------- #
-
-
-def _list_repo_archives(api: HfApi, repo_id: str) -> list[str]:
-    """List all .tar.gz files in the HF dataset repo."""
-    files = api.list_repo_files(repo_id=repo_id, repo_type="dataset")
-    return sorted(f for f in files if f.endswith(".tar.gz") and not f.startswith("."))
-
-
-def _download_and_extract(
-    *, api: HfApi, repo_id: str, filename: str, output_dir: Path, skip_extract: bool
-) -> str:
-    """Download a single archive and extract it. Returns a status string."""
-    plate_name = filename.removesuffix(".tar.gz")
-    plate_dir = output_dir / plate_name
-    if plate_dir.is_dir() and any(plate_dir.glob("*.pt")):
-        return f"{plate_name} (skipped, already extracted)"
-
-    local_path = hf_hub_download(repo_id=repo_id, repo_type="dataset", filename=filename)
-    if skip_extract:
-        return f"{plate_name} (downloaded)"
-
-    with tarfile.open(local_path, "r:gz") as tar:
-        tar.extractall(path=output_dir)
-    return f"{plate_name} (done)"
 
 
 @app.command()
@@ -401,7 +369,7 @@ def download(
     """Download and extract DINOv3 feature archives from a Hugging Face dataset repo."""
     load_dotenv()
     api = HfApi()
-    archives = _list_repo_archives(api, repo_id)
+    archives = list_repo_archives(api, repo_id)
     if not archives:
         console.print(f"[red]No .tar.gz archives found in {repo_id}[/red]")
         return
@@ -415,15 +383,7 @@ def download(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    pending = []
-    skipped = 0
-    for archive in archives:
-        plate_name = archive.removesuffix(".tar.gz")
-        plate_dir = output_dir / plate_name
-        if plate_dir.is_dir() and any(plate_dir.glob("*.pt")):
-            skipped += 1
-        else:
-            pending.append(archive)
+    pending, skipped = partition_pending_archives(archives, output_dir)
 
     if skipped:
         console.print(f"[dim]Skipping {skipped} already-extracted plate(s)[/dim]")
@@ -444,7 +404,7 @@ def download(
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
                 pool.submit(
-                    _download_and_extract,
+                    download_and_extract_archive,
                     api=api,
                     repo_id=repo_id,
                     filename=archive,

@@ -5,8 +5,6 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from morphoclip.data.perturbation import PerturbationInfo
-from morphoclip.models.image_encoder import MorphoCLIPImageEncoder
-from morphoclip.models.projection_head import ProjectionHead
 from morphoclip.training.batch_correction import cross_well_alignment
 from morphoclip.training.engine import autocast_context
 from morphoclip.training.losses import compute_loss
@@ -86,8 +84,8 @@ def compute_retrieval_metrics(
 
 
 def evaluate_epoch(
-    image_encoder: MorphoCLIPImageEncoder,
-    text_projection: ProjectionHead,
+    image_encoder: nn.Module,
+    text_projection: nn.Module,
     text_cache: dict,
     loader: DataLoader,
     *,

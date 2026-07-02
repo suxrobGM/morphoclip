@@ -1,7 +1,5 @@
 """Comparison tables and plots for benchmark fraction-retrieved outputs."""
 
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 from pathlib import Path

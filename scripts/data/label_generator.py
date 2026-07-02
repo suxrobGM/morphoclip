@@ -16,39 +16,20 @@ Behavior:
   with an extra `channel_count` column.
 """
 
-import argparse
 import re
 from pathlib import Path
+from typing import Annotated
 
 import pandas as pd
+import typer
+from rich.console import Console
 
 FILE_RE = re.compile(
     r"^r(?P<row>\d{2})c(?P<col>\d{2})f(?P<site>\d{2})p(?P<plane>\d{2})-ch(?P<channel>\d{1,2})sk1fk1fl1\.tiff$",
     re.IGNORECASE,
 )
 
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate labels from batch/plate/Images folders.")
-    parser.add_argument(
-        "--batch-folder",
-        type=Path,
-        default=Path("data/raw/2020_11_04_CPJUMP1"),
-        help="Batch folder that contains plate directories.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("output"),
-        help="Output directory for generated CSV files.",
-    )
-    parser.add_argument(
-        "--profiles-root",
-        type=Path,
-        default=Path("data/profiles"),
-        help="Root profiles directory containing per-batch plate folders.",
-    )
-    return parser.parse_args()
+console = Console()
 
 
 def row_to_letter(row_token: str) -> str:
@@ -68,7 +49,7 @@ def parse_plate_images(plate_folder: Path, plate_code: str) -> pd.DataFrame:
     """Parse valid image filenames under one plate's `Images` folder."""
     images_dir = plate_folder / "Images"
     if not images_dir.exists() or not images_dir.is_dir():
-        print(f"Skipping {plate_folder.name}: missing Images/")
+        console.print(f"[yellow]Skipping {plate_folder.name}: missing Images/[/yellow]")
         return pd.DataFrame(columns=["platecode", "row", "col", "site", "channel", "Well"])
 
     records: list[dict[str, str]] = []
@@ -108,7 +89,9 @@ def load_plate_profile_metadata(
         / f"{plate_code}_normalized_feature_select_negcon_batch.csv.gz"
     )
     if not profile_path.exists():
-        print(f"Warning: profile not found for plate {plate_code}: {profile_path}")
+        console.print(
+            f"[yellow]Warning: profile not found for plate {plate_code}: {profile_path}[/yellow]"
+        )
         return pd.DataFrame(columns=["Metadata_Well"])
 
     header = pd.read_csv(profile_path, nrows=0)
@@ -118,7 +101,9 @@ def load_plate_profile_metadata(
         meta_cols.append("Metadata_Well")
 
     if not meta_cols:
-        print(f"Warning: no metadata columns found in profile for {plate_code}")
+        console.print(
+            f"[yellow]Warning: no metadata columns found in profile for {plate_code}[/yellow]"
+        )
         return pd.DataFrame(columns=["Metadata_Well"])
 
     meta_df = pd.read_csv(profile_path, usecols=meta_cols)
@@ -128,23 +113,34 @@ def load_plate_profile_metadata(
     return meta_df
 
 
-def main() -> None:
-    args = parse_args()
-    batch_folder = args.batch_folder.resolve()
-    batch_name = batch_folder.name
+def main(
+    batch_folder: Annotated[
+        Path, typer.Option(help="Batch folder that contains plate directories.")
+    ] = Path("data/raw/2020_11_04_CPJUMP1"),
+    output_dir: Annotated[
+        Path, typer.Option(help="Output directory for generated CSV files.")
+    ] = Path("output"),
+    profiles_root: Annotated[
+        Path, typer.Option(help="Root profiles directory containing per-batch plate folders.")
+    ] = Path("data/profiles"),
+) -> None:
+    """Generate labels from batch/plate/Images folders."""
+    resolved_batch = batch_folder.resolve()
+    batch_name = resolved_batch.name
 
-    if not batch_folder.exists():
-        raise FileNotFoundError(f"Batch folder not found: {batch_folder}")
+    if not resolved_batch.exists():
+        console.print(f"[red]Batch folder not found: {resolved_batch}[/red]")
+        raise typer.Exit(1)
 
-    plate_folders = sorted(path for path in batch_folder.iterdir() if path.is_dir())
+    plate_folders = sorted(path for path in resolved_batch.iterdir() if path.is_dir())
     if not plate_folders:
-        print(f"No plate folders found under: {batch_folder}")
+        console.print(f"[yellow]No plate folders found under: {resolved_batch}[/yellow]")
         return
 
     per_plate_grouped: list[pd.DataFrame] = []
     for plate_folder in plate_folders:
         plate_code = plate_folder.name.split("_")[0]
-        print(plate_code)
+        console.print(plate_code)
         plate_df = parse_plate_images(plate_folder, plate_code)
         if plate_df.empty:
             continue
@@ -157,7 +153,7 @@ def main() -> None:
         )
 
         meta_df = load_plate_profile_metadata(
-            profiles_root=args.profiles_root.resolve(),
+            profiles_root=profiles_root.resolve(),
             batch_name=batch_name,
             plate_code=plate_code,
         )
@@ -166,7 +162,7 @@ def main() -> None:
         per_plate_grouped.append(grouped)
 
     if not per_plate_grouped:
-        print("No valid filenames found with expected pattern.")
+        console.print("[yellow]No valid filenames found with expected pattern.[/yellow]")
         return
 
     grouped_all = pd.concat(per_plate_grouped, ignore_index=True)
@@ -174,16 +170,16 @@ def main() -> None:
     complete_df = grouped_all[grouped_all["channel_count"] >= 5].reset_index(drop=True)
     incomplete_df = grouped_all[grouped_all["channel_count"] < 5].reset_index(drop=True)
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    labels_path = args.output_dir / "labels.csv"
-    incomplete_path = args.output_dir / "incomplete_channel_wells.csv"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    labels_path = output_dir / "labels.csv"
+    incomplete_path = output_dir / "incomplete_channel_wells.csv"
 
     complete_df.to_csv(labels_path, index=False)
     incomplete_df.to_csv(incomplete_path, index=False)
 
-    print(f"Saved {len(complete_df)} rows -> {labels_path}")
-    print(f"Saved {len(incomplete_df)} rows -> {incomplete_path}")
+    console.print(f"[green]Saved {len(complete_df)} rows -> {labels_path}[/green]")
+    console.print(f"[green]Saved {len(incomplete_df)} rows -> {incomplete_path}[/green]")
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

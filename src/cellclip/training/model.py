@@ -1,7 +1,5 @@
 """Local CellCLIP model for training on precomputed site features."""
 
-from __future__ import annotations
-
 from contextlib import nullcontext
 
 import numpy as np

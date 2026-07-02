@@ -12,6 +12,7 @@ from cellclip.training.model import (
     CellCLIPModelConfig,
     build_cellclip_model,
 )
+from cellclip.training.reporting import render_train_config, render_train_summary
 
 __all__ = [
     "CellCLIP",
@@ -21,5 +22,7 @@ __all__ = [
     "CellCLIPTrainingConfig",
     "build_cellclip_model",
     "load_training_config",
+    "render_train_config",
+    "render_train_summary",
     "train_cellclip",
 ]

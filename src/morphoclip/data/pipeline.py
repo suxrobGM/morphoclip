@@ -219,7 +219,7 @@ class PlateExtractionPipeline:
                 skipped += 1
                 continue
 
-            image_dir = self._raw_root / self._batch / plate_name / "Images"
+            image_dir = self._image_dir(plate_name)
             try:
                 record["status"] = PlateStatus.FETCHING
                 record["started_at"] = _utcnow()
@@ -276,6 +276,21 @@ class PlateExtractionPipeline:
     def _save_progress(self) -> None:
         """Persist current progress to disk."""
         save_progress(self._progress, self._progress_path)
+
+    def _image_dir(self, plate_name: str) -> Path:
+        """Resolve the raw ``Images/`` directory for a plate."""
+        return self._raw_root / self._batch / plate_name / "Images"
+
+    def _sync(self, uri: str, dest: Path) -> None:
+        """Sync an S3 path into *dest* using the pipeline's backend settings."""
+        sync_s3_path(
+            uri,
+            dest,
+            backend=self._backend,
+            no_sign_request=self._no_sign_request,
+            rclone_remote=self._rclone_remote,
+            dry_run=self._dry_run,
+        )
 
     def _compute_config_hash(self) -> str:
         """SHA-256 of the sorted plate list."""
@@ -348,7 +363,7 @@ class PlateExtractionPipeline:
         if record and record["status"] == PlateStatus.COMPLETED and record["sites_extracted"] > 0:
             return actual >= max(record["sites_extracted"], min_sites)
 
-        image_dir = self._raw_root / self._batch / plate_name / "Images"
+        image_dir = self._image_dir(plate_name)
         if not self._tensors_only and image_dir.exists():
             _, _, missing = verify_plate_features(feature_dir, image_dir)
             return len(missing) == 0
@@ -362,26 +377,12 @@ class PlateExtractionPipeline:
 
         console.print("\n[bold]Downloading metadata...[/bold]")
         platemaps_uri = build_s3_uri(self._endpoint, self._config["metadata"], self._batch)
-        sync_s3_path(
-            platemaps_uri,
-            self._metadata_root / "platemaps" / self._batch,
-            backend=self._backend,
-            no_sign_request=self._no_sign_request,
-            rclone_remote=self._rclone_remote,
-            dry_run=self._dry_run,
-        )
+        self._sync(platemaps_uri, self._metadata_root / "platemaps" / self._batch)
 
         ext_metadata_uri = build_s3_uri(
             self._endpoint, self._config["external_metadata"], self._batch
         )
-        sync_s3_path(
-            ext_metadata_uri,
-            self._metadata_root / "external_metadata",
-            backend=self._backend,
-            no_sign_request=self._no_sign_request,
-            rclone_remote=self._rclone_remote,
-            dry_run=self._dry_run,
-        )
+        self._sync(ext_metadata_uri, self._metadata_root / "external_metadata")
 
         self._progress.metadata_downloaded = True
         self._save_progress()
@@ -389,22 +390,16 @@ class PlateExtractionPipeline:
 
     def _fetch_plate(self, plate_name: str, image_dir: Path) -> None:
         """Download plate images from S3."""
-        if image_dir.exists() and _count_tiffs(image_dir) > 0:
-            console.print(f"  Raw images already present ({_count_tiffs(image_dir)} TIFFs)")
+        existing_tiffs = _count_tiffs(image_dir) if image_dir.exists() else 0
+        if existing_tiffs > 0:
+            console.print(f"  Raw images already present ({existing_tiffs} TIFFs)")
             return
 
         images_uri = build_s3_uri(self._endpoint, self._config["images"], self._batch)
         plate_uri = f"{images_uri}/{plate_name}/Images"
 
         console.print("  Fetching from S3...")
-        sync_s3_path(
-            plate_uri,
-            image_dir,
-            backend=self._backend,
-            no_sign_request=self._no_sign_request,
-            rclone_remote=self._rclone_remote,
-            dry_run=self._dry_run,
-        )
+        self._sync(plate_uri, image_dir)
 
         tiff_count = _count_tiffs(image_dir)
         console.print(f"  Downloaded {tiff_count} TIFFs")

@@ -6,15 +6,17 @@ Usage:
     python scripts/text/inspect_text_embeddings.py --device mps
 """
 
-import argparse
 import sys
 from pathlib import Path
+from typing import Annotated
+
+import pandas as pd
+import torch
+import torch.nn.functional as F
+import typer
+from rich.console import Console
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-
-import pandas as pd  # noqa: E402
-import torch  # noqa: E402
-import torch.nn.functional as F  # noqa: E402
 
 from morphoclip.models.text_encoder import MorphoCLIPTextEncoder  # noqa: E402
 from morphoclip.utils.device import resolve_device  # noqa: E402
@@ -22,6 +24,8 @@ from morphoclip.utils.device import resolve_device  # noqa: E402
 CACHE_PATH = "data/text/cached_text_features.pt"
 METADATA_DIR = Path("data/metadata/external_metadata")
 N = 5  # how many perturbations to inspect
+
+console = Console()
 
 
 def build_id_labels(metadata_dir: Path) -> dict[str, str]:
@@ -69,18 +73,17 @@ def build_id_labels(metadata_dir: Path) -> dict[str, str]:
     return labels
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Inspect cached text embeddings.")
-    parser.add_argument("--device", type=str, default="auto", help="Device (default: auto)")
-    args = parser.parse_args()
-
-    device = resolve_device(args.device)
+def main(
+    device: Annotated[str, typer.Option(help="Torch device (default: auto).")] = "auto",
+) -> None:
+    """Inspect cached text embeddings."""
+    resolved_device = resolve_device(device)
 
     cache = torch.load(CACHE_PATH, map_location="cpu")
     emb_raw: torch.Tensor = cache["embeddings"]  # [N_all, 768]
     ids: list[str] = cache["perturbation_ids"]
 
-    emb_raw_small = emb_raw[:N].to(device)
+    emb_raw_small = emb_raw[:N].to(resolved_device)
     ids_small = ids[:N]
 
     id_labels = build_id_labels(METADATA_DIR)
@@ -91,32 +94,32 @@ def main() -> None:
     sim_raw = emb_raw_norm @ emb_raw_norm.T
 
     # Projected similarities (projection head only, on cached raw features)
-    encoder = MorphoCLIPTextEncoder().eval().to(device)
+    encoder = MorphoCLIPTextEncoder().eval().to(resolved_device)
     with torch.no_grad():
         proj = encoder.projection(emb_raw_small)  # [N, 512]
         proj_norm = F.normalize(proj, dim=-1)
         sim_proj = proj_norm @ proj_norm.T
 
-    print("=== Cached text feature inspection ===")
-    print(f"Cache: {CACHE_PATH}")
-    print(f"Device: {device}")
-    print(f"Total cached perturbations: {emb_raw.shape[0]}")
-    print(f"Inspecting first {len(ids_small)} entries\n")
+    console.rule("[bold blue]Cached text feature inspection")
+    console.print(f"Cache: {CACHE_PATH}")
+    console.print(f"Device: {resolved_device}")
+    console.print(f"Total cached perturbations: {emb_raw.shape[0]}")
+    console.print(f"Inspecting first {len(ids_small)} entries")
 
-    print("--- IDs and titles ---")
+    console.print("\n[bold]IDs and titles[/bold]")
     for i, (pid, label) in enumerate(zip(ids_small, pretty, strict=False)):
-        print(f"[{i}] {pid}  ->  {label}")
+        console.print(f"[{i}] {pid}  ->  {label}", markup=False)
 
-    print("\n--- Cosine similarities (projected 512-d) ---")
+    console.print("\n[bold]Cosine similarities (projected 512-d)[/bold]")
     for i in range(len(ids_small)):
         for j in range(i + 1, len(ids_small)):
-            print(f"  {pretty[i]:35s} \u2194 {pretty[j]:35s} : {sim_proj[i, j]:.4f}")
+            console.print(f"  {pretty[i]:35s} ↔ {pretty[j]:35s} : {sim_proj[i, j]:.4f}")
 
-    print("\n--- Cosine similarities (raw 768-d, no projection head) ---")
+    console.print("\n[bold]Cosine similarities (raw 768-d, no projection head)[/bold]")
     for i in range(len(ids_small)):
         for j in range(i + 1, len(ids_small)):
-            print(f"  {pretty[i]:35s} \u2194 {pretty[j]:35s} : {sim_raw[i, j]:.4f}")
+            console.print(f"  {pretty[i]:35s} ↔ {pretty[j]:35s} : {sim_raw[i, j]:.4f}")
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

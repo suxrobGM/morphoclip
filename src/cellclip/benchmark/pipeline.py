@@ -1,7 +1,5 @@
 """Plate-at-a-time CellCLIP export pipeline with disk-bounded cleanup."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any

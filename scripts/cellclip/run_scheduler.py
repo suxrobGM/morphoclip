@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 """Run or preview the CellCLIP ChemBERTa sweep scheduler."""
 
-from __future__ import annotations
-
-import argparse
 import sys
 from pathlib import Path
+from typing import Annotated
+
+import typer
+from rich.console import Console
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -14,41 +15,32 @@ from cellclip.scheduler import load_schedule_spec, run_schedule  # noqa: E402
 
 DEFAULT_SPEC = Path("configs/cellclip/schedules/chemberta_full_benchmark.yaml")
 
-
-def build_parser() -> argparse.ArgumentParser:
-    """Build the scheduler CLI."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--spec", type=Path, default=DEFAULT_SPEC)
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--resume", action="store_true")
-    return parser
+console = Console()
 
 
-def main() -> None:
-    args = build_parser().parse_args()
-    spec = load_schedule_spec(args.spec)
+def main(
+    spec: Annotated[Path, typer.Option(help="Schedule spec YAML.")] = DEFAULT_SPEC,
+    dry_run: Annotated[bool, typer.Option(help="Preview the schedule without running it.")] = False,
+    resume: Annotated[bool, typer.Option(help="Resume an existing schedule directory.")] = False,
+) -> None:
+    """Run or preview the CellCLIP ChemBERTa sweep scheduler."""
+    schedule_spec = load_schedule_spec(spec)
 
-    print("=" * 60)
-    print("CellCLIP Scheduler")
-    print("=" * 60)
-    print(f"Spec:             {args.spec}")
-    print(f"Schedule:         {spec.schedule_name}")
-    print(f"Base config:      {spec.base_config}")
-    print(f"Dry run:          {args.dry_run}")
-    print(f"Resume:           {args.resume}")
-    print("=" * 60)
+    console.rule("[bold blue]CellCLIP Scheduler")
+    console.print(f"Spec:             {spec}")
+    console.print(f"Schedule:         {schedule_spec.schedule_name}")
+    console.print(f"Base config:      {schedule_spec.base_config}")
+    console.print(f"Dry run:          {dry_run}")
+    console.print(f"Resume:           {resume}")
 
-    schedule_dir = run_schedule(spec, dry_run=args.dry_run, resume=args.resume)
+    schedule_dir = run_schedule(schedule_spec, dry_run=dry_run, resume=resume)
 
-    print("=" * 60)
-    print("Scheduler Complete")
-    print("=" * 60)
-    print(f"Schedule dir:     {schedule_dir}")
-    if not args.dry_run:
-        print(f"Manifest:         {schedule_dir / 'manifest.jsonl'}")
-        print(f"Final report:     {schedule_dir / 'final_report.md'}")
-    print("=" * 60)
+    console.rule("[bold green]Scheduler Complete")
+    console.print(f"Schedule dir:     {schedule_dir}")
+    if not dry_run:
+        console.print(f"Manifest:         {schedule_dir / 'manifest.jsonl'}")
+        console.print(f"Final report:     {schedule_dir / 'final_report.md'}")
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

@@ -78,16 +78,17 @@ class TrainingLogger:
 
     def log_config(self, config: Any) -> None:
         """Write training config and custom scalars layout."""
-        if not self._enabled:
+        w = self._writer
+        if w is None:
             return
         config_dict = config.to_dict() if hasattr(config, "to_dict") else {}
-        self._writer.add_text(
+        w.add_text(
             "config",
             f"```yaml\n{yaml.dump(config_dict, default_flow_style=False)}```",
             global_step=0,
         )
         try:
-            self._writer.add_custom_scalars(_CUSTOM_SCALARS_LAYOUT)
+            w.add_custom_scalars(_CUSTOM_SCALARS_LAYOUT)
         except Exception:
             pass
 
@@ -105,9 +106,9 @@ class TrainingLogger:
         text_emb: torch.Tensor | None = None,
     ) -> None:
         """Log per-step training scalars and embedding diagnostics."""
-        if not self._enabled:
-            return
         w = self._writer
+        if w is None:
+            return
 
         w.add_scalar("train/loss", loss, step)
         w.add_scalar("train/lr", lr, step)
@@ -137,9 +138,9 @@ class TrainingLogger:
         eval_metrics: dict[str, float] | None = None,
     ) -> None:
         """Log per-epoch train/eval scalars and retrieval metrics."""
-        if not self._enabled:
-            return
         w = self._writer
+        if w is None:
+            return
 
         train_loss = train_metrics.get("train_loss")
         if train_loss is not None:
@@ -167,9 +168,9 @@ class TrainingLogger:
         text_projection: nn.Module,
     ) -> None:
         """Log parameter norms for model health monitoring."""
-        if not self._enabled:
-            return
         w = self._writer
+        if w is None:
+            return
         w.add_scalar("health/image_encoder_param_norm", compute_param_norm(image_encoder), step)
         w.add_scalar("health/text_projection_param_norm", compute_param_norm(text_projection), step)
 
@@ -183,9 +184,9 @@ class TrainingLogger:
         text_emb: torch.Tensor | None = None,
     ) -> None:
         """Log weight and embedding histograms (called every histogram_every_epochs)."""
-        if not self._enabled:
-            return
         w = self._writer
+        if w is None:
+            return
 
         for name, param in image_encoder.named_parameters():
             if param.requires_grad:

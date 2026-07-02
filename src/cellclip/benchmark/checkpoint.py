@@ -1,7 +1,5 @@
 """Checkpoint loading utilities for the local CellCLIP runtime."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import torch

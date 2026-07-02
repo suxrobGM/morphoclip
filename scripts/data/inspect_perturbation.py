@@ -6,16 +6,19 @@ Examples:
     python scripts/inspect_perturbation.py --example-type compound --json
 """
 
-import argparse
 import importlib.util
 import json
 import sys
 import types
 from dataclasses import fields
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-PROJECT_ROOT = Path(__file__).parent.parent
+import typer
+from rich.console import Console
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = PROJECT_ROOT / "src"
 DATA_ROOT = SRC_ROOT / "morphoclip" / "data"
 
@@ -47,6 +50,14 @@ perturbation_module = _load_module("morphoclip.data.perturbation", DATA_ROOT / "
 PerturbationInfo = perturbation_module.PerturbationInfo
 PerturbationType = perturbation_module.PerturbationType
 generate_text = perturbation_module.generate_text
+
+console = Console()
+
+
+class Level(StrEnum):
+    name_only = "name_only"
+    name_target = "name_target"
+    full = "full"
 
 
 def _type_name(value: Any) -> str:
@@ -186,65 +197,62 @@ def _render_text_output(
     return "\n".join(lines)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Inspect MorphoCLIP perturbation types, fields, and metadata-backed examples."
-    )
-    parser.add_argument("--config", type=Path, default=Path("configs/dataset.yml"))
-    parser.add_argument("--metadata-dir", type=Path, default=None)
-    parser.add_argument("--batch", type=str, default=None)
-    parser.add_argument("--plate", type=str, default=None, help="Plate barcode, e.g. BR00116991.")
-    parser.add_argument("--well", type=str, default=None, help="Well position, e.g. A01.")
-    parser.add_argument(
-        "--level",
-        type=str,
-        choices=["name_only", "name_target", "full"],
-        default="full",
-        help="Text generation level used for examples and metadata lookup.",
-    )
-    parser.add_argument(
-        "--example-type",
-        type=str,
-        choices=[member.value for member in PerturbationType],
-        default=None,
-        help="Restrict template output to one perturbation type.",
-    )
-    parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
-    args = parser.parse_args()
-
-    if (args.plate is None) != (args.well is None):
-        parser.error("--plate and --well must be provided together.")
+def main(
+    config: Annotated[Path, typer.Option(help="Dataset config YAML.")] = Path(
+        "configs/dataset.yml"
+    ),
+    metadata_dir: Annotated[
+        Path | None, typer.Option(help="Metadata directory (default: from config).")
+    ] = None,
+    batch: Annotated[str | None, typer.Option(help="Batch name (default: from config).")] = None,
+    plate: Annotated[str | None, typer.Option(help="Plate barcode, e.g. BR00116991.")] = None,
+    well: Annotated[str | None, typer.Option(help="Well position, e.g. A01.")] = None,
+    level: Annotated[
+        Level, typer.Option(help="Text generation level used for examples and metadata lookup.")
+    ] = Level.full,
+    example_type: Annotated[
+        PerturbationType | None,
+        typer.Option(help="Restrict template output to one perturbation type."),
+    ] = None,
+    json_output: Annotated[
+        bool, typer.Option("--json/--no-json", help="Emit machine-readable JSON.")
+    ] = False,
+) -> None:
+    """Inspect MorphoCLIP perturbation types, fields, and metadata-backed examples."""
+    if (plate is None) != (well is None):
+        raise typer.BadParameter("--plate and --well must be provided together.")
 
     schema = _field_schema()
     example_infos = _build_examples()
 
     selected_examples: list[dict[str, Any]] = []
     for pert_type, info in example_infos.items():
-        if args.example_type is not None and pert_type.value != args.example_type:
+        if example_type is not None and pert_type != example_type:
             continue
         selected_examples.append(
             {
                 "pert_type": pert_type.value,
                 "info": _info_to_dict(info),
                 "text_by_level": {
-                    level: generate_text(info, level=level)
-                    for level in ("name_only", "name_target", "full")
+                    text_level: generate_text(info, level=text_level)
+                    for text_level in ("name_only", "name_target", "full")
                 },
             }
         )
 
     lookup_result: dict[str, Any] | None = None
-    if args.plate is not None and args.well is not None:
+    if plate is not None and well is not None:
         try:
-            index = _load_index(args.config, args.metadata_dir, args.batch)
+            index = _load_index(config, metadata_dir, batch)
         except RuntimeError as exc:
-            parser.error(str(exc))
-        info = index.lookup(args.plate, args.well)
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(1) from exc
+        info = index.lookup(plate, well)
         lookup_result = {
-            "plate": args.plate,
-            "well": args.well.upper(),
-            "level": args.level,
-            "text": generate_text(info, level=args.level),
+            "plate": plate,
+            "well": well.upper(),
+            "level": level,
+            "text": generate_text(info, level=level),
             "info": _info_to_dict(info),
         }
 
@@ -255,12 +263,12 @@ def main() -> None:
         "lookup": lookup_result,
     }
 
-    if args.json:
+    if json_output:
         print(json.dumps(payload, indent=2))
         return
 
-    print(_render_text_output(schema, selected_examples, lookup_result))
+    console.print(_render_text_output(schema, selected_examples, lookup_result), markup=False)
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

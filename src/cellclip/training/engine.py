@@ -1,33 +1,32 @@
 """Training loop for local CellCLIP.
 
-Supports single-GPU and multi-GPU (DDP via ``torchrun``) training
-with optional TensorBoard logging.
+Supports single-GPU and multi-GPU (DDP via ``torchrun``) training with optional
+TensorBoard logging. Optimizer/scheduler/checkpointing live in
+:mod:`cellclip.training.optim`; evaluation in :mod:`cellclip.training.evaluate`.
 """
-
-from __future__ import annotations
 
 import math
 import time
 from contextlib import ExitStack
-from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import torch
 import torch.distributed as torch_dist
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.optim import AdamW
-from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from cellclip.training.augment import FeatureBagAugmenter
 from cellclip.training.config import CellCLIPTrainingConfig
 from cellclip.training.dataset import prepare_datasets
+from cellclip.training.evaluate import _move_optional_tokens, _move_tokens, evaluate_epoch
 from cellclip.training.losses import compute_loss
-from cellclip.training.model import build_cellclip_model
+from cellclip.training.model import CellCLIP, build_cellclip_model
+from cellclip.training.optim import build_optimizer, build_scheduler, save_checkpoint
+from morphoclip.training.config import TensorBoardConfig
 from morphoclip.training.distributed import (
     DistributedState,
     all_reduce_scalar,
@@ -37,70 +36,6 @@ from morphoclip.training.distributed import (
 from morphoclip.training.metrics import compute_grad_norm, compute_logit_stats
 from morphoclip.training.tb_logger import TrainingLogger
 from morphoclip.utils.device import autocast_context, resolve_device, resolve_num_workers
-
-
-def build_optimizer(model: nn.Module, config: CellCLIPTrainingConfig) -> AdamW:
-    """Build AdamW with CLIP-style decay exclusions."""
-    decay: list[torch.nn.Parameter] = []
-    no_decay: list[torch.nn.Parameter] = []
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            continue
-        lowered = name.lower()
-        if (
-            param.ndim < 2
-            or "bias" in lowered
-            or "ln" in lowered
-            or "norm" in lowered
-            or "logit_scale" in lowered
-        ):
-            no_decay.append(param)
-        else:
-            decay.append(param)
-
-    opt_cfg = config.optimization
-    return AdamW(
-        [
-            {"params": no_decay, "weight_decay": 0.0},
-            {"params": decay, "weight_decay": opt_cfg.weight_decay},
-        ],
-        lr=opt_cfg.lr,
-        betas=opt_cfg.betas,
-        eps=opt_cfg.eps,
-    )
-
-
-def build_scheduler(
-    optimizer: AdamW,
-    *,
-    total_steps: int,
-    warmup_steps: int,
-) -> LambdaLR:
-    """Warmup + cosine decay scheduler."""
-
-    def lr_lambda(step: int) -> float:
-        if total_steps <= 0:
-            return 1.0
-        if step < warmup_steps:
-            return float(step + 1) / float(max(1, warmup_steps))
-        progress = float(step - warmup_steps) / float(max(1, total_steps - warmup_steps))
-        progress = min(max(progress, 0.0), 1.0)
-        return 0.5 * (1.0 + math.cos(math.pi * progress))
-
-    return LambdaLR(optimizer, lr_lambda=lr_lambda)
-
-
-def _move_tokens(tokens: dict[str, torch.Tensor], device: torch.device) -> dict[str, torch.Tensor]:
-    return {key: value.to(device, non_blocking=True) for key, value in tokens.items()}
-
-
-def _move_optional_tokens(
-    tokens: dict[str, torch.Tensor] | None,
-    device: torch.device,
-) -> dict[str, torch.Tensor] | None:
-    if tokens is None:
-        return None
-    return _move_tokens(tokens, device)
 
 
 def _build_augmenter(prepared, config: CellCLIPTrainingConfig) -> FeatureBagAugmenter | None:
@@ -113,116 +48,6 @@ def _build_augmenter(prepared, config: CellCLIPTrainingConfig) -> FeatureBagAugm
         within_well_interp_sites=config.dataset.within_well_interp_sites,
         same_pert_interp_sites=config.dataset.same_pert_interp_sites,
         interp_alpha=config.dataset.interp_alpha,
-    )
-
-
-def compute_retrieval_metrics(
-    image_features: torch.Tensor,
-    text_features: torch.Tensor,
-) -> dict[str, float]:
-    """Compute retrieval metrics for both directions."""
-    logits = image_features @ text_features.t()
-    results: dict[str, float] = {}
-    for prefix, score_matrix in (
-        ("image_to_text", logits),
-        ("text_to_image", logits.t()),
-    ):
-        order = torch.argsort(score_matrix, dim=1, descending=True)
-        target = torch.arange(score_matrix.shape[0], device=score_matrix.device).unsqueeze(1)
-        ranks = torch.argmax((order == target).to(torch.int64), dim=1) + 1
-        results[f"{prefix}_mean_rank"] = float(ranks.float().mean().item())
-        results[f"{prefix}_median_rank"] = float(ranks.float().median().item())
-        for k in (1, 5, 10):
-            results[f"{prefix}_R@{k}"] = float((ranks <= k).float().mean().item())
-    return results
-
-
-def evaluate_epoch(
-    model: nn.Module,
-    loader,
-    *,
-    device: torch.device,
-    loss_type: str,
-    amp: bool,
-) -> dict[str, float]:
-    """Run one evaluation epoch."""
-    model.eval()
-    losses: list[float] = []
-    image_batches: list[torch.Tensor] = []
-    text_batches: list[torch.Tensor] = []
-
-    # Unwrap DDP for encode_mil access
-    raw_model = model.module if hasattr(model, "module") else model
-
-    with torch.no_grad():
-        for batch in loader:
-            features = batch["features"].to(device, non_blocking=True)
-            text_tokens = _move_tokens(batch["text_tokens"], device)
-            smiles_tokens = _move_optional_tokens(batch.get("smiles_tokens"), device)
-            has_smiles = batch.get("has_smiles")
-            if has_smiles is not None:
-                has_smiles = has_smiles.to(device, non_blocking=True)
-            with autocast_context(device, amp):
-                pooled_images = raw_model.encode_mil(features)
-                outputs = model(
-                    pooled_images,
-                    text_tokens,
-                    smiles=smiles_tokens,
-                    has_smiles=has_smiles,
-                )
-                image_features, text_features, logit_scale = outputs[:3]
-                loss = compute_loss(
-                    loss_type,
-                    pooled_images,
-                    image_features,
-                    text_features,
-                    logit_scale,
-                )
-            losses.append(float(loss.detach().cpu().item()))
-            image_batches.append(image_features.detach().cpu())
-            text_batches.append(text_features.detach().cpu())
-
-    metrics = {"eval_loss": float(sum(losses) / max(1, len(losses)))}
-    if image_batches:
-        metrics.update(
-            compute_retrieval_metrics(
-                torch.cat(image_batches, dim=0),
-                torch.cat(text_batches, dim=0),
-            )
-        )
-    return metrics
-
-
-def _unwrap_state_dict(module: nn.Module) -> dict[str, Any]:
-    """Get state_dict stripping DDP wrapper if present."""
-    inner = module.module if hasattr(module, "module") else module
-    return inner.state_dict()
-
-
-def save_checkpoint(
-    path: Path,
-    *,
-    model: nn.Module,
-    optimizer: AdamW,
-    scheduler: LambdaLR,
-    epoch: int,
-    global_step: int,
-    best_eval_loss: float,
-    config: CellCLIPTrainingConfig,
-) -> None:
-    """Save a training checkpoint (DDP-safe)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {
-            "model": _unwrap_state_dict(model),
-            "optimizer": optimizer.state_dict(),
-            "scheduler": scheduler.state_dict(),
-            "epoch": epoch,
-            "steps": global_step,
-            "best_eval_loss": best_eval_loss,
-            "config": asdict(config),
-        },
-        path,
     )
 
 
@@ -280,6 +105,7 @@ def _train_loop(
 
     # --- DDP wrapping ---
     if use_ddp:
+        assert dist_state is not None  # implied by use_ddp
         model = DDP(
             model,
             device_ids=[dist_state.local_rank],
@@ -289,6 +115,7 @@ def _train_loop(
     # --- Distributed sampler ---
     train_sampler: DistributedSampler | None = None
     if use_ddp:
+        assert dist_state is not None  # implied by use_ddp
         train_sampler = DistributedSampler(
             prepared.train_dataset,
             num_replicas=dist_state.world_size,
@@ -323,7 +150,7 @@ def _train_loop(
 
     # --- TensorBoard logger ---
     rank = dist_state.rank if dist_state else 0
-    logger = TrainingLogger(run_dir, config.tensorboard, rank=rank)
+    logger = TrainingLogger(run_dir, cast(TensorBoardConfig, config.tensorboard), rank=rank)
     logger.log_config(config)
 
     history: list[dict[str, float | int]] = []
@@ -332,7 +159,7 @@ def _train_loop(
     best_checkpoint_path = run_dir / "checkpoints" / "best.pt"
     last_checkpoint_path = run_dir / "checkpoints" / "last.pt"
 
-    raw_model = model.module if hasattr(model, "module") else model
+    raw_model = cast(CellCLIP, model.module if hasattr(model, "module") else model)
 
     for epoch in range(1, config.optimization.epochs + 1):
         if global_step >= total_steps:
@@ -374,7 +201,7 @@ def _train_loop(
             # Skip gradient sync during accumulation
             sync_ctx = ExitStack()
             if is_accumulating and use_ddp:
-                sync_ctx.enter_context(model.no_sync())
+                sync_ctx.enter_context(cast(DDP, model).no_sync())
 
             with sync_ctx:
                 with autocast_context(device, config.runtime.amp):
@@ -419,7 +246,7 @@ def _train_loop(
                 epoch_losses.append(loss_value)
 
                 if is_main and global_step % config.runtime.log_every_steps == 0:
-                    current_lr = scheduler.get_last_lr()[0]
+                    current_lr = float(scheduler.get_last_lr()[0])
                     current_tau = raw_model.logit_scale.exp().item()
                     print(
                         f"epoch={epoch} step={global_step}/{total_steps} "

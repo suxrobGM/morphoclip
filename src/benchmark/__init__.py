@@ -5,7 +5,6 @@ from benchmark.data import (
     get_feature_columns,
     get_metadata_columns,
 )
-from benchmark.evaluate import BenchmarkEvaluator, EvaluationConfig
 from benchmark.metrics import (
     CopairsMode,
     compute_fraction_retrieved,
@@ -18,9 +17,7 @@ __all__ = [
     "get_metadata_columns",
     "get_feature_columns",
     "CopairsMode",
-    "EvaluationConfig",
     "compute_map",
     "compute_fraction_retrieved",
     "run_map_pipeline",
-    "BenchmarkEvaluator",
 ]

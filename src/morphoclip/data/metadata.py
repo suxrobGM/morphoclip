@@ -4,8 +4,6 @@ Parses plate maps, barcode mappings, and external metadata TSVs,
 then caches the full lookup for fast access during training.
 """
 
-from __future__ import annotations
-
 import csv
 import logging
 from pathlib import Path
