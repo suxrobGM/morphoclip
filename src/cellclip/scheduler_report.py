@@ -6,10 +6,10 @@ import csv
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from cellclip.scheduler import ScheduleSpec
+from cellclip.scheduler_spec import BENCHMARK_COMPARE_KEYS
 
-BENCHMARK_COMPARE_KEYS = ("baseline", "pretrained_clip")
+if TYPE_CHECKING:
+    from cellclip.scheduler_spec import ScheduleSpec
 
 
 def _read_summary_table(path: Path, kind: str) -> list[dict[str, str]]:

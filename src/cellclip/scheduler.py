@@ -1,91 +1,60 @@
-"""Sequential experiment scheduler for CellCLIP ChemBERTa sweeps."""
+"""Sequential experiment scheduler for CellCLIP ChemBERTa sweeps.
+
+Config dataclasses live in :mod:`cellclip.scheduler_spec`, stage builders in
+:mod:`cellclip.scheduler_planning`, ranking in :mod:`cellclip.scheduler_ranking`,
+and manifest/CSV I/O in :mod:`cellclip.scheduler_io`. This coordinator keeps
+``PROJECT_ROOT`` and every function that reads it (path builders, the runner,
+overlay-config writer, job runner, and ``run_schedule``) — tests monkeypatch
+``cellclip.scheduler.PROJECT_ROOT``, which is resolved in this module's namespace
+at call time.
+"""
 
 from __future__ import annotations
 
-import csv
-import json
 import shlex
 import subprocess
-from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from cellclip.scheduler_io import _read_json, _write_csv, append_manifest, load_manifest
+from cellclip.scheduler_planning import (
+    build_stage1_jobs,
+    build_stage2_jobs,
+    build_stage3_jobs,
+)
+from cellclip.scheduler_ranking import _leaderboard_rows, rank_records
 from cellclip.scheduler_report import write_final_report
+from cellclip.scheduler_spec import (
+    BENCHMARK_COMPARE_KEYS,
+    TUNING_MODE_OVERRIDES,
+    CandidateSpec,
+    Runner,
+    ScheduleSpec,
+    StageBudget,
+    StageJob,
+    _now_iso,
+    _read_yaml,
+)
+
+__all__ = [
+    "PROJECT_ROOT",
+    "ScheduleSpec",
+    "load_schedule_spec",
+    "build_stage1_jobs",
+    "build_stage2_jobs",
+    "rank_records",
+    "load_manifest",
+    "run_schedule",
+]
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-BENCHMARK_COMPARE_KEYS = ("baseline", "pretrained_clip")
-TUNING_MODE_OVERRIDES = {
-    "frozen": {"freeze_chemberta": True, "chemberta_tune_layers": 0},
-    "top2": {"freeze_chemberta": False, "chemberta_tune_layers": 2},
-    "full": {"freeze_chemberta": False, "chemberta_tune_layers": 0},
-}
-
-
-@dataclass(frozen=True)
-class StageBudget:
-    """Budget and promotion settings for one scheduler stage."""
-
-    name: str
-    max_train_steps: int | None
-    max_eval_wells: int | None
-    promote_top: int | None
-
-
-@dataclass(frozen=True)
-class CandidateSpec:
-    """One ChemBERTa candidate family."""
-
-    candidate_id: str
-    model: dict[str, Any]
-    dataset: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class ScheduleSpec:
-    """Resolved sweep configuration."""
-
-    schedule_name: str
-    base_config: Path
-    compare_full_benchmark_dirs: dict[str, Path]
-    stage_budgets: dict[str, StageBudget]
-    stage1_candidates: list[CandidateSpec]
-    stage2_tuning_modes: list[str]
-    benchmark_timelines: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class StageJob:
-    """One runnable stage candidate."""
-
-    stage: str
-    candidate_id: str
-    family_id: str
-    model_overrides: dict[str, Any]
-    dataset_overrides: dict[str, Any]
-
-
-Runner = Callable[[list[str], Path], None]
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def _resolve_project_path(value: str | Path) -> Path:
     path = Path(value)
     return path if path.is_absolute() else PROJECT_ROOT / path
-
-
-def _read_yaml(path: Path) -> dict[str, Any]:
-    with open(path, encoding="utf-8") as f:
-        payload = yaml.safe_load(f) or {}
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected mapping YAML in {path}")
-    return payload
 
 
 def load_schedule_spec(path: str | Path) -> ScheduleSpec:
@@ -133,115 +102,6 @@ def load_schedule_spec(path: str | Path) -> ScheduleSpec:
         stage2_tuning_modes=tuning_modes,
         benchmark_timelines=benchmark_timelines,
     )
-
-
-def build_stage1_jobs(spec: ScheduleSpec) -> list[StageJob]:
-    """Return the fixed Stage 1 ChemBERTa candidate set."""
-    return [
-        StageJob(
-            stage="stage1",
-            candidate_id=candidate.candidate_id,
-            family_id=candidate.candidate_id,
-            model_overrides=dict(candidate.model),
-            dataset_overrides=dict(candidate.dataset),
-        )
-        for candidate in spec.stage1_candidates
-    ]
-
-
-def build_stage2_jobs(spec: ScheduleSpec, promoted_families: list[str]) -> list[StageJob]:
-    """Expand promoted Stage 1 families across tuning modes."""
-    family_map = {candidate.candidate_id: candidate for candidate in spec.stage1_candidates}
-    jobs: list[StageJob] = []
-    for family_id in promoted_families:
-        base_candidate = family_map[family_id]
-        for tuning_mode in spec.stage2_tuning_modes:
-            overrides = dict(base_candidate.model)
-            overrides.update(TUNING_MODE_OVERRIDES[tuning_mode])
-            jobs.append(
-                StageJob(
-                    stage="stage2",
-                    candidate_id=f"{family_id}__{tuning_mode}",
-                    family_id=family_id,
-                    model_overrides=overrides,
-                    dataset_overrides=dict(base_candidate.dataset),
-                )
-            )
-    return jobs
-
-
-def build_stage3_jobs(stage2_records: list[dict[str, Any]]) -> list[StageJob]:
-    """Promote selected Stage 2 records into full runs."""
-    jobs: list[StageJob] = []
-    for record in stage2_records:
-        jobs.append(
-            StageJob(
-                stage="stage3",
-                candidate_id=record["candidate_id"],
-                family_id=record["family_id"],
-                model_overrides=dict(record["model_overrides"]),
-                dataset_overrides=dict(record.get("dataset_overrides", {})),
-            )
-        )
-    return jobs
-
-
-def _score_tuple(record: dict[str, Any]) -> tuple[float, float, float, float, float]:
-    summary = record.get("analysis_summary", {})
-    primary = summary.get("primary", summary)
-    compound = primary.get("compound_eval_retrieval", {})
-    overall = primary.get("eval_retrieval", {})
-    metrics = primary.get("final_metrics", {})
-    split_pca = primary.get("split_pca", {}).get("compound", {})
-    image_pca = split_pca.get("image", {})
-    text_pca = split_pca.get("text", {})
-    return (
-        -float(compound.get("broad_sample_R@1", 0.0)),
-        -float(overall.get("broad_sample_R@1", 0.0)),
-        -float(metrics.get("text_to_image_R@10", 0.0)),
-        float(image_pca.get("top1_fraction", 1.0)),
-        float(text_pca.get("top1_fraction", 1.0)),
-    )
-
-
-def rank_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Sort completed records using the fixed promotion order."""
-    completed = [record for record in records if record.get("status") == "completed"]
-    return sorted(completed, key=_score_tuple)
-
-
-def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not rows:
-        path.write_text("", encoding="utf-8")
-        return
-    fieldnames = sorted({key for row in rows for key in row})
-    with open(path, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def load_manifest(path: Path) -> dict[tuple[str, str], dict[str, Any]]:
-    """Load the latest manifest row for each stage/candidate pair."""
-    records: dict[tuple[str, str], dict[str, Any]] = {}
-    if not path.exists():
-        return records
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            key = (row["stage"], row["candidate_id"])
-            records[key] = row
-    return records
-
-
-def append_manifest(path: Path, record: dict[str, Any]) -> None:
-    """Append one scheduler record to a JSONL manifest."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record, sort_keys=True) + "\n")
 
 
 def default_runner(command: list[str], log_path: Path) -> None:
@@ -315,11 +175,6 @@ def _write_overlay_config(
     with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump(payload, f, sort_keys=False)
     return path
-
-
-def _read_json(path: Path) -> dict[str, Any]:
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
 
 
 def _run_job(
@@ -415,35 +270,6 @@ def _run_job(
         record["error"] = f"command exited with {exc.returncode}: {' '.join(exc.cmd)}"
     record["finished_at"] = _now_iso()
     return record
-
-
-def _leaderboard_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for rank, record in enumerate(rank_records(records), start=1):
-        primary = record["analysis_summary"]["primary"]
-        rows.append(
-            {
-                "rank": rank,
-                "candidate_id": record["candidate_id"],
-                "family_id": record["family_id"],
-                "stage": record["stage"],
-                "status": record["status"],
-                "compound_broad_sample_R@1": primary["compound_eval_retrieval"].get(
-                    "broad_sample_R@1", 0.0
-                ),
-                "overall_broad_sample_R@1": primary["eval_retrieval"].get("broad_sample_R@1", 0.0),
-                "text_to_image_R@10": primary["final_metrics"].get("text_to_image_R@10", 0.0),
-                "compound_image_top1_fraction": primary["split_pca"]["compound"]["image"].get(
-                    "top1_fraction", 1.0
-                ),
-                "compound_text_top1_fraction": primary["split_pca"]["compound"]["text"].get(
-                    "top1_fraction", 1.0
-                ),
-                "run_dir": record["run_dir"],
-                "analysis_summary_path": record["analysis_summary_path"],
-            }
-        )
-    return rows
 
 
 def print_dry_run(spec: ScheduleSpec) -> None:
