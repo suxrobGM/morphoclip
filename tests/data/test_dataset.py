@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import torch
 
-import benchmark.splits as splits_module
+import benchmark.split_contexts as split_contexts_module
 from benchmark.splits import (
     build_split_groups as benchmark_build_split_groups,
 )
@@ -287,7 +287,7 @@ class TestCreateSplits:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            splits_module,
+            split_contexts_module,
             "OFFICIAL_SPLIT_METADATA_PATH",
             official_split_metadata_csv,
         )
@@ -323,7 +323,7 @@ class TestCreateSplits:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            splits_module,
+            split_contexts_module,
             "OFFICIAL_SPLIT_METADATA_PATH",
             official_split_metadata_csv,
         )
@@ -353,7 +353,7 @@ class TestCreateSplits:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            splits_module,
+            split_contexts_module,
             "OFFICIAL_SPLIT_METADATA_PATH",
             official_split_metadata_csv,
         )
@@ -393,7 +393,7 @@ class TestCreateSplits:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            splits_module,
+            split_contexts_module,
             "OFFICIAL_SPLIT_METADATA_PATH",
             official_split_metadata_csv,
         )
@@ -435,7 +435,7 @@ class TestCreateSplits:
             + "\n",
             encoding="utf-8",
         )
-        monkeypatch.setattr(splits_module, "METADATA_PATH", experiment_metadata_tsv)
+        monkeypatch.setattr(split_contexts_module, "METADATA_PATH", experiment_metadata_tsv)
 
         for plate, well in [
             ("BR00116991", "A01"),
@@ -483,7 +483,7 @@ class TestCreateSplits:
             + "\n",
             encoding="utf-8",
         )
-        monkeypatch.setattr(splits_module, "METADATA_PATH", experiment_metadata_tsv)
+        monkeypatch.setattr(split_contexts_module, "METADATA_PATH", experiment_metadata_tsv)
 
         for plate, well in [
             ("BR00116991", "A01"),
@@ -510,7 +510,7 @@ class TestCreateSplits:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            splits_module,
+            split_contexts_module,
             "OFFICIAL_SPLIT_METADATA_PATH",
             official_split_metadata_csv,
         )

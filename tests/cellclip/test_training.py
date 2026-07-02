@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-import benchmark.splits as splits_module
+import benchmark.split_contexts as split_contexts_module
 from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
 from cellclip.training.config import (
     CellCLIPDatasetConfig,
@@ -87,7 +87,7 @@ def test_prepare_datasets_uses_official_subsets(
     official_split_metadata_csv: Path,
 ) -> None:
     monkeypatch.setattr(
-        splits_module,
+        split_contexts_module,
         "OFFICIAL_SPLIT_METADATA_PATH",
         official_split_metadata_csv,
     )
