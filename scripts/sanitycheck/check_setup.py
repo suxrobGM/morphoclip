@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 """Basic environment sanity check for MorphoCLIP setups."""
 
-import argparse
 import importlib
 import sys
+from enum import StrEnum
 from pathlib import Path
+from typing import Annotated
+
+import typer
+from rich.console import Console
+
+console = Console()
+
+# Body messages carry literal ``[OK]``/``[FAIL]`` tokens, so they are printed with
+# ``markup=False`` and colorized via ``style=`` to avoid Rich parsing the brackets.
+_STATUS_STYLES = {"[OK]": "green", "[FAIL]": "red bold", "[WARN]": "yellow", "[INFO]": "cyan"}
 
 REQUIRED_IMPORTS = [
     "PIL",
@@ -28,6 +38,17 @@ REQUIRED_IMPORTS = [
 OPTIONAL_IMPORTS = [
     "tensorboard",
 ]
+
+
+class DeviceMode(StrEnum):
+    auto = "auto"
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+def _emit(message: str) -> None:
+    style = next((s for prefix, s in _STATUS_STYLES.items() if message.startswith(prefix)), None)
+    console.print(f"  - {message}", style=style, markup=False)
 
 
 def _check_python_version() -> tuple[bool, str]:
@@ -128,24 +149,15 @@ def _check_torch(device_mode: str, expected_cuda: str | None) -> tuple[bool, lis
     return ok, messages
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Sanity check MorphoCLIP environment.")
-    parser.add_argument(
-        "--device",
-        choices=["auto", "cpu", "gpu"],
-        default="auto",
-        help="Device mode for torch sanity check.",
-    )
-    parser.add_argument(
-        "--expected-cuda",
-        default=None,
-        help="Expected CUDA runtime prefix, e.g. '12.1', '12.4', '12.8'.",
-    )
-    return parser.parse_args()
-
-
-def main() -> int:
-    args = parse_args()
+def main(
+    device: Annotated[
+        DeviceMode, typer.Option(help="Device mode for torch sanity check.")
+    ] = DeviceMode.auto,
+    expected_cuda: Annotated[
+        str | None, typer.Option(help="Expected CUDA runtime prefix, e.g. '12.1', '12.4', '12.8'.")
+    ] = None,
+) -> None:
+    """Sanity check MorphoCLIP environment."""
     checks: list[tuple[str, bool, list[str]]] = []
 
     py_ok, py_msg = _check_python_version()
@@ -160,27 +172,26 @@ def main() -> int:
     files_ok, file_msgs = _check_project_files()
     checks.append(("Project layout", files_ok, file_msgs))
 
-    torch_ok, torch_msgs = _check_torch(args.device, args.expected_cuda)
+    torch_ok, torch_msgs = _check_torch(device, expected_cuda)
     checks.append(("Torch/CUDA", torch_ok, torch_msgs))
 
-    print("=== MorphoCLIP Environment Sanity Check ===")
-    print()
+    console.rule("[bold blue]MorphoCLIP Environment Sanity Check")
     overall_ok = True
     for name, ok, messages in checks:
         status = "PASS" if ok else "FAIL"
-        print(f"[{status}] {name}")
+        console.print(f"[{status}] {name}", style="green bold" if ok else "red bold", markup=False)
         for message in messages:
-            print(f"  - {message}")
-        print()
+            _emit(message)
+        console.print()
         overall_ok = overall_ok and ok
 
     if overall_ok:
-        print("All sanity checks passed.")
-        return 0
+        console.print("[green]All sanity checks passed.[/green]")
+        return
 
-    print("One or more sanity checks failed.")
-    return 1
+    console.print("[red]One or more sanity checks failed.[/red]")
+    raise typer.Exit(1)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    typer.run(main)

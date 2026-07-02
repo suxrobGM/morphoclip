@@ -17,15 +17,16 @@ Usage:
     uv run python scripts/features/diagnose_features.py --max-sites 500
 """
 
-import argparse
 import json
 import random
 import sys
 from pathlib import Path
+from typing import Annotated
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import typer
 import yaml
 from rich.console import Console
 
@@ -396,24 +397,23 @@ def plot_variance_decomp(metrics: dict, output_dir: Path) -> Path:
 # main
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Diagnose DINOv3 feature extraction quality.")
-    parser.add_argument("--config", type=Path, default=Path("configs/dataset.yml"))
-    parser.add_argument("--plate", type=str, help="Diagnose a specific plate.")
-    parser.add_argument(
-        "--max-sites", type=int, default=500, help="Max sites to sample (default: 500)."
-    )
-    parser.add_argument("--output-dir", type=Path, default=None, help="Override output directory.")
-    args = parser.parse_args()
+def main(
+    config: Annotated[Path, typer.Option(help="Dataset config YAML.")] = Path(
+        "configs/dataset.yml"
+    ),
+    plate: Annotated[str | None, typer.Option(help="Diagnose a specific plate.")] = None,
+    max_sites: Annotated[int, typer.Option(help="Max sites to sample.")] = 500,
+    output_dir: Annotated[Path | None, typer.Option(help="Override output directory.")] = None,
+) -> None:
+    """Diagnose DINOv3 feature extraction quality."""
+    with open(config) as f:
+        cfg = yaml.safe_load(f)["cpjump"]
 
-    with open(args.config) as f:
-        config = yaml.safe_load(f)["cpjump"]
-
-    local = config.get("local", {})
+    local = cfg.get("local", {})
     features_root = Path(local.get("features", "data/features"))
 
-    if args.plate:
-        plates = [args.plate]
+    if plate:
+        plates = [plate]
     else:
         plates = [d.name for d in sorted(features_root.iterdir()) if d.is_dir()]
 
@@ -427,14 +427,14 @@ def main() -> None:
             console.print(f"[red]Not found: {feature_dir}[/red]")
             continue
 
-        out_dir = args.output_dir or Path("data/visualizations") / plate
+        out_dir = output_dir or Path("data/visualizations") / plate
         out_dir.mkdir(parents=True, exist_ok=True)
 
         n_files = len(list(feature_dir.glob("*.pt")))
         console.rule(f"[bold blue]Diagnosing {plate} ({n_files} sites)")
 
         # Load
-        features, names = load_features(feature_dir, max_sites=args.max_sites)
+        features, names = load_features(feature_dir, max_sites=max_sites)
         console.print(f"  Loaded {features.shape[0]} sites, shape: {tuple(features.shape)}")
 
         # Compute metrics
@@ -491,4 +491,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

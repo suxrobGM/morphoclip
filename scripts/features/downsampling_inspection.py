@@ -1,13 +1,12 @@
 """Downsample a demo set of CPJUMP images and render inspection panels."""
 
-from __future__ import annotations
-
-import argparse
 import csv
 import random
 import sys
 from collections.abc import Iterable
+from enum import StrEnum
 from pathlib import Path
+from typing import Annotated
 
 import matplotlib
 
@@ -17,7 +16,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
+import typer
 from PIL import Image
+from rich.console import Console
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
@@ -26,72 +27,20 @@ from morphoclip.data.image_loader import FLUORESCENCE_CHANNELS, parse_filename  
 DEFAULT_OUTPUT_DIR = Path("output/downsampling_inspection")
 DEFAULT_RAW_ROOTS = (Path("data/raw/images"), Path("data/raw"))
 DEFAULT_COMPRESSED_ROOTS = (Path("data/raw_compressed"),)
-SUPPORTED_MODES = ("nearest", "bilinear", "bicubic")
+
+console = Console()
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Sample a small set of microscopy images from raw or raw_compressed, "
-            "downsample them to 384x384, and save comparison panels."
-        )
-    )
-    parser.add_argument(
-        "--source",
-        choices=("auto", "raw", "raw_compressed"),
-        default="auto",
-        help="Input tree to inspect. auto prefers raw_compressed, then raw.",
-    )
-    parser.add_argument(
-        "--input-dir",
-        type=Path,
-        default=None,
-        help="Optional path to a specific plate Images/ directory.",
-    )
-    parser.add_argument(
-        "--plate",
-        type=str,
-        default=None,
-        help="Optional plate substring filter, e.g. BR00116991.",
-    )
-    parser.add_argument(
-        "--num-images",
-        type=int,
-        default=10,
-        help="How many demo images to sample.",
-    )
-    parser.add_argument(
-        "--target-size",
-        type=int,
-        default=384,
-        help="Target square size for downsampling.",
-    )
-    parser.add_argument(
-        "--channels",
-        type=int,
-        nargs="+",
-        default=list(FLUORESCENCE_CHANNELS),
-        help="Channels to sample from. Defaults to fluorescence channels 1-5.",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=56,
-        help="Random seed used when sampling demo images.",
-    )
-    parser.add_argument(
-        "--mode",
-        choices=SUPPORTED_MODES,
-        default="bilinear",
-        help="Interpolation mode used for downsampling and reconstruction.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=DEFAULT_OUTPUT_DIR,
-        help="Root output directory.",
-    )
-    return parser.parse_args()
+class Source(StrEnum):
+    auto = "auto"
+    raw = "raw"
+    raw_compressed = "raw_compressed"
+
+
+class InterpMode(StrEnum):
+    nearest = "nearest"
+    bilinear = "bilinear"
+    bicubic = "bicubic"
 
 
 def has_valid_images(image_dir: Path, channels: set[int]) -> bool:
@@ -327,17 +276,38 @@ def write_manifest(rows: list[dict[str, object]], manifest_path: Path) -> None:
         writer.writerows(rows)
 
 
-def main() -> None:
-    args = parse_args()
-    channels = set(args.channels)
-    source, image_dir = resolve_input_dir(args.source, args.input_dir, args.plate, channels)
-    all_images = discover_images(image_dir, channels)
-    sampled_images = sample_demo_images(all_images, args.num_images, args.seed)
+def main(
+    source: Annotated[
+        Source, typer.Option(help="Input tree to inspect. auto prefers raw_compressed, then raw.")
+    ] = Source.auto,
+    input_dir: Annotated[
+        Path | None, typer.Option(help="Optional path to a specific plate Images/ directory.")
+    ] = None,
+    plate: Annotated[
+        str | None, typer.Option(help="Optional plate substring filter, e.g. BR00116991.")
+    ] = None,
+    num_images: Annotated[int, typer.Option(help="How many demo images to sample.")] = 10,
+    target_size: Annotated[int, typer.Option(help="Target square size for downsampling.")] = 384,
+    channels: Annotated[
+        list[int], typer.Option(help="Channels to sample from. Defaults to fluorescence 1-5.")
+    ] = list(FLUORESCENCE_CHANNELS),  # noqa: B006 — Typer copies list defaults per call
+    seed: Annotated[int, typer.Option(help="Random seed used when sampling demo images.")] = 56,
+    mode: Annotated[
+        InterpMode, typer.Option(help="Interpolation mode for downsampling and reconstruction.")
+    ] = InterpMode.bilinear,
+    output_dir: Annotated[Path, typer.Option(help="Root output directory.")] = DEFAULT_OUTPUT_DIR,
+) -> None:
+    """Sample microscopy images, downsample to a square size, and save comparison panels."""
+    channel_set = set(channels)
+    resolved_source, image_dir = resolve_input_dir(source, input_dir, plate, channel_set)
+    all_images = discover_images(image_dir, channel_set)
+    sampled_images = sample_demo_images(all_images, num_images, seed)
 
     if not sampled_images:
-        raise FileNotFoundError(f"No matching images found in {image_dir}")
+        console.print(f"[red]No matching images found in {image_dir}[/red]")
+        raise typer.Exit(1)
 
-    output_root = args.output_dir / source / image_dir.parent.name
+    output_root = output_dir / resolved_source / image_dir.parent.name
     downsampled_dir = output_root / "downsampled"
     panels_dir = output_root / "panels"
     manifest_path = output_root / "manifest.csv"
@@ -348,15 +318,15 @@ def main() -> None:
         original_unit = to_unit_float(original)
         downsampled_unit = resize_float_image(
             original_unit,
-            height=args.target_size,
-            width=args.target_size,
-            mode=args.mode,
+            height=target_size,
+            width=target_size,
+            mode=mode,
         )
         reconstructed_unit = resize_float_image(
             downsampled_unit,
             height=original.shape[0],
             width=original.shape[1],
-            mode=args.mode,
+            mode=mode,
         )
 
         downsampled = restore_dtype(downsampled_unit, original.dtype)
@@ -378,12 +348,12 @@ def main() -> None:
             downsampled=downsampled,
             reconstructed=reconstructed,
             panel_path=panel_path,
-            title=f"{source} | {path.name} | channel {channel} | mode={args.mode}",
+            title=f"{resolved_source} | {path.name} | channel {channel} | mode={mode}",
         )
 
         rows.append(
             {
-                "source": source,
+                "source": resolved_source,
                 "image_dir": str(image_dir),
                 "filename": path.name,
                 "image_id": f"{image_key}-ch{channel}",
@@ -396,13 +366,13 @@ def main() -> None:
 
     write_manifest(rows, manifest_path)
 
-    print(f"Source: {source}")
-    print(f"Image dir: {image_dir}")
-    print(f"Sampled images: {len(sampled_images)}")
-    print(f"Downsampled outputs: {downsampled_dir}")
-    print(f"Comparison panels: {panels_dir}")
-    print(f"Manifest: {manifest_path}")
+    console.print(f"Source: {resolved_source}")
+    console.print(f"Image dir: {image_dir}")
+    console.print(f"Sampled images: {len(sampled_images)}")
+    console.print(f"Downsampled outputs: {downsampled_dir}")
+    console.print(f"Comparison panels: {panels_dir}")
+    console.print(f"Manifest: {manifest_path}")
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

@@ -1,11 +1,10 @@
 """Render a DINO attention heatmap next to a microscopy image."""
 
-from __future__ import annotations
-
-import argparse
 import sys
 from collections.abc import Iterable
+from enum import StrEnum
 from pathlib import Path
+from typing import Annotated
 
 import matplotlib
 
@@ -15,7 +14,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
+import typer
 from PIL import Image
+from rich.console import Console
 from transformers import AutoImageProcessor, AutoModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
@@ -26,90 +27,27 @@ from morphoclip.data.image_loader import parse_filename  # noqa: E402
 DEFAULT_OUTPUT_DIR = Path("output/dino_heatmap_inspection")
 DEFAULT_RAW_ROOTS = (Path("data/raw/images"), Path("data/raw"))
 DEFAULT_COMPRESSED_ROOTS = (Path("data/raw_compressed"),)
-SUPPORTED_MODES = ("nearest", "bilinear", "bicubic")
-SUPPORTED_HEATMAP_METHODS = ("last_cls", "last4_cls", "rollout")
+DEFAULT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+console = Console()
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Load a CPJUMP microscopy image, run DINO attention rollout, and "
-            "save a side-by-side heatmap panel."
-        )
-    )
-    parser.add_argument(
-        "--image",
-        type=Path,
-        default=None,
-        help="Optional path to a specific image file.",
-    )
-    parser.add_argument(
-        "--source",
-        choices=("auto", "raw", "raw_compressed"),
-        default="raw_compressed",
-        help="Input tree to inspect when --image is not provided.",
-    )
-    parser.add_argument(
-        "--input-dir",
-        type=Path,
-        default=None,
-        help="Optional path to a specific plate Images/ directory.",
-    )
-    parser.add_argument(
-        "--plate",
-        type=str,
-        default=None,
-        help="Optional plate substring filter, e.g. BR00116991.",
-    )
-    parser.add_argument(
-        "--channel",
-        type=int,
-        default=5,
-        help="Microscopy channel to inspect.",
-    )
-    parser.add_argument(
-        "--target-size",
-        type=int,
-        default=384,
-        help="Target square size used before feeding the image to DINO.",
-    )
-    parser.add_argument(
-        "--mode",
-        choices=SUPPORTED_MODES,
-        default="bilinear",
-        help="Interpolation mode used for resizing.",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda" if torch.cuda.is_available() else "cpu",
-        help="Torch device used for inference.",
-    )
-    parser.add_argument(
-        "--model-name",
-        type=str,
-        default=DEFAULT_MODEL,
-        help="Hugging Face model id.",
-    )
-    parser.add_argument(
-        "--overlay-alpha",
-        type=float,
-        default=0.45,
-        help="Alpha value for the overlay panel.",
-    )
-    parser.add_argument(
-        "--heatmap-method",
-        choices=SUPPORTED_HEATMAP_METHODS,
-        default="last4_cls",
-        help="How to convert DINO attentions into a spatial heatmap.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=DEFAULT_OUTPUT_DIR,
-        help="Directory for the saved heatmap panel.",
-    )
-    return parser.parse_args()
+class Source(StrEnum):
+    auto = "auto"
+    raw = "raw"
+    raw_compressed = "raw_compressed"
+
+
+class InterpMode(StrEnum):
+    nearest = "nearest"
+    bilinear = "bilinear"
+    bicubic = "bicubic"
+
+
+class HeatmapMethod(StrEnum):
+    last_cls = "last_cls"
+    last4_cls = "last4_cls"
+    rollout = "rollout"
 
 
 def has_valid_images(image_dir: Path, channel: int) -> bool:
@@ -402,7 +340,7 @@ def render_method_comparison_panel(
     image_path: Path,
     output_path: Path,
 ) -> None:
-    ordered_methods = [method for method in SUPPORTED_HEATMAP_METHODS if method in heatmaps]
+    ordered_methods = [method for method in HeatmapMethod if method in heatmaps]
     fig, axes = plt.subplots(
         2, len(ordered_methods) + 1, figsize=(5 * (len(ordered_methods) + 1), 9)
     )
@@ -433,84 +371,114 @@ def render_method_comparison_panel(
     plt.close(fig)
 
 
-@torch.no_grad()
-def main() -> None:
-    args = parse_args()
-
-    resolved_source, image_path = pick_image_path(
-        image=args.image,
-        source=args.source,
-        input_dir=args.input_dir,
-        plate=args.plate,
-        channel=args.channel,
-    )
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-
-    image_raw = load_grayscale_array(image_path)
-    image_float = to_unit_float(image_raw)
-
-    processor, model = load_dino_with_attentions(args.model_name, args.device)
-
-    inputs, resized = build_model_input(
-        processor=processor,
-        image_float=image_float,
-        target_size=args.target_size,
-        mode=args.mode,
-    )
-    outputs = model(
-        pixel_values=inputs.to(args.device),
-        output_attentions=True,
-    )
-    num_register_tokens = int(getattr(model.config, "num_register_tokens", 0))
-    heatmaps_by_method: dict[str, np.ndarray] = {}
-    for method in SUPPORTED_HEATMAP_METHODS:
-        heatmap_small = build_attention_heatmap(
-            outputs.attentions,
-            method=method,
-            num_register_tokens=num_register_tokens,
+def main(
+    image: Annotated[
+        Path | None, typer.Option(help="Optional path to a specific image file.")
+    ] = None,
+    source: Annotated[
+        Source, typer.Option(help="Input tree to inspect when --image is not provided.")
+    ] = Source.raw_compressed,
+    input_dir: Annotated[
+        Path | None, typer.Option(help="Optional path to a specific plate Images/ directory.")
+    ] = None,
+    plate: Annotated[
+        str | None, typer.Option(help="Optional plate substring filter, e.g. BR00116991.")
+    ] = None,
+    channel: Annotated[int, typer.Option(help="Microscopy channel to inspect.")] = 5,
+    target_size: Annotated[
+        int, typer.Option(help="Target square size used before feeding the image to DINO.")
+    ] = 384,
+    mode: Annotated[
+        InterpMode, typer.Option(help="Interpolation mode used for resizing.")
+    ] = InterpMode.bilinear,
+    device: Annotated[str, typer.Option(help="Torch device used for inference.")] = DEFAULT_DEVICE,
+    model_name: Annotated[str, typer.Option(help="Hugging Face model id.")] = DEFAULT_MODEL,
+    overlay_alpha: Annotated[float, typer.Option(help="Alpha value for the overlay panel.")] = 0.45,
+    heatmap_method: Annotated[
+        HeatmapMethod, typer.Option(help="How to convert DINO attentions into a spatial heatmap.")
+    ] = HeatmapMethod.last4_cls,
+    output_dir: Annotated[
+        Path, typer.Option(help="Directory for the saved heatmap panel.")
+    ] = DEFAULT_OUTPUT_DIR,
+) -> None:
+    """Load a CPJUMP microscopy image, run DINO attention rollout, and save a heatmap panel."""
+    with torch.no_grad():
+        resolved_source, image_path = pick_image_path(
+            image=image,
+            source=source,
+            input_dir=input_dir,
+            plate=plate,
+            channel=channel,
         )
-        heatmaps_by_method[method] = normalize_heatmap(
-            resize_float_image(
-                heatmap_small.astype(np.float32),
-                image_float.shape[0],
-                image_float.shape[1],
-                args.mode,
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        image_raw = load_grayscale_array(image_path)
+        image_float = to_unit_float(image_raw)
+
+        processor, model = load_dino_with_attentions(model_name, device)
+
+        inputs, resized = build_model_input(
+            processor=processor,
+            image_float=image_float,
+            target_size=target_size,
+            mode=mode,
+        )
+        outputs = model(
+            pixel_values=inputs.to(device),
+            output_attentions=True,
+        )
+        num_register_tokens = int(getattr(model.config, "num_register_tokens", 0))
+        heatmaps_by_method: dict[str, np.ndarray] = {}
+        for method in HeatmapMethod:
+            heatmap_small = build_attention_heatmap(
+                outputs.attentions,
+                method=method,
+                num_register_tokens=num_register_tokens,
             )
+            heatmaps_by_method[method] = normalize_heatmap(
+                resize_float_image(
+                    heatmap_small.astype(np.float32),
+                    image_float.shape[0],
+                    image_float.shape[1],
+                    mode,
+                )
+            )
+
+        heatmap = heatmaps_by_method[heatmap_method]
+
+        stem = image_path.stem
+        panel_path = output_dir / f"{stem}_dino_heatmap.png"
+        comparison_path = output_dir / f"{stem}_dino_heatmap_comparison.png"
+        resized_path = output_dir / f"{stem}_resized_input.png"
+        heatmap_path = output_dir / f"{stem}_heatmap.npy"
+
+        Image.fromarray(np.rint(np.clip(resized, 0.0, 1.0) * 255.0).astype(np.uint8)).save(
+            resized_path
+        )
+        np.save(heatmap_path, heatmap.astype(np.float32))
+        render_panel(
+            original=image_float,
+            heatmap=heatmap,
+            overlay_alpha=overlay_alpha,
+            image_path=image_path,
+            output_path=panel_path,
+        )
+        render_method_comparison_panel(
+            original=image_float,
+            heatmaps=heatmaps_by_method,
+            overlay_alpha=overlay_alpha,
+            image_path=image_path,
+            output_path=comparison_path,
         )
 
-    heatmap = heatmaps_by_method[args.heatmap_method]
-
-    stem = image_path.stem
-    panel_path = args.output_dir / f"{stem}_dino_heatmap.png"
-    comparison_path = args.output_dir / f"{stem}_dino_heatmap_comparison.png"
-    resized_path = args.output_dir / f"{stem}_resized_input.png"
-    heatmap_path = args.output_dir / f"{stem}_heatmap.npy"
-
-    Image.fromarray(np.rint(np.clip(resized, 0.0, 1.0) * 255.0).astype(np.uint8)).save(resized_path)
-    np.save(heatmap_path, heatmap.astype(np.float32))
-    render_panel(
-        original=image_float,
-        heatmap=heatmap,
-        overlay_alpha=args.overlay_alpha,
-        image_path=image_path,
-        output_path=panel_path,
-    )
-    render_method_comparison_panel(
-        original=image_float,
-        heatmaps=heatmaps_by_method,
-        overlay_alpha=args.overlay_alpha,
-        image_path=image_path,
-        output_path=comparison_path,
-    )
-
-    print(f"source={resolved_source}")
-    print(f"image={image_path}")
-    print(f"heatmap_method={args.heatmap_method}")
-    print(f"panel={panel_path}")
-    print(f"comparison_panel={comparison_path}")
-    print(f"resized_input={resized_path}")
-    print(f"heatmap={heatmap_path}")
+    console.print(f"source={resolved_source}")
+    console.print(f"image={image_path}")
+    console.print(f"heatmap_method={heatmap_method}")
+    console.print(f"panel={panel_path}")
+    console.print(f"comparison_panel={comparison_path}")
+    console.print(f"resized_input={resized_path}")
+    console.print(f"heatmap={heatmap_path}")
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

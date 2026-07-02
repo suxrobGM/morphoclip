@@ -4,23 +4,47 @@ Examples:
     uv run poe inspect-dataset --demo --sample-index 0
     uv run poe inspect-dataset --demo --collate-preview 3 \
         --split-strategy cpjump1_official_representation
-    uv run poe inspect-dataset --feature-dir data/features --plates BR00116991 BR00117000
-    uv run poe inspect-dataset --list-groups cellclip_cpjump_style cpjump1_official_gene_compound
+    uv run poe inspect-dataset --feature-dir data/features --plates BR00116991 --plates BR00117000
+    uv run poe inspect-dataset --list-groups cellclip_cpjump_style \
+        --list-groups cpjump1_official_gene_compound
 """
 
-import argparse
 import inspect
 import json
 import statistics
 import tempfile
 from collections import Counter
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
+
+import typer
+from rich.console import Console
 
 from benchmark import splits as benchmark_splits
 from morphoclip.data import dataset as dataset_module
 from morphoclip.data import metadata as metadata_module
 from morphoclip.data import perturbation
+from morphoclip.data.perturbation import PerturbationType
+
+console = Console()
+
+
+class Mode(StrEnum):
+    features = "features"
+    tensors = "tensors"
+
+
+class TextLevel(StrEnum):
+    name_only = "name_only"
+    name_target = "name_target"
+    full = "full"
+
+
+class SplitStrategy(StrEnum):
+    cpjump1_official_representation = "cpjump1_official_representation"
+    cpjump1_official_gene_compound = "cpjump1_official_gene_compound"
+    cellclip_cpjump_style = "cellclip_cpjump_style"
 
 
 def _load_config(config_path: Path) -> dict[str, Any]:
@@ -377,71 +401,63 @@ def _render_text(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Inspect MorphoCLIPDataset indexing, sample loading, and split behavior."
-    )
-    parser.add_argument("--config", type=Path, default=Path("configs/dataset.yml"))
-    parser.add_argument("--feature-dir", type=Path, default=None)
-    parser.add_argument("--metadata-dir", type=Path, default=None)
-    parser.add_argument("--batch", type=str, default=None)
-    parser.add_argument("--plates", nargs="*", default=None)
-    parser.add_argument("--mode", choices=["features", "tensors"], default="features")
-    parser.add_argument(
-        "--text-level", choices=["name_only", "name_target", "full"], default="full"
-    )
-    parser.add_argument("--exclude-controls", action="store_true")
-    parser.add_argument("--pert-types", nargs="*", default=None)
-    parser.add_argument("--max-sites-per-well", type=int, default=None)
-    parser.add_argument("--sample-index", type=int, default=None)
-    parser.add_argument("--collate-preview", type=int, default=0)
-    parser.add_argument(
-        "--split-strategy",
-        choices=[
-            "cpjump1_official_representation",
-            "cpjump1_official_gene_compound",
-            "cellclip_cpjump_style",
-        ],
-        default=None,
-    )
-    parser.add_argument("--val-fraction", type=float, default=0.1)
-    parser.add_argument("--test-fraction", type=float, default=0.1)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument(
-        "--list-groups",
-        nargs="+",
-        choices=[
-            "cpjump1_official_representation",
-            "cpjump1_official_gene_compound",
-            "cellclip_cpjump_style",
-        ],
-        default=None,
-        help="List actual grouping keys and members for the selected strategies.",
-    )
-    parser.add_argument(
-        "--group-limit",
-        type=int,
-        default=20,
-        help="Maximum number of groups to print per strategy.",
-    )
-    parser.add_argument(
-        "--group-member-limit",
-        type=int,
-        default=10,
-        help="Maximum number of members to print inside each group.",
-    )
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Show all groups and all members for --list-groups.",
-    )
-    parser.add_argument("--demo", action="store_true")
-    parser.add_argument("--json", action="store_true")
-    args = parser.parse_args()
-
+def main(
+    config: Annotated[Path, typer.Option(help="Dataset config YAML.")] = Path(
+        "configs/dataset.yml"
+    ),
+    feature_dir: Annotated[
+        Path | None, typer.Option(help="Feature/tensor directory (default: from config).")
+    ] = None,
+    metadata_dir: Annotated[
+        Path | None, typer.Option(help="Metadata directory (default: from config).")
+    ] = None,
+    batch: Annotated[str | None, typer.Option(help="Batch name (default: from config).")] = None,
+    plates: Annotated[
+        list[str] | None, typer.Option(help="Restrict to specific plates (repeatable).")
+    ] = None,
+    mode: Annotated[Mode, typer.Option(help="Dataset loading mode.")] = Mode.features,
+    text_level: Annotated[
+        TextLevel, typer.Option(help="Text generation granularity.")
+    ] = TextLevel.full,
+    exclude_controls: Annotated[bool, typer.Option(help="Exclude negcon/poscon wells.")] = False,
+    pert_types: Annotated[
+        list[PerturbationType] | None,
+        typer.Option(help="Restrict to specific perturbation types (repeatable)."),
+    ] = None,
+    max_sites_per_well: Annotated[
+        int | None, typer.Option(help="Cap sites loaded per well.")
+    ] = None,
+    sample_index: Annotated[
+        int | None, typer.Option(help="Preview a single sample by index.")
+    ] = None,
+    collate_preview: Annotated[
+        int, typer.Option(help="Number of samples to collate as a preview batch.")
+    ] = 0,
+    split_strategy: Annotated[
+        SplitStrategy | None, typer.Option(help="Summarize a train/val/test split.")
+    ] = None,
+    list_groups: Annotated[
+        list[SplitStrategy] | None,
+        typer.Option(help="List grouping keys/members for the selected strategies (repeatable)."),
+    ] = None,
+    group_limit: Annotated[
+        int, typer.Option(help="Maximum number of groups to print per strategy.")
+    ] = 20,
+    group_member_limit: Annotated[
+        int, typer.Option(help="Maximum number of members to print inside each group.")
+    ] = 10,
+    show_all: Annotated[
+        bool,
+        typer.Option("--all/--no-all", help="Show all groups and all members for --list-groups."),
+    ] = False,
+    demo: Annotated[bool, typer.Option(help="Build a temporary demo dataset.")] = False,
+    json_output: Annotated[
+        bool, typer.Option("--json/--no-json", help="Emit machine-readable JSON.")
+    ] = False,
+) -> None:
+    """Inspect MorphoCLIPDataset indexing, sample loading, and split behavior."""
     extract_plate_barcode = perturbation.extract_plate_barcode
     row_col_from_well = perturbation.row_col_from_well
-    PerturbationType = perturbation.PerturbationType
     MetadataIndex = metadata_module.MetadataIndex
     MorphoCLIPDataset = dataset_module.MorphoCLIPDataset
     MorphoCLIPSample = dataset_module.MorphoCLIPSample
@@ -451,29 +467,21 @@ def main() -> None:
     build_split_groups = benchmark_splits.build_split_groups
     metadata_path = benchmark_splits.METADATA_PATH
 
-    config = _load_config(args.config)
-    local_config = config.get("local", {})
-    default_feature_dir = Path(local_config["features" if args.mode == "features" else "tensors"])
-    feature_dir = args.feature_dir or default_feature_dir
-    metadata_dir = args.metadata_dir or Path(local_config["metadata"])
-    batch = args.batch or config.get("batch")
+    pert_types_set = set(pert_types) if pert_types is not None else None
 
-    if args.plates is not None:
-        plates = _normalize_plates(args.plates, extract_plate_barcode)
-    else:
-        plates = _auto_detect_plates(feature_dir)
-        if not plates and not feature_dir.exists():
-            plates = _normalize_plates(config.get("plates", []), extract_plate_barcode)
+    cfg = _load_config(config)
+    local_config = cfg.get("local", {})
+    default_feature_dir = Path(local_config["features" if mode == "features" else "tensors"])
+    feature_dir = feature_dir or default_feature_dir
+    metadata_dir = metadata_dir or Path(local_config["metadata"])
+    batch_value = batch or cfg.get("batch")
 
-    if args.pert_types is not None:
-        invalid_types = [
-            name for name in args.pert_types if name not in {p.value for p in PerturbationType}
-        ]
-        if invalid_types:
-            parser.error(f"Unknown perturbation type(s): {', '.join(invalid_types)}")
-        pert_types = {PerturbationType(name) for name in args.pert_types}
+    if plates is not None:
+        resolved_plates = _normalize_plates(plates, extract_plate_barcode)
     else:
-        pert_types = None
+        resolved_plates = _auto_detect_plates(feature_dir)
+        if not resolved_plates and not feature_dir.exists():
+            resolved_plates = _normalize_plates(cfg.get("plates", []), extract_plate_barcode)
 
     payload: dict[str, Any] = {
         "class_schema": {
@@ -489,108 +497,107 @@ def main() -> None:
             ],
         },
         "inputs": {
-            "mode": args.mode,
+            "mode": mode,
             "feature_dir": str(feature_dir),
             "metadata_dir": str(metadata_dir),
-            "batch": batch,
-            "plates": plates,
-            "demo": args.demo,
+            "batch": batch_value,
+            "plates": resolved_plates,
+            "demo": demo,
             "inspection_basis": "feature_index",
             "experiment_metadata_path": str(metadata_path),
         },
         "dataset_summary": {},
-        "sample_index": args.sample_index,
+        "sample_index": sample_index,
         "sample_preview": None,
         "collate_preview": None,
-        "split_strategy": args.split_strategy,
+        "split_strategy": split_strategy,
         "split_summary": None,
         "group_summaries": [],
     }
 
     with tempfile.TemporaryDirectory(prefix="inspect_dataset_") as tmpdir:
         torch = dataset_module.torch
-        if args.demo:
+        if demo:
             feature_dir = Path(tmpdir)
-            plates = _create_demo_dataset(feature_dir, args.mode, row_col_from_well, torch)
+            resolved_plates = _create_demo_dataset(feature_dir, mode, row_col_from_well, torch)
             payload["inputs"]["feature_dir"] = str(feature_dir)
-            payload["inputs"]["plates"] = plates
+            payload["inputs"]["plates"] = resolved_plates
 
-        metadata = MetadataIndex.from_directory(metadata_dir, batch=batch)
+        metadata = MetadataIndex.from_directory(metadata_dir, batch=batch_value)
         dataset = MorphoCLIPDataset(
             feature_dir=feature_dir,
             metadata=metadata,
-            plates=plates,
-            mode=args.mode,
-            text_level=args.text_level,
-            exclude_controls=args.exclude_controls,
-            pert_types=pert_types,
-            max_sites_per_well=args.max_sites_per_well,
+            plates=resolved_plates,
+            mode=mode,
+            text_level=text_level,
+            exclude_controls=exclude_controls,
+            pert_types=pert_types_set,
+            max_sites_per_well=max_sites_per_well,
         )
 
         inspection_dataset = dataset
-        if len(dataset) == 0 and (args.split_strategy is not None or args.list_groups is not None):
-            if not plates:
-                plates = _normalize_plates(config.get("plates", []), extract_plate_barcode)
-            if not plates:
-                plates = metadata.plates()
+        if len(dataset) == 0 and (split_strategy is not None or list_groups is not None):
+            if not resolved_plates:
+                resolved_plates = _normalize_plates(cfg.get("plates", []), extract_plate_barcode)
+            if not resolved_plates:
+                resolved_plates = metadata.plates()
 
-            payload["inputs"]["plates"] = plates
+            payload["inputs"]["plates"] = resolved_plates
             payload["inputs"]["inspection_basis"] = "metadata_only"
             inspection_dataset = _build_metadata_only_dataset(
                 metadata=metadata,
-                plates=plates,
-                exclude_controls=args.exclude_controls,
-                pert_types=pert_types,
+                plates=resolved_plates,
+                exclude_controls=exclude_controls,
+                pert_types=pert_types_set,
             )
 
         payload["dataset_summary"] = _summarize_dataset(inspection_dataset, extract_plate_barcode)
 
-        if args.sample_index is not None:
-            if not (0 <= args.sample_index < len(dataset)):
-                parser.error(f"--sample-index must be in [0, {len(dataset) - 1}] for this dataset.")
-            payload["sample_preview"] = _summarize_sample(dataset[args.sample_index])
+        if sample_index is not None:
+            if not (0 <= sample_index < len(dataset)):
+                raise typer.BadParameter(
+                    f"--sample-index must be in [0, {len(dataset) - 1}] for this dataset."
+                )
+            payload["sample_preview"] = _summarize_sample(dataset[sample_index])
 
-        if args.collate_preview > 0:
-            batch_size = min(args.collate_preview, len(dataset))
+        if collate_preview > 0:
+            batch_size = min(collate_preview, len(dataset))
             if batch_size == 0:
-                parser.error("--collate-preview requested, but the dataset is empty.")
+                console.print("[red]--collate-preview requested, but the dataset is empty.[/red]")
+                raise typer.Exit(1)
             samples = [dataset[i] for i in range(batch_size)]
             payload["collate_preview"] = _summarize_collated_batch(collate_fn(samples))
 
-        if args.split_strategy is not None:
+        if split_strategy is not None:
             if len(inspection_dataset) == 0:
-                parser.error("--split-strategy requested, but the dataset is empty.")
-            train, val, test = create_splits(
-                inspection_dataset,
-                strategy=args.split_strategy,
-                val_fraction=args.val_fraction,
-                test_fraction=args.test_fraction,
-                seed=args.seed,
-            )
+                console.print("[red]--split-strategy requested, but the dataset is empty.[/red]")
+                raise typer.Exit(1)
+            train, val, test = create_splits(inspection_dataset, strategy=split_strategy)
             payload["split_summary"] = _summarize_splits(train, val, test)
 
-        if args.list_groups is not None:
+        if list_groups is not None:
             if len(inspection_dataset) == 0:
-                parser.error("--list-groups requested, but the dataset is empty.")
+                console.print("[red]--list-groups requested, but the dataset is empty.[/red]")
+                raise typer.Exit(1)
             payload["group_summaries"] = [
                 _summarize_groups(
                     inspection_dataset,
                     strategy=strategy,
                     build_split_groups=build_split_groups,
                     extract_plate_barcode=extract_plate_barcode,
-                    group_limit=args.group_limit,
-                    member_limit=args.group_member_limit,
-                    show_all=args.all,
+                    group_limit=group_limit,
+                    member_limit=group_member_limit,
+                    show_all=show_all,
                 )
-                for strategy in args.list_groups
+                for strategy in list_groups
             ]
 
-    if args.json:
+    if json_output:
         print(json.dumps(payload, indent=2))
         return
 
-    print(_render_text(payload))
+    console.print(_render_text(payload), markup=False)
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)
