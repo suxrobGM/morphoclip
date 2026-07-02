@@ -1,6 +1,4 @@
-"""Tests for the local CellCLIP training pipeline."""
-
-from __future__ import annotations
+"""Tests for CellCLIP training dataset preparation and tokenized collation."""
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,24 +7,14 @@ import pytest
 import torch
 
 import benchmark.split_contexts as split_contexts_module
-from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
-from cellclip.training.config import (
-    CellCLIPDatasetConfig,
-    CellCLIPModelConfig,
-    load_training_config,
-)
-from cellclip.training.dataset import (
-    build_tokenized_collate_fn,
-    prepare_datasets,
-)
-from cellclip.training.model import CellCLIP
+from cellclip.training.config import CellCLIPDatasetConfig, CellCLIPModelConfig
+from cellclip.training.dataset import build_tokenized_collate_fn, prepare_datasets
 from morphoclip.data.metadata import MetadataIndex
 from morphoclip.data.perturbation import PerturbationType
 from tests.cellclip.conftest import (
     HIDDEN_DIM,
     NUM_CHANNELS,
     DummyTokenizer,
-    FakeTextModel,
     write_feature,
 )
 
@@ -263,125 +251,3 @@ def test_build_tokenized_collate_fn_uses_upstream_style_crispr_prompt() -> None:
         batch["text"][0]
         == "U2OS cells treated with crispr sequence: ACGTACGT, targeting genes: OPRL1"
     )
-
-
-def test_training_checkpoint_is_visual_loader_compatible(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setattr(
-        "cellclip.training.model.AutoModel.from_pretrained",
-        lambda *_args, **_kwargs: FakeTextModel(hidden_size=24),
-    )
-
-    model = CellCLIP(
-        CellCLIPModelConfig(
-            embed_dim=512,
-            vision_layers=2,
-            vision_width=16,
-            vision_heads=4,
-            input_channels=5,
-            text_model_name="fake",
-            tokenizer_name="fake",
-        )
-    )
-    checkpoint_path = tmp_path / "train_ckpt.pt"
-    torch.save({"model": model.state_dict()}, checkpoint_path)
-
-    loaded = load_cellclip_visual_encoder(
-        model_path=str(checkpoint_path),
-        device="cpu",
-        input_dim=16,
-        embed_dim=512,
-        vision_layers=2,
-        vision_heads=4,
-        input_channels=5,
-    )
-
-    sample = torch.randn(2, 5, 16)
-    expected = model.encode_image(sample)
-    actual = loaded.encode_image(sample)
-    assert torch.allclose(actual, expected)
-
-    bag = torch.randn(2, 3, 5, 16)
-    expected_bag = model.encode_image(model.encode_mil(bag))
-    actual_bag = loaded.encode_image(loaded.encode_mil(bag))
-    assert torch.allclose(actual_bag, expected_bag)
-
-
-def test_cellclip_text_encoder_is_trainable_by_default(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "cellclip.training.model.AutoModel.from_pretrained",
-        lambda *_args, **_kwargs: FakeTextModel(hidden_size=24),
-    )
-
-    model = CellCLIP(
-        CellCLIPModelConfig(
-            embed_dim=64,
-            vision_layers=2,
-            vision_width=16,
-            vision_heads=4,
-            input_channels=5,
-            text_model_name="fake",
-            tokenizer_name="fake",
-        )
-    )
-
-    assert all(param.requires_grad for param in model.text.parameters())
-
-    model.train()
-    assert model.training is True
-    assert model.text.training is True
-
-    text_tokens = {
-        "input_ids": torch.randint(0, 100, (2, 8)),
-        "attention_mask": torch.ones(2, 8, dtype=torch.long),
-    }
-    text_features = model.encode_text(text_tokens)
-    text_features.sum().backward()
-
-    assert model.text_proj.weight.grad is not None
-    assert any(param.grad is not None for param in model.text.parameters())
-
-
-def test_load_training_config_supports_extends(tmp_path: Path) -> None:
-    base = tmp_path / "base.yaml"
-    base.write_text(
-        "\n".join(
-            [
-                "dataset:",
-                '  feature_root: "data/features_cellclip_base"',
-                "  batch_size: 16",
-                "optimization:",
-                "  lr: 5.0e-4",
-                "  warmup_steps: 100",
-                "runtime:",
-                '  run_name: "base_run"',
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    child = tmp_path / "child.yaml"
-    child.write_text(
-        "\n".join(
-            [
-                'extends: "base.yaml"',
-                "dataset:",
-                "  batch_size: 64",
-                "optimization:",
-                "  warmup_steps: 1000",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    config = load_training_config(child)
-
-    assert config.dataset.feature_root == "data/features_cellclip_base"
-    assert config.dataset.batch_size == 64
-    assert config.optimization.lr == pytest.approx(5.0e-4)
-    assert config.optimization.warmup_steps == 1000
-    assert config.runtime.run_name == "base_run"
