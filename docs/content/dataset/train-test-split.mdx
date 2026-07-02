@@ -101,12 +101,12 @@ written to `--output-dir` (default: `output/benchmark/input`).
 ## CLI example
 
 ```bash
-./.venv/bin/python scripts/label_generator.py \
+uv run python scripts/label_generator.py \
   --batch-folder data/raw/2020_11_04_CPJUMP1 \
   --profiles-root data/profiles \
   --output-dir output
 
-./.venv/bin/python scripts/train_test_split.py \
+uv run python scripts/train_test_split.py \
   --label-file output/labels.csv \
   --output-dir output/benchmark/input \
   --train-ratio 0.75 \

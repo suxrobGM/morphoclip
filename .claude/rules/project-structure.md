@@ -49,6 +49,9 @@
 
 ## Baselines
 
-- External comparison repos live as git submodules under `baselines/`.
-- Current submodules: `baselines/CellCLIP`, `baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1`.
-- `baselines/cellprofiler/` contains the CellProfiler baseline notebook and utilities.
+- External comparison repos are **not** vendored. Reference them upstream by link:
+  [CellCLIP](https://github.com/suinleelab/CellCLIP) and
+  [Chandrasekaran 2024 CPJUMP1](https://github.com/jump-cellpainting/2024_Chandrasekaran_NatureMethods_CPJUMP1).
+- The small CPJUMP1 reference metadata required by the benchmark harness lives
+  first-party under `data/reference/cpjump1/` (`cpjump1_metadata.csv`,
+  `JUMP-Target-1_compound_metadata_additional_annotations.tsv`).

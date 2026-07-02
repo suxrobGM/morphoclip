@@ -38,7 +38,7 @@ src/benchmark/    # General benchmark evaluation (metrics, plotting, stable help
 src/cellclip/     # CellCLIP baseline (separate from MorphoCLIP)
   benchmark/      # CellCLIP visual encoder, checkpoint loading, export pipeline
   training/       # Local CellCLIP trainer (config, dataset, engine, losses, model)
-baselines/        # Git submodules: CellCLIP, Chandrasekaran 2024, CellProfiler baseline
+data/reference/   # First-party CPJUMP1 reference metadata (cpjump1_metadata.csv, JUMP-Target-1 annotations)
 scripts/
   data/           # Dataset fetching, plate checks, label generation
   features/       # DINOv3 feature extraction

@@ -1,7 +1,7 @@
 # Benchmark Guide
 
 This repo uses a local, stable CPJUMP1 benchmark workflow built around
-[`scripts/benchmark/benchmark_stable.py`](/home/rongfei/WorkSpace/project-spring26-jumpcp/scripts/benchmark/benchmark_stable.py).
+[`scripts/benchmark/benchmark_stable.py`](../../scripts/benchmark/benchmark_stable.py).
 
 The benchmark measures three tasks on CPJUMP1:
 
@@ -24,7 +24,7 @@ Baseline benchmark input:
 CellCLIP benchmark input:
 
 - Benchmark-format CellCLIP profile CSVs under `data/profiles_cellclip_hf/<batch>/<plate>/`
-- These are produced from per-site feature tensors with [`scripts/cellclip/export_cellclip_profiles.py`](/home/rongfei/WorkSpace/project-spring26-jumpcp/scripts/cellclip/export_cellclip_profiles.py)
+- These are produced from per-site feature tensors with [`scripts/cellclip/export_cellclip_profiles.py`](../../scripts/cellclip/export_cellclip_profiles.py)
 
 Benchmark outputs:
 
@@ -37,7 +37,7 @@ Benchmark outputs:
 Run the baseline CellProfiler-style benchmark on the default profile directory:
 
 ```bash
-.venv/bin/python scripts/benchmark/benchmark_stable.py \
+uv run python scripts/benchmark/benchmark_stable.py \
   --profiles-dir data/profiles \
   --output-dir output/benchmark \
   --batch 2020_11_04_CPJUMP1 \
@@ -60,7 +60,7 @@ The local CellCLIP workflow has two stages:
 ### 1. Export CellCLIP Profiles
 
 ```bash
-.venv/bin/python scripts/cellclip/export_cellclip_profiles.py \
+uv run python scripts/cellclip/export_cellclip_profiles.py \
   --ckpt-path /path/to/cellclip_checkpoint.pt \
   --feature-root data/features_cellclip_base \
   --output-profiles-root data/profiles_cellclip_hf \
@@ -77,7 +77,7 @@ Notes:
 ### 2. Benchmark the Exported CellCLIP Profiles
 
 ```bash
-.venv/bin/python scripts/benchmark/benchmark_stable.py \
+uv run python scripts/benchmark/benchmark_stable.py \
   --profiles-dir data/profiles_cellclip_hf \
   --output-dir output/benchmark_cellclip_hf \
   --batch 2020_11_04_CPJUMP1 \
@@ -97,7 +97,7 @@ Notes:
 If you need to extract features, export CellCLIP profiles, and clean caches plate-by-plate in one run, use:
 
 ```bash
-.venv/bin/python scripts/cellclip/run_cellclip_pipeline.py \
+uv run python scripts/cellclip/run_cellclip_pipeline.py \
   --ckpt-path /path/to/cellclip_checkpoint.pt \
   --batch 2020_11_04_CPJUMP1 \
   --timelines short
@@ -110,7 +110,7 @@ This is the heavier end-to-end path. If you already have per-site feature tensor
 After both runs finish, generate comparison tables and plots with:
 
 ```bash
-.venv/bin/python scripts/benchmark/compare_benchmark.py \
+uv run python scripts/benchmark/compare_benchmark.py \
   --baseline-dir output/benchmark \
   --candidate-dir output/benchmark_cellclip_hf \
   --output-dir output/benchmark_comparison

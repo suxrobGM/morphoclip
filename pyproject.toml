@@ -38,6 +38,13 @@ cpu = ["torch>=2.10.0", "torchvision>=0.25.0"]
 cu128 = ["torch>=2.10.0", "torchvision>=0.25.0"]
 cu130 = ["torch>=2.10.0", "torchvision>=0.25.0"]
 
+# Benchmark harness (mAP via copairs). Pinned to the "old API" commit the stable
+# benchmark path depends on. Install with: uv sync --extra benchmark
+benchmark = [
+  "copairs @ git+https://github.com/cytomining/copairs@880f22a551bd897896d148a0b07baa99d981c6a9",
+  "scikit-learn>=1.5.0",
+]
+
 [dependency-groups]
 dev = [
   "pytest>=9.0.0",
@@ -107,11 +114,12 @@ eval = "python scripts/training/eval.py --checkpoint output/morphoclip_runs/defa
 infer = "python scripts/training/infer.py --checkpoint output/morphoclip_runs/default/checkpoints/best.pt"
 tensorboard = "python -m tensorboard.main --logdir output/morphoclip_runs"
 
+benchmark = "python scripts/benchmark/benchmark_stable.py --config configs/benchmark.yml"
+
 [tool.ruff]
 target-version = "py314"
 line-length = 100
 src = ["src", "scripts"]
-extend-exclude = ["baselines"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

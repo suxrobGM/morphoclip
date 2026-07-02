@@ -378,10 +378,8 @@ def _run_job(
         if job.stage == "stage3":
             profiles_dir, benchmark_dir = _benchmark_dirs(spec, job)
             export_cmd = [
-                "micromamba",
+                "uv",
                 "run",
-                "-n",
-                "cpjump",
                 "python",
                 "scripts/cellclip/export_cellclip_profiles.py",
                 "--config",
@@ -395,10 +393,8 @@ def _run_job(
             ]
             runner(export_cmd, benchmark_dir / "export.log")
             benchmark_cmd = [
-                "micromamba",
+                "uv",
                 "run",
-                "-n",
-                "cpjump",
                 "python",
                 "scripts/benchmark/benchmark_stable.py",
                 "--config",
