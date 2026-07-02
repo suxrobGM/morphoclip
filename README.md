@@ -91,13 +91,11 @@ docs/             # Documentation website (Nextra)
 
 ---
 
-## Team
+## Authors
 
-| Name | Role |
-|---|---|
-| Shubham Gajjar | Team Lead |
-| Rongfei Jin | Member |
-| Sukhrobbek Ilyosbekov | Member |
+- Sukhrobbek Ilyosbekov
+- Shubham Gajjar
+- Rongfei Jin
 
 ---
 
