@@ -16,13 +16,24 @@ from sklearn.preprocessing import StandardScaler
 
 from benchmark.data import ProfileLoader, get_feature_columns
 from benchmark.metrics import compute_fraction_retrieved, compute_map
+from benchmark.profile_ops import concat_profiles
 
-
-def concat_profiles(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
-    """Concatenate profiles while preserving old empty-frame behavior."""
-    if df1.shape[0] == 0:
-        return df2.copy()
-    return pd.concat([df1, df2], ignore_index=True, join="inner")
+__all__ = [
+    "concat_profiles",
+    "load_profiles_for_plates",
+    "BatchCorrectionTransform",
+    "fit_batch_correction",
+    "apply_batch_correction",
+    "run_with_unpaired_guard",
+    "compute_map_and_fr",
+    "plot_replicability_barplot",
+    "plot_matching_barplot",
+    "plot_cross_modality_barplot",
+    "plot_replicability_map_boxplot",
+    "plot_matching_map_boxplot",
+    "plot_replicability_fr_faceted",
+    "plot_matching_fr_faceted",
+]
 
 
 def load_profiles_for_plates(
