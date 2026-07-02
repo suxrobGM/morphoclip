@@ -1,0 +1,18 @@
+extends: "official_chemberta_upstreamish_film_keep_smiles.yaml"
+
+dataset:
+  train_max_sites_per_well: 5
+  eval_max_sites_per_well: null
+  within_well_interp_sites: 1
+  same_pert_interp_sites: 1
+  interp_alpha: 0.4
+
+model:
+  variant: "chemberta"
+  chem_fusion_type: "film"
+  chemberta_pooling: "cls"
+  freeze_chemberta: false
+  chemberta_tune_layers: 0
+
+runtime:
+  run_name: "cellclip_chemberta_upstreamish_film_keep_cls_augmented"

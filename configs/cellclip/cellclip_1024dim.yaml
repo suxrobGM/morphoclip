@@ -1,0 +1,10 @@
+extends: "base.yaml"
+
+dataset:
+  feature_root: "data/features"   # 1024-dim DINOv3 ViT-L features from HF
+
+model:
+  vision_width: 1024              # Match DINOv3 ViT-L CLS token dimension (default: 1536)
+
+runtime:
+  run_name: "cellclip_1024dim_baseline"

@@ -1,0 +1,221 @@
+# MorphoCLIP Dataset Construction
+
+This document explains how the training dataset is constructed by `src/morphoclip/data/`.
+
+The important point is that the runtime dataset is not built directly from raw TIFFs. It is built in two stages:
+
+1. Raw CPJUMP1 images and metadata are downloaded.
+2. Images are converted into per-site `.pt` artifacts, and `MorphoCLIPDataset` groups those artifacts into well-level samples paired with text.
+
+## Final sample unit
+
+`MorphoCLIPDataset` uses one **well** as one sample.
+
+A sample contains:
+
+- all sites found for that well, stacked together
+- one text description derived from perturbation metadata
+- plate and well identifiers
+- the full `PerturbationInfo` record
+
+In feature mode, one sample has shape:
+
+```text
+(num_sites, 5, hidden_dim)
+```
+
+In tensor mode, one sample has shape:
+
+```text
+(num_sites, 5, H, W)
+```
+
+## Stage 1: Download raw inputs
+
+The project config in `configs/dataset.yml` defines the CPJUMP1 source and local storage layout.
+
+Relevant inputs are:
+
+- raw images under `data/raw/<batch>/<plate>/Images/`
+- platemaps under `data/metadata/platemaps/<batch>/`
+- external annotations under `data/metadata/external_metadata/`
+
+Raw image files follow the CPJUMP1 naming pattern:
+
+```text
+r{row}c{col}f{field}p{plane}-ch{channel}sk1fk1fl1.tiff
+```
+
+Only fluorescence channels `1..5` are used. Brightfield channels `6..8` are ignored.
+
+## Stage 2: Convert raw images into per-site artifacts
+
+`src/morphoclip/data/feature_extractor.py` builds the artifacts consumed by the dataset.
+
+For each plate:
+
+1. `discover_sites()` scans `Images/` and groups files by `(row, col, field)`.
+2. A site is kept only if all five fluorescence channels are present.
+3. `load_site_as_tensor()` loads the five 16-bit TIFFs, converts them to `float32`, normalizes them to `[0, 1]`, and optionally resizes them to `384 x 384`.
+4. If tensor caching is enabled, the resized site tensor is saved to:
+
+   ```text
+   data/tensors/<barcode>/rXXcXXfXX.pt
+   ```
+
+5. `prepare_channels_for_dino()` replicates each grayscale channel into pseudo-RGB.
+6. The frozen DINOv3 backbone extracts one CLS vector per channel.
+7. The per-site feature tensor is saved to:
+
+   ```text
+   data/features/<barcode>/rXXcXXfXX.pt
+   ```
+
+So after extraction, the dataset no longer needs the TIFFs. It consumes `.pt` files keyed by site.
+
+## Stage 3: Build the metadata index
+
+`src/morphoclip/data/metadata.py` builds a unified lookup:
+
+```text
+(plate_barcode, well) -> PerturbationInfo
+```
+
+It merges three metadata sources:
+
+1. `barcode_platemap.csv`
+   Maps each plate barcode to a platemap file name.
+2. Platemap `.txt` files
+   Map each well position like `A01` to platemap fields such as `broad_sample`, `pert_type`, and `control_type`.
+3. External metadata TSVs
+   Add perturbation-specific annotations for compounds, CRISPR guides, and ORFs.
+
+During cache construction:
+
+- perturbation type is classified as `compound`, `crispr`, `orf`, `negcon`, `poscon`, or `unknown`
+- compound wells receive fields like `pert_iname`, `target_list`, `smiles`, `pubchem_cid`, `moa`
+- CRISPR and ORF wells receive fields like `gene` and `pert_iname`
+
+The result is an in-memory cache used by the dataset at lookup time.
+
+## Stage 4: Build the dataset index
+
+`MorphoCLIPDataset` does not read a manifest file. It builds its index by scanning the extracted artifact directories.
+
+Initialization inputs:
+
+- `feature_dir`: usually `data/features` or `data/tensors`
+- `plates`: plate identifiers whose subdirectories should be scanned
+- `metadata`: a `MetadataIndex`
+
+For each requested plate:
+
+1. Open `feature_dir/<plate>/`.
+2. Read every `rXXcXXfXX.pt` file.
+3. Parse `row` and `col` from the filename.
+4. Convert `(row, col)` into a well ID like `A01`.
+5. Group all site files from the same well together.
+6. Look up `(barcode, well)` in `MetadataIndex`.
+7. Optionally filter out:
+   - controls if `exclude_controls=True`
+   - unwanted perturbation types if `pert_types` is set
+
+The internal index stores:
+
+```text
+(plate, well, [site_paths])
+```
+
+This means construction is filesystem-driven and lazy:
+
+- dataset initialization only scans and groups paths
+- the actual tensors are loaded later in `__getitem__`
+
+## Stage 5: Materialize one sample
+
+When `dataset[idx]` is called:
+
+1. Load all `.pt` files for that well.
+2. Optionally subsample sites if `max_sites_per_well` is set.
+3. Stack site tensors into one tensor.
+4. Look up the well metadata.
+5. Generate text with `generate_text()` using the configured `text_level`.
+
+Text levels are:
+
+- `name_only`
+- `name_target`
+- `full`
+
+Examples:
+
+- compound: `Chemical perturbation: <name>.`
+- CRISPR: `CRISPR knockout of <gene>.`
+- ORF: `ORF overexpression of <gene>.`
+- controls: `Negative control (...)` or `Positive control (...)`
+
+The returned object is `MorphoCLIPSample`.
+
+## Stage 6: Batch and split
+
+### Collation
+
+Different wells can have different numbers of sites. `collate_fn()` pads to the largest site count in the batch and returns:
+
+- `features`
+- `site_mask`
+- `text`
+- `plates`
+- `wells`
+- `pert_info`
+
+### Splitting
+
+`src/morphoclip/data/splits.py` provides three split strategies:
+
+- `cpjump1_official_representation`: official CPJUMP1 representation split
+- `cpjump1_official_gene_compound`: official CPJUMP1 gene-compound target split
+- `cellclip_cpjump_style`: CellCLIP-style deterministic 75/25 split within benchmark slices
+
+The default in `configs/dataset.yml` is `cpjump1_official_representation`.
+
+## Practical directory layout
+
+After download and extraction, the relevant layout is:
+
+```text
+data/
+  raw/
+    <batch>/
+      <plate_measurement_dir>/
+        Images/
+  metadata/
+    platemaps/
+    external_metadata/
+  features/
+    <barcode>/
+      r01c01f01.pt
+      r01c01f02.pt
+  tensors/
+    <barcode>/
+      r01c01f01.pt
+      r01c01f02.pt
+```
+
+One subtle but important detail:
+
+- raw downloads are organized by full plate measurement directory names such as `BR00116991__2020-11-05T19_51_35-Measurement1`
+- extracted artifacts are organized by barcode only, such as `BR00116991`
+
+So the runtime dataset is effectively barcode-indexed even though the raw source data is measurement-directory-indexed.
+
+## Legacy CSV pipeline
+
+There is also an older benchmark-oriented pipeline in:
+
+- `scripts/label_generator.py`
+- `scripts/train_test_split.py`
+
+That flow creates `labels.csv` plus CSV train/test splits from raw filenames and profile metadata.
+
+It is useful for exports and benchmark scripts, but it is separate from the main MorphoCLIP training dataset described above. The current package-level dataset is the well-level `.pt`-backed pipeline implemented in `src/morphoclip/data/`.

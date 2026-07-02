@@ -1,0 +1,238 @@
+# CPJUMP1 Split Strategy
+
+This note describes the split strategies that are currently supported in this repo.
+
+The supported strategies are:
+
+- `cpjump1_official_representation`
+- `cpjump1_official_gene_compound`
+- `cellclip_cpjump_style`
+
+These are implemented in `src/morphoclip/data/splits.py` and are the only split names that should be used in configs, scripts, and analysis.
+
+## Inputs And Metadata
+
+The split code relies on two metadata sources:
+
+- benchmark experiment metadata:
+  - `output/benchmark/input/experiment-metadata.tsv`
+  - fallback: `output/benchmark/output/experiment-metadata.tsv`
+- official CPJUMP1 split metadata:
+  - `baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/datasplits/cpjump1_metadata.csv`
+
+The benchmark metadata provides:
+
+- `Assay_Plate_Barcode`
+- `Cell_type`
+- `Perturbation`
+- `Time`
+
+The official split metadata provides:
+
+- `Metadata_Plate`
+- `Metadata_Well`
+- `Metadata_broad_sample`
+- `Metadata_target`
+- `Metadata_cell_line`
+- `Metadata_experiment_type`
+- `Metadata_timepoint`
+- `Metadata_timepoint_code`
+- `Metadata_target_is_across`
+- `Metadata_target_radix`
+
+All split manifests written by the repo are keyed by:
+
+- `Metadata_Plate`
+- `Metadata_Well`
+
+This is the canonical split key for training/export/benchmark handoff in this codebase.
+
+## Supported Strategy 1: `cpjump1_official_representation`
+
+This is the default split for current training configs.
+
+### Assignment Rule
+
+For each dataset well with official split metadata:
+
+- `CRISPR` and `ORF` wells go to `train`
+- `Compound` wells with `Metadata_timepoint_code == "low"` go to `validate`
+- `Compound` wells with `Metadata_timepoint_code == "high"` go to `test`
+
+Controls and empty `broad_sample` entries are skipped.
+
+### Practical Meaning
+
+This is the benchmark-faithful representation-learning split.
+
+It is intended to train on genetic perturbations and evaluate transfer to compounds:
+
+- training domain: genetic perturbations
+- validation domain: low-time compounds
+- test domain: high-time compounds
+
+### Grouping Properties
+
+This strategy keeps:
+
+- all wells for the same perturbation together
+- all images from the same well together
+
+It does not add a special extra rule for:
+
+- CRISPR sister-guide pairing
+- duplicate compound identifier pairing
+
+Those constraints come from the benchmark guidance, but this implementation follows the released official split metadata rather than reconstructing extra grouping rules locally.
+
+## Supported Strategy 2: `cpjump1_official_gene_compound`
+
+This is the official target-holdout split.
+
+### Assignment Rule
+
+For each dataset well with official split metadata:
+
+- keep only rows with `Metadata_target_is_across == TRUE`
+- group rows by `Metadata_target`
+- sort targets by `Metadata_target_radix` and then by target name
+- assign:
+  - first `60%` of targets to `train`
+  - next `20%` to `validate`
+  - remaining `20%` to `test`
+
+Controls and empty `broad_sample` entries are skipped.
+
+### Practical Meaning
+
+This is the supported split when the question is:
+
+- can the model generalize to unseen biological targets?
+
+The split assignment is target-level and then propagated to all linked wells for that target.
+
+### Grouping Properties
+
+This strategy keeps:
+
+- all wells for the same target together
+- all images from the same well together
+- CRISPR guide families together to the extent that they share the same official target
+
+It is the strictest supported split in the repo with respect to biological leakage.
+
+## Supported Strategy 3: `cellclip_cpjump_style`
+
+This is the repo’s local adaptation of the upstream CellCLIP CP-JUMP split.
+
+### Assignment Rule
+
+The code first builds benchmark slices by:
+
+- `Cell_type`
+- `Perturbation`
+- `Time`
+
+Inside each slice:
+
+- group wells by `Metadata_broad_sample`
+- sort those groups lexically
+- assign the first `75%` to `train`
+- assign the remaining `25%` to `test`
+- `validate` is empty
+
+Controls and empty `broad_sample` entries are skipped.
+
+### Practical Meaning
+
+This is not the official CPJUMP1 representation split.
+
+It is meant for local reproduction of the CellCLIP-style within-slice holdout:
+
+- train/test split only
+- no validation subset
+- balanced separately inside each benchmark slice
+
+In the short benchmark timeline, this effectively produces per-slice splitting inside the six standard groups:
+
+- `A549 compound 24`
+- `U2OS compound 24`
+- `A549 crispr 96`
+- `U2OS crispr 96`
+- `A549 orf 48`
+- `U2OS orf 48`
+
+### Grouping Properties
+
+This strategy keeps:
+
+- the same `broad_sample` together within a fixed `(Cell_type, Perturbation, Time)` slice
+- all images from the same well together
+
+It does not guarantee:
+
+- target-level holdout
+- cross-modality target grouping
+- a benchmark-style validation subset
+
+## Leakage-Control Summary
+
+The CPJUMP1 paper recommends these grouping constraints when constructing splits:
+
+- same perturbation replicates stay together
+- both CRISPR guides for the same target stay together
+- duplicate compound identities stay together
+- all cells from the same well stay together
+
+The supported repo strategies relate to those rules as follows:
+
+| Strategy                          | Same perturbation replicates together | Target / guide grouping                 | Same well together |
+| --------------------------------- | ------------------------------------- | --------------------------------------- | ------------------ |
+| `cpjump1_official_representation` | Yes                                   | Not explicit beyond official split file | Yes                |
+| `cpjump1_official_gene_compound`  | Yes                                   | Yes, by official target                 | Yes                |
+| `cellclip_cpjump_style`           | Yes, within slice                     | No                                      | Yes                |
+
+Two practical points matter most:
+
+- if you want benchmark-faithful representation learning, use `cpjump1_official_representation`
+- if you want target-holdout evaluation, use `cpjump1_official_gene_compound`
+- if you want the CellCLIP-style train/test recipe, use `cellclip_cpjump_style`
+
+## CellCLIP Script Comparison
+
+The upstream-style local strategy in this repo is `cellclip_cpjump_style`, not the official CPJUMP1 split.
+
+Relative to the official representation split:
+
+- `cellclip_cpjump_style` uses `train/test`, not `train/validate/test`
+- it splits within `(Cell_type, Perturbation, Time)` slices
+- it holds out `25%` of `broad_sample` groups per slice
+- it does not enforce:
+  - `CRISPR/ORF -> train`
+  - `Compound low -> validate`
+  - `Compound high -> test`
+
+So benchmark claims should distinguish clearly between:
+
+- official CPJUMP1 split results
+- CellCLIP-style split results
+
+They are not interchangeable.
+
+## Worked Example
+
+An official representation split assignment looks like this:
+
+| Metadata_Plate | Metadata_Well | Metadata_experiment_type | Metadata_timepoint_code | Split      |
+| -------------- | ------------- | ------------------------ | ----------------------- | ---------- |
+| `BR00117020`   | `A01`         | `ORF`                    | `low`                   | `train`    |
+| `BR00116997`   | `A01`         | `CRISPR`                 | `high`                  | `train`    |
+| `BR00116991`   | `A01`         | `Compound`               | `low`                   | `validate` |
+| `BR00117012`   | `A01`         | `Compound`               | `high`                  | `test`     |
+
+Under any supported strategy in this repo:
+
+- the same well is never split across subsets
+- the same site image from that well is therefore never split across subsets
+
+The split unit is always above the site-image level.

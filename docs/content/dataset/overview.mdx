@@ -1,0 +1,105 @@
+# CPJUMP Dataset Structure
+
+Endpoint: s3://cellpainting-gallery/cpg0000-jump-pilot/source_4/
+
+The following relative paths are relevant to model training (choose `2020_11_04_CPJUMP1` as our batch)
+
+```text
+images/2020_11_04_CPJUMP1/Images
+workspace/metadata/platemaps/2020_11_04_CPJUMP1/
+workspace/metadata/external_metadata/
+```
+
+Example Plate S3 URI:
+s3://cellpainting-gallery/cpg0000-jump-pilot/source_4/images/2020_11_04_CPJUMP1/images/
+
+The folder for each 384-well plate typically contains images from nine sites for each well (for some wells 7,8 or 16 sites were imaged). The (x,y) coordinates of sites are available in the Metadata_PositionX and Metadata_PositionY columns of the load_data.csv.gz files in the load_data_csv folder. There are eight images per site (five from the fluorescent channels and three brightfield images). The names of the image files follow the naming convention - rXXcXXfXXp01-chXXsk1fk1fl1.tiff where
+
+    rXX is the row number of the well that was imaged. rXX ranges from r01 to r16.
+    cXX is the column number of the well that was imaged. cXX ranges from c01 to c24.
+    fXX corresponds to the site that was imaged. fXX ranges from f01 to f16.
+    chXX corresponds to the fluorescent channels imaged. chXX ranges from ch01 to ch08.
+        ch01 - Alexa 647 (Mitochondria / MitoTracker)
+        ch02 - Alexa 568 (Actin / Phalloidin)
+        ch03 - Alexa 488 long (Golgi / WGA)
+        ch04 - Alexa 488 (ER / Concanavalin A)
+        ch05 - Hoechst 33342 (DNA / Nucleus)
+        ch06-8 - three brighfield z planes.
+
+Cell bounding boxes and segmentation masks have not been provided.
+
+## Plate Size Summary
+
+Generated via `uv run poe check-plates` (51 plates, 3.31 TiB total).
+
+| Plate                                          |                       Size |         Files |
+| ---------------------------------------------- | -------------------------: | ------------: |
+| BR00116991\_\_2020-11-05T19_51_35-Measurement1 |                  62.72 GiB |         27651 |
+| BR00116992\_\_2020-11-05T21_31_31-Measurement1 |                  63.13 GiB |         27651 |
+| BR00116993\_\_2020-11-05T23_11_39-Measurement1 |                  62.45 GiB |         27651 |
+| BR00116994\_\_2020-11-06T00_59_44-Measurement1 |                  62.84 GiB |         27651 |
+| BR00116995\_\_2020-11-06T02_41_05-Measurement1 |                  57.56 GiB |         27651 |
+| BR00116996\_\_2020-11-09T15_32_10-Measurement3 |                  60.47 GiB |         27651 |
+| BR00116997\_\_2020-11-06T09_19_16-Measurement1 |                  62.19 GiB |         27651 |
+| BR00116998\_\_2020-11-06T20_06_24-Measurement1 |                  62.29 GiB |         27651 |
+| BR00116999\_\_2020-11-06T21_45_58-Measurement1 |                  62.64 GiB |         27651 |
+| BR00117000\_\_2020-11-03T07_28_24-Measurement1 |                  64.70 GiB |         27651 |
+| BR00117001\_\_2020-11-03T09_07_42-Measurement1 |                  64.23 GiB |         27651 |
+| BR00117002\_\_2020-11-05T00_04_13-Measurement1 |                  58.99 GiB |         27651 |
+| BR00117003\_\_2020-11-05T05_07_49-Measurement1 |                  63.65 GiB |         27651 |
+| BR00117004\_\_2020-11-05T01_44_16-Measurement1 |                  64.00 GiB |         27651 |
+| BR00117005\_\_2020-11-05T12_53_34-Measurement2 |                  62.00 GiB |         27652 |
+| BR00117006\_\_2020-11-02T19_54_45-Measurement1 |                  64.34 GiB |         27651 |
+| BR00117008\_\_2020-11-09T00_55_40-Measurement1 |                  59.37 GiB |         27651 |
+| BR00117009\_\_2020-11-09T02_35_08-Measurement1 |                  59.50 GiB |         27651 |
+| BR00117010\_\_2020-11-08T18_18_00-Measurement1 |                  58.55 GiB |         27651 |
+| BR00117011\_\_2020-11-08T19_57_47-Measurement1 |                  58.86 GiB |         27651 |
+| BR00117012\_\_2020-11-08T14_58_34-Measurement1 |                  57.80 GiB |         27651 |
+| BR00117013\_\_2020-11-08T16_38_19-Measurement1 |                  58.67 GiB |         27651 |
+| BR00117015\_\_2020-11-10T23_51_39-Measurement1 |                 107.71 GiB |         49155 |
+| BR00117016\_\_2020-11-11T02_32_26-Measurement1 |                 107.88 GiB |         49155 |
+| BR00117017\_\_2020-11-10T18_25_46-Measurement1 |                 107.91 GiB |         49155 |
+| BR00117019\_\_2020-11-10T21_10_40-Measurement1 |                 107.59 GiB |         49155 |
+| BR00117020\_\_2020-11-04T20_45_03-Measurement1 |                  62.36 GiB |         27651 |
+| BR00117021\_\_2020-11-04T19_05_14-Measurement2 |                  61.85 GiB |         27651 |
+| BR00117022\_\_2020-11-05T14_43_33-Measurement1 |                  63.32 GiB |         27651 |
+| BR00117023\_\_2020-11-05T16_32_08-Measurement1 |                  62.63 GiB |         27651 |
+| BR00117024\_\_2020-11-06T04_20_37-Measurement1 |                  60.32 GiB |         27651 |
+| BR00117025\_\_2020-11-06T06_00_19-Measurement1 |                  60.26 GiB |         27651 |
+| BR00117026\_\_2020-11-06T07_39_45-Measurement1 |                  60.31 GiB |         27651 |
+| BR00117050\_\_2020-11-09T07_34_11-Measurement1 |                  61.48 GiB |         27651 |
+| BR00117051\_\_2020-11-09T09_14_02-Measurement1 |                  63.08 GiB |         27651 |
+| BR00117052\_\_2020-11-09T04_14_50-Measurement1 |                  63.31 GiB |         27651 |
+| BR00117053\_\_2020-11-09T05_54_45-Measurement1 |                  63.49 GiB |         27651 |
+| BR00117054\_\_2020-11-08T21_37_22-Measurement1 |                  63.52 GiB |         27651 |
+| BR00117055\_\_2020-11-08T23_16_47-Measurement1 |                  63.67 GiB |         27651 |
+| BR00118039\_\_2020-11-02T18_16_01-Measurement1 |                  61.91 GiB |         27651 |
+| BR00118040\_\_2020-11-02T23_13_02-Measurement1 |                  62.12 GiB |         27651 |
+| BR00118041\_\_2020-11-05T03_24_00-Measurement1 |                  64.02 GiB |         27651 |
+| BR00118042\_\_2020-11-04T22_24_50-Measurement1 |                 118.47 GiB |         55302 |
+| BR00118043\_\_2020-11-05T18_12_02-Measurement2 |                  64.73 GiB |         27651 |
+| BR00118044\_\_2020-11-03T23_15_33-Measurement1 |                  64.27 GiB |         27651 |
+| BR00118045\_\_2020-11-03T05_49_34-Measurement1 |                  61.73 GiB |         27651 |
+| BR00118046\_\_2020-11-03T00_51_55-Measurement1 |                  61.26 GiB |         27651 |
+| BR00118047\_\_2020-11-03T02_31_55-Measurement1 |                  60.13 GiB |         27651 |
+| BR00118048\_\_2020-11-03T04_10_30-Measurement1 |                  60.39 GiB |         27651 |
+| BR00118049\_\_2020-11-02T16_37_05-Measurement1 |                  58.17 GiB |         27651 |
+| BR00118050\_\_2020-11-02T21_33_56-Measurement1 |                  63.04 GiB |         27651 |
+| **TOTAL**                                      | **3391.89 GiB (3.31 TiB)** | **1,523,869** |
+
+Notable observations:
+
+- Most plates are ~58-65 GiB with 27,651 files each (5 fluorescent + 3 brightfield channels x 9 sites x 384 wells)
+- 4 plates (BR00117015-BR00117019) are ~2x larger (~108 GiB, 49,155 files) — likely 16 sites per well
+- BR00118042 is the largest single plate at 118.47 GiB (55,302 files)
+- BR00117005 has one extra file (27,652 vs 27,651)
+
+## Access Methods
+
+## rclone
+
+List files
+
+```bash
+rclone lsd :s3,provider=AWS,region=us-east-1,no_check_bucket=true:cellpainting-gallery/cpg0000-jump-pilot/source_4/
+```

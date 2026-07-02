@@ -1,0 +1,83 @@
+schedule_name: "chemberta_full_benchmark"
+base_config: "configs/cellclip/official_chemberta_upstreamish_film_remove_smiles.yaml"
+
+compare_full_benchmark_dirs:
+  baseline: "output/benchmark_full_baseline"
+  pretrained_clip: "output/benchmark_full_cellclip_hf"
+
+stage_budgets:
+  stage1:
+    max_train_steps: 1500
+    max_eval_wells: 1024
+    promote_top: 4
+  stage2:
+    max_train_steps: 4500
+    max_eval_wells: null
+    promote_top: 2
+  stage3:
+    max_train_steps: null
+    max_eval_wells: null
+    promote_top: null
+
+stage2_tuning_modes:
+  - "frozen"
+  - "top2"
+  - "full"
+
+stage1_candidates:
+  - id: "film_remove_mean"
+    model:
+      variant: "chemberta_film"
+      chem_fusion_type: "film"
+      chem_prompt_policy: "remove_smiles"
+      chemberta_pooling: "mean"
+      freeze_chemberta: true
+      chemberta_tune_layers: 0
+  - id: "film_keep_mean"
+    model:
+      variant: "chemberta"
+      chem_fusion_type: "film"
+      chem_prompt_policy: "keep_smiles"
+      chemberta_pooling: "mean"
+      freeze_chemberta: true
+      chemberta_tune_layers: 0
+  - id: "film_keep_cls"
+    model:
+      variant: "chemberta"
+      chem_fusion_type: "film"
+      chem_prompt_policy: "keep_smiles"
+      chemberta_pooling: "cls"
+      freeze_chemberta: true
+      chemberta_tune_layers: 0
+  - id: "residual_keep_mean"
+    model:
+      variant: "chemberta"
+      chem_fusion_type: "residual_add"
+      chem_prompt_policy: "keep_smiles"
+      chemberta_pooling: "mean"
+      freeze_chemberta: true
+      chemberta_tune_layers: 0
+  - id: "residual_keep_cls"
+    model:
+      variant: "chemberta"
+      chem_fusion_type: "residual_add"
+      chem_prompt_policy: "keep_smiles"
+      chemberta_pooling: "cls"
+      freeze_chemberta: true
+      chemberta_tune_layers: 0
+  - id: "concat_keep_mean"
+    model:
+      variant: "chemberta"
+      chem_fusion_type: "concat_mlp"
+      chem_prompt_policy: "keep_smiles"
+      chemberta_pooling: "mean"
+      freeze_chemberta: true
+      chemberta_tune_layers: 0
+  - id: "concat_keep_cls"
+    model:
+      variant: "chemberta"
+      chem_fusion_type: "concat_mlp"
+      chem_prompt_policy: "keep_smiles"
+      chemberta_pooling: "cls"
+      freeze_chemberta: true
+      chemberta_tune_layers: 0

@@ -1,0 +1,70 @@
+# 8-Bit-Only Aggressive Compression Plan (Quality 50/25/10)
+
+## Summary
+
+All candidates will use **8-bit images only** (no 16-bit outputs), then apply aggressive lossy compression with quality levels **50, 25, 10**. Selection is based on max compression under automated (`SNR`, `PSNR`, `SSIM`) and manual QC gates.
+
+## Compression Candidates (all 8-bit)
+
+1. **Global min-max -> JP2** (`q=50,25,10`)
+2. **Percentile clipping (e.g., p0.1–p99.9) -> JP2** (`q=50,25,10`)
+3. **Percentile clipping -> WebP** (`q=50,25,10`)
+4. **Percentile clipping -> JPEG** (`q=50,25,10`)
+
+## Pipeline
+
+1. Build manifest from `data/subset_raw` (`well/site/channel/path/size`).
+2. Convert each TIFF to 8-bit using each normalization strategy.
+3. Compress each 8-bit image for each codec/quality pair.
+4. Compute per-image metrics vs original (original normalized to matched dynamic range):
+   - `compression_ratio`, `SNR`, `PSNR`, `SSIM`
+5. Produce summaries:
+   - per-image CSV
+   - per-candidate global + per-channel stats
+   - leaderboard (Pareto sorted by ratio then quality)
+
+## Manual Inspection
+
+1. Stratified sample: 30–50 images across `ch1–ch5`.
+2. Panels per sample: original / compressed / abs-diff / histogram.
+3. Reviewer checklist: cellular boundary clarity, puncta/texture retention, artifacts (blur/ringing/banding), pass/fail note.
+
+## Selection Rules
+
+1. Hard gates:
+   - decode success = 100%
+   - manual fail rate ≤ 10%
+   - p5 thresholds: `PSNR >= 32 dB`, `SSIM >= 0.95`, `SNR >= 25 dB`
+2. Winner:
+   - highest median compression ratio among gate-passing candidates
+   - tie-break: higher median SSIM, then PSNR
+
+## Public Interface / Config Changes
+
+1. Add `cpjump.compression` block in [dataset.yml](/home/rongfei/WorkSpace/project-spring26-jumpcp/configs/dataset.yml):
+   - `bit_depth_mode: "8bit_only"` (mandatory)
+   - `normalization_methods: ["minmax","percentile"]`
+   - `codecs: ["jp2","webp"]`
+   - `quality_levels: [50,25,10]`
+   - QC thresholds and output paths
+2. Extend file discovery in [image_loader.py](/home/rongfei/WorkSpace/project-spring26-jumpcp/src/morphoclip/data/image_loader.py) for compressed extensions used in experiments.
+3. Add scripts:
+   - `scripts/compression/compress_images.py`
+   - `scripts/compression/evaluate_quality.py`
+   - `scripts/compression/manual_inspection.py`
+   - `scripts/compression/run_pipeline.py`
+
+## Tests
+
+1. 8-bit conversion correctness for min-max and percentile methods.
+2. Parsing/grouping works for compressed outputs.
+3. Metric functions validated on identical and degraded cases.
+4. End-to-end subset run creates all expected artifacts.
+5. Source TIFF files remain unchanged.
+
+## Assumptions and Defaults
+
+1. **8-bit-only is strict**: no 16-bit compressed candidate is allowed.
+2. Initial run is subset smoke test on `data/subset_raw`.
+3. Quality sweep is fixed at `50,25,10` for all candidates.
+4. If all fail gates, next iteration adjusts normalization/clipping policy before changing quality sweep.

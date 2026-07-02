@@ -1,0 +1,76 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{float}
+
+\graphicspath{{figures/}}
+
+\begin{document}
+
+\title{MorphoCLIP: Text-Supervised Contrastive Learning for Perturbation Matching in Cell Painting Images}
+
+\author{
+  \IEEEauthorblockN{Sukhrobbek Ilyosbekov}
+  \IEEEauthorblockA{
+    Northeastern University \\
+    Portland, ME, USA \\
+    ilyosbekov.s@northeastern.edu
+  }
+  \and
+  \IEEEauthorblockN{Shubham Gajjar}
+  \IEEEauthorblockA{
+    Northeastern University \\
+    Portland, ME, USA \\
+    gajjar.shu@northeastern.edu
+  }
+  \and
+  \IEEEauthorblockN{Rongfei Jin}
+  \IEEEauthorblockA{
+    Northeastern University \\
+    Portland, ME, USA \\
+    jin.ron@northeastern.edu
+  }
+}
+
+\maketitle
+
+\begin{abstract}
+  Cell Painting microscopy produces multi-channel phenotypic images of cells under chemical or genetic perturbation, but matching those images back to the underlying perturbation is difficult and remains a bottleneck for phenotypic drug discovery.
+  We present MorphoCLIP, a contrastive learning framework that embeds Cell Painting images and natural-language descriptions of perturbations in a shared 512-dimensional space.
+  The image branch passes each of five fluorescence channels through a frozen DINOv3 ViT-L/16 backbone and aggregates the resulting CLS tokens with a single-layer CrossChannelFormer.
+  The text branch uses a frozen BioClinical ModernBERT with a trainable projection head. Training uses the Continuously Weighted Contrastive Loss (CWCL) to handle soft-positive relationships across perturbations that share a biological target.
+  On the CPJUMP1 benchmark (51 plates, 817 candidate perturbations), MorphoCLIP reaches text-to-image Recall@10 of 24.3\% with a median rank of 28, around two orders of magnitude above the random-retrieval baseline of 0.12\%.
+  Unlike prior contrastive methods restricted to small molecules, MorphoCLIP is trained jointly on compounds, CRISPR knockouts, and ORF overexpressions in a single model, and supports both retrieval directions at inference.
+\end{abstract}
+
+\begin{IEEEkeywords}
+  contrastive learning, cell painting, morphological profiling, CLIP, perturbation matching
+\end{IEEEkeywords}
+
+% Section I
+\input{sections/introduction}
+% Section II
+\input{sections/problem_statement}
+% Section III
+\input{sections/related_work}
+% Section IV
+\input{sections/methods}
+% Section V
+\input{sections/experiments}
+% Section VI
+\input{sections/results}
+% Section VII
+\input{sections/conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

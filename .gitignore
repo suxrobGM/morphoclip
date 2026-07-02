@@ -1,0 +1,82 @@
+# Byte-compiled
+*.py[cod]
+*$py.class
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# uv / venv
+.venv/
+venv/
+env/
+
+# Project
+outputs/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Data (keep structure via .gitkeep)
+data/**/
+data/.cache/
+!data/**/.gitkeep
+!data/metadata/
+!data/features/.gitkeep
+!data/tensors/.gitkeep
+!data/visualizations/**
+
+# Generated baseline data. The vendored baseline repositories use Git LFS for
+# these files, and the local pointers are not useful without the LFS objects.
+baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/load_data_csv/
+baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/profiles/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Build / dist
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Logs / coverage
+*.log
+.coverage
+htmlcov/
+
+.DS_Store
+
+.claude/settings.local.json
+output/
+.VSCodeCounter/
+
+# LaTeX build files
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.lot
+*.out
+*.toc
+*.synctex.gz
+*.synctex(busy)
+*.nav
+*.snm
+*.vrb
+*.dvi
+*.ps

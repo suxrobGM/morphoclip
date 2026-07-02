@@ -1,0 +1,46 @@
+schedule_name: "chemberta_full_augmentation"
+base_config: "configs/cellclip/official_chemberta_upstreamish_film_keep_cls_augmented.yaml"
+
+compare_full_benchmark_dirs:
+  baseline: "output/benchmark_full_baseline"
+  pretrained_clip: "output/benchmark_full_cellclip_hf"
+
+stage_budgets:
+  stage1:
+    max_train_steps: 1500
+    max_eval_wells: 1024
+    promote_top: 3
+  stage2:
+    max_train_steps: 4500
+    max_eval_wells: null
+    promote_top: 3
+  stage3:
+    max_train_steps: null
+    max_eval_wells: null
+    promote_top: null
+
+stage2_tuning_modes:
+  - "full"
+
+stage1_candidates:
+  - id: "within_well_only"
+    dataset:
+      train_max_sites_per_well: 5
+      eval_max_sites_per_well: null
+      within_well_interp_sites: 1
+      same_pert_interp_sites: 0
+      interp_alpha: 0.4
+  - id: "same_pert_only"
+    dataset:
+      train_max_sites_per_well: 5
+      eval_max_sites_per_well: null
+      within_well_interp_sites: 0
+      same_pert_interp_sites: 1
+      interp_alpha: 0.4
+  - id: "mixed"
+    dataset:
+      train_max_sites_per_well: 5
+      eval_max_sites_per_well: null
+      within_well_interp_sites: 1
+      same_pert_interp_sites: 1
+      interp_alpha: 0.4

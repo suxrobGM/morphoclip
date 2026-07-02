@@ -1,0 +1,10 @@
+extends: "base.yaml"
+
+dataset:
+  split_strategy: "cellclip_cpjump_style"
+  eval_subset: "test"
+  val_fraction: 0.0
+  test_fraction: 0.25
+
+runtime:
+  run_name: "cellclip_cpjump_style_base"

@@ -1,0 +1,9 @@
+extends: "official_chemberta_upstreamish_film_remove_smiles.yaml"
+
+model:
+  variant: "chemberta"
+  chem_fusion_type: "film"
+  chem_prompt_policy: "keep_smiles"
+
+runtime:
+  run_name: "cellclip_chemberta_upstreamish_film_keep_smiles"

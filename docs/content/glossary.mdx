@@ -1,0 +1,101 @@
+# Glossary
+
+Plain-language definitions of technical terms used throughout this documentation.
+
+## Biology & Cell Imaging
+
+### Cell Painting
+
+A laboratory technique that uses fluorescent dyes to stain six components of a cell (nucleus, cytoplasm, mitochondria, etc.), then photographs them under a microscope. Each "paint" highlights a different part of the cell, producing a rich visual fingerprint of cell health and behavior.
+
+### Perturbation
+
+Any deliberate change applied to cells in an experiment. In this project, perturbations include chemical compounds (drugs), CRISPR knockouts (disabling a gene), and ORF overexpressions (forcing a gene to produce more protein).
+
+### Compound
+
+A chemical substance (typically a drug or drug-like molecule) applied to cells to observe its effect on cell morphology.
+
+### CRISPR Knockout
+
+A genetic editing technique that disables ("knocks out") a specific gene. By observing how cells change when a gene is turned off, researchers can learn what that gene does.
+
+### ORF Overexpression
+
+The opposite of a knockout — a gene is artificially forced to produce more protein than normal. "ORF" stands for Open Reading Frame, the DNA sequence that encodes a protein.
+
+### Negative Control (NEGCON)
+
+Cells treated with an inert substance (like DMSO) that should have no effect. These serve as a baseline — any changes seen in treated cells are measured relative to the controls.
+
+### Batch Effect
+
+Unwanted variation between experimental runs. For example, images taken on different days or different plates may look slightly different even for the same treatment, due to small differences in staining, temperature, or imaging conditions.
+
+### Well
+
+A small compartment on a multi-well plate where cells are grown and treated. A typical plate has 384 wells, each containing cells with a specific treatment.
+
+### Site
+
+A specific location within a well that is photographed. Multiple sites per well are imaged to capture representative cell populations.
+
+## Machine Learning
+
+### Contrastive Learning
+
+A training approach where the model learns by comparing examples. It pulls matching pairs closer together (e.g., an image and its correct text description) and pushes non-matching pairs apart. CLIP (by OpenAI) popularized this approach for vision-language models.
+
+### Embedding
+
+A numerical representation (a list of numbers, or "vector") that captures the meaning of an input. Images and text are both converted into embeddings in the same shared space, so that similar items end up near each other.
+
+### Cosine Similarity
+
+A measure of how similar two embeddings are, based on the angle between them. A value of 1.0 means identical direction (very similar), 0 means unrelated, and -1.0 means opposite.
+
+### CLS Token
+
+A special token in transformer models that serves as a summary of the entire input. After processing, the CLS token's embedding represents the overall meaning of the image or text.
+
+### ViT (Vision Transformer)
+
+A neural network architecture that processes images by splitting them into patches and applying the same transformer architecture used in language models. DINOv3 uses a ViT-L/16 (Large model, 16x16 pixel patches).
+
+### mAP (Mean Average Precision)
+
+A metric that measures how well a model ranks correct matches above incorrect ones. Higher mAP means the model is better at retrieving the right answers. Used to evaluate MorphoCLIP's ability to match perturbations.
+
+### Fine-tuning
+
+Taking a pre-trained model and continuing its training on a specific dataset. MorphoCLIP fine-tunes projection heads while keeping the base models (DINOv3, ModernBERT) frozen.
+
+### Projection Head
+
+A small neural network that transforms embeddings from one dimension to another. MorphoCLIP uses projection heads to map both image and text representations into a shared 512-dimensional space.
+
+## MorphoCLIP-Specific
+
+### DINOv3
+
+A self-supervised vision model by Meta that learns visual representations without labeled data. MorphoCLIP uses DINOv3 ViT-L/16 (300 million parameters) as the image encoder, kept frozen during training.
+
+### BioClinical ModernBERT
+
+A language model specialized for biomedical and clinical text. MorphoCLIP uses it (150 million parameters) to encode text descriptions of perturbations, kept frozen during training.
+
+### CWCL (Continuously Weighted Contrastive Loss)
+
+MorphoCLIP's training loss function. Unlike standard contrastive loss (which treats matches as binary — correct or not), CWCL assigns soft weights based on how similar perturbations are, allowing the model to learn from partial matches.
+
+### CWA (Cross-Well Alignment)
+
+A batch correction technique applied during training to reduce plate-to-plate variation. It aligns embeddings from different experimental wells so the model focuses on biological signal rather than technical noise.
+
+### CrossChannelFormer
+
+A small transformer that combines features from the five fluorescence channels into a single image representation. Each channel captures a different cell component (mitochondria, actin, Golgi, ER, DNA), and the CrossChannelFormer learns how to merge them.
+
+### CPJUMP1
+
+The benchmark dataset used in this project, from the JUMP Cell Painting Consortium. It contains 51 plates of Cell Painting images with 303 matched chemical and genetic perturbations, designed to test whether computational methods can identify which compounds and genes have similar biological effects.

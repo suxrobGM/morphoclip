@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" font-family="system-ui, -apple-system, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <linearGradient id="imgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d9488;stop-opacity:0.15"/>
+      <stop offset="100%" style="stop-color:#0d9488;stop-opacity:0.05"/>
+    </linearGradient>
+    <linearGradient id="txtGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.15"/>
+      <stop offset="100%" style="stop-color:#6366f1;stop-opacity:0.05"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="450" y="30" text-anchor="middle" font-size="18" font-weight="700" fill="#1e293b">MorphoCLIP Architecture</text>
+
+  <!-- Image Branch Background -->
+  <rect x="20" y="50" width="860" height="155" rx="12" fill="url(#imgGrad)" stroke="#0d9488" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="40" y="75" font-size="12" font-weight="600" fill="#0d9488">IMAGE BRANCH</text>
+
+  <!-- Cell Painting Image -->
+  <rect x="40" y="90" width="120" height="90" rx="8" fill="white" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="100" y="125" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Cell Painting</text>
+  <text x="100" y="142" text-anchor="middle" font-size="10" fill="#64748b">5 channels</text>
+  <text x="100" y="158" text-anchor="middle" font-size="10" fill="#64748b">1080 x 1080</text>
+
+  <!-- Arrow -->
+  <line x1="170" y1="135" x2="210" y2="135" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- DINOv3 -->
+  <rect x="220" y="90" width="130" height="90" rx="8" fill="white" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="285" y="120" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">DINOv3</text>
+  <text x="285" y="137" text-anchor="middle" font-size="10" fill="#64748b">ViT-L/16 (frozen)</text>
+  <text x="285" y="154" text-anchor="middle" font-size="10" fill="#64748b">300M params</text>
+  <text x="285" y="171" text-anchor="middle" font-size="9" fill="#94a3b8">5 x 1024-d CLS tokens</text>
+
+  <!-- Arrow -->
+  <line x1="360" y1="135" x2="400" y2="135" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- CrossChannelFormer -->
+  <rect x="410" y="90" width="140" height="90" rx="8" fill="white" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="480" y="120" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">CrossChannel</text>
+  <text x="480" y="137" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Former</text>
+  <text x="480" y="154" text-anchor="middle" font-size="10" fill="#64748b">1-layer transformer</text>
+  <text x="480" y="171" text-anchor="middle" font-size="9" fill="#94a3b8">5 x 1024 → 1 x 1024</text>
+
+  <!-- Arrow -->
+  <line x1="560" y1="135" x2="600" y2="135" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Image Projection -->
+  <rect x="610" y="90" width="120" height="90" rx="8" fill="white" stroke="#0d9488" stroke-width="1.5"/>
+  <text x="670" y="120" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Projection</text>
+  <text x="670" y="137" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Head</text>
+  <text x="670" y="154" text-anchor="middle" font-size="10" fill="#64748b">1024 → 512</text>
+  <text x="670" y="171" text-anchor="middle" font-size="9" fill="#94a3b8">L2 normalized</text>
+
+  <!-- Arrow to shared space -->
+  <line x1="740" y1="135" x2="780" y2="135" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="780" y1="135" x2="810" y2="270" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Text Branch Background -->
+  <rect x="20" y="220" width="770" height="155" rx="12" fill="url(#txtGrad)" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="6,3"/>
+  <text x="40" y="245" font-size="12" font-weight="600" fill="#6366f1">TEXT BRANCH</text>
+
+  <!-- Prompt Templates -->
+  <rect x="40" y="260" width="130" height="90" rx="8" fill="white" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="105" y="290" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Prompt</text>
+  <text x="105" y="307" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Templates</text>
+  <text x="105" y="327" text-anchor="middle" font-size="10" fill="#64748b">compound / CRISPR</text>
+  <text x="105" y="342" text-anchor="middle" font-size="10" fill="#64748b">ORF / negcon</text>
+
+  <!-- Arrow -->
+  <line x1="180" y1="305" x2="220" y2="305" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- ModernBERT -->
+  <rect x="230" y="260" width="140" height="90" rx="8" fill="white" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="300" y="290" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">BioClinical</text>
+  <text x="300" y="307" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">ModernBERT</text>
+  <text x="300" y="324" text-anchor="middle" font-size="10" fill="#64748b">150M params (frozen)</text>
+  <text x="300" y="341" text-anchor="middle" font-size="9" fill="#94a3b8">768-d embeddings</text>
+
+  <!-- Arrow -->
+  <line x1="380" y1="305" x2="420" y2="305" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Text Projection -->
+  <rect x="430" y="260" width="120" height="90" rx="8" fill="white" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="490" y="290" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Projection</text>
+  <text x="490" y="307" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Head</text>
+  <text x="490" y="324" text-anchor="middle" font-size="10" fill="#64748b">768 → 512</text>
+  <text x="490" y="341" text-anchor="middle" font-size="9" fill="#94a3b8">L2 normalized</text>
+
+  <!-- Arrow to shared space -->
+  <line x1="560" y1="305" x2="600" y2="305" stroke="#64748b" stroke-width="1.5"/>
+  <line x1="600" y1="305" x2="810" y2="290" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Shared Space / Loss -->
+  <rect x="800" y="250" width="80" height="60" rx="30" fill="#f59e0b" fill-opacity="0.15" stroke="#f59e0b" stroke-width="2"/>
+  <text x="840" y="275" text-anchor="middle" font-size="11" font-weight="700" fill="#b45309">CWCL</text>
+  <text x="840" y="292" text-anchor="middle" font-size="10" fill="#b45309">Loss</text>
+
+  <!-- Legend -->
+  <rect x="30" y="390" width="12" height="12" rx="2" fill="#0d9488" fill-opacity="0.3" stroke="#0d9488"/>
+  <text x="48" y="401" font-size="10" fill="#64748b">Image encoder (frozen + trainable heads)</text>
+  <rect x="280" y="390" width="12" height="12" rx="2" fill="#6366f1" fill-opacity="0.3" stroke="#6366f1"/>
+  <text x="298" y="401" font-size="10" fill="#64748b">Text encoder (frozen + trainable head)</text>
+  <rect x="520" y="390" width="12" height="12" rx="2" fill="#f59e0b" fill-opacity="0.3" stroke="#f59e0b"/>
+  <text x="538" y="401" font-size="10" fill="#64748b">Contrastive loss (shared 512-d space)</text>
+</svg>

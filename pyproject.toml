@@ -1,0 +1,129 @@
+[project]
+name = "morphoclip"
+version = "0.1.0"
+description = "Text-Supervised Contrastive Learning for Perturbation Matching in Cell Painting Images"
+authors = [{ name = "team", email = "suxrobgm@gmail.com" }]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.14,<3.15"
+
+dependencies = [
+  "Pillow>=12.1.0",
+  "numpy>=2.4.0",
+  "PyYAML>=6.0.3",
+  "opencv-python>=4.13.0",
+  "transformers>=5.3.0",
+  "huggingface-hub>=1.7.0",
+  "rich>=14.3.0",
+  "pandas>=3.0.0",
+  "seaborn>=0.13.2",
+  "matplotlib>=3.10.0",
+  "scipy>=1.17.0",
+  "scikit-image>=0.26.0",
+  "python-dotenv>=1.2.0",
+  "datasets>=3.6.0",
+  "tensorboard>=2.20.0",
+  "setuptools==81.0.0",
+]
+
+# PyTorch is installed via a selectable, mutually-exclusive extra that picks the
+# right wheel index for your hardware. macOS ignores these indexes (via the
+# sys_platform marker) and pulls the MPS-enabled wheel from the default PyPI.
+#
+#   uv sync --extra cpu        # CPU-only (Linux/Windows), or macOS (MPS)
+#   uv sync --extra cu128      # CUDA 12.8 (RTX 50-series / Blackwell)
+#   uv sync --extra cu130      # CUDA 13.0
+[project.optional-dependencies]
+cpu = ["torch>=2.10.0", "torchvision>=0.25.0"]
+cu128 = ["torch>=2.10.0", "torchvision>=0.25.0"]
+cu130 = ["torch>=2.10.0", "torchvision>=0.25.0"]
+
+[dependency-groups]
+dev = [
+  "pytest>=9.0.0",
+  "ruff>=0.15.0",
+  "mypy>=1.19.0",
+  "types-PyYAML>=6.0.12",
+  "poethepoet>=0.30.0",
+]
+
+[tool.uv]
+package = false
+conflicts = [[{ extra = "cpu" }, { extra = "cu128" }, { extra = "cu130" }]]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform != 'darwin'" },
+  { index = "pytorch-cu128", extra = "cu128", marker = "sys_platform != 'darwin'" },
+  { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform != 'darwin'" },
+]
+torchvision = [
+  { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform != 'darwin'" },
+  { index = "pytorch-cu128", extra = "cu128", marker = "sys_platform != 'darwin'" },
+  { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform != 'darwin'" },
+]
+
+# Task runner (poethepoet). Run with: uv run poe <task>
+[tool.poe.tasks]
+test = "pytest tests/ -v"
+lint = "ruff check ."
+format = "ruff format ."
+typecheck = "mypy src"
+
+check-plates = "python scripts/data/check_plates.py"
+fetch-dataset = "python scripts/data/fetch_dataset.py"
+fetch-dataset-rclone = "python scripts/data/fetch_dataset.py --backend rclone"
+inspect-perturbation = "python scripts/data/inspect_perturbation.py"
+inspect-dataset = "python scripts/data/inspect_dataset.py"
+
+extract-features = "python scripts/features/extract_features.py"
+cellclip-pipeline = "python scripts/cellclip/run_cellclip_pipeline.py"
+extract-pipeline = "python scripts/features/run_pipeline.py"
+upload-features = "python scripts/features/upload_features.py"
+download-features = "python scripts/features/download_features.py"
+downsampling-inspection = "python scripts/features/downsampling_inspection.py"
+dino-heatmap-inspection = "python scripts/features/dino_heatmap_inspection.py"
+
+precompute-text = "python scripts/text/precompute_text_embeddings.py"
+inspect-text = "python scripts/text/inspect_text_embeddings.py"
+
+train = "python scripts/training/train.py --config configs/train/base.yaml"
+eval = "python scripts/training/eval.py --checkpoint output/morphoclip_runs/default/checkpoints/best.pt"
+infer = "python scripts/training/infer.py --checkpoint output/morphoclip_runs/default/checkpoints/best.pt"
+tensorboard = "python -m tensorboard.main --logdir output/morphoclip_runs"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["src", "scripts"]
+extend-exclude = ["baselines"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["morphoclip", "cellclip", "benchmark"]
+
+[tool.mypy]
+python_version = "3.14"
+mypy_path = "src"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

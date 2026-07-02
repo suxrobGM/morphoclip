@@ -1,0 +1,15 @@
+# Multi-GPU DDP training configuration.
+# Launch with: torchrun --nproc_per_node=NUM_GPUS scripts/training/train.py --config configs/train/ddp.yaml --distributed
+
+extends: base.yaml
+
+dataset:
+  batch_size: 128                   # Per-GPU batch size (effective = 128 * num_gpus * accum_steps)
+  num_workers: 4                    # Per-GPU DataLoader workers
+
+distributed:
+  enabled: true
+  backend: "nccl"
+  gradient_accumulation_steps: 1
+  gather_with_grad: true            # Preserve gradient flow through all_gather (better for contrastive loss)
+  find_unused_parameters: false

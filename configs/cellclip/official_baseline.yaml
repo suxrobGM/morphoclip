@@ -1,0 +1,4 @@
+extends: "base.yaml"
+
+runtime:
+  run_name: "cellclip_official_baseline"

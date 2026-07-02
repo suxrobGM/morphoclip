@@ -1,0 +1,11 @@
+extends: "official_baseline.yaml"
+
+dataset:
+  split_strategy: "cellclip_cpjump_style"
+  eval_subset: "test"
+
+model:
+  variant: "chemberta_film"
+
+runtime:
+  run_name: "cellclip_chemberta_film_cpjump_style_full"

@@ -1,0 +1,180 @@
+import { Callout } from "nextra/components";
+
+# Feature Extraction Pipeline
+
+<Callout type="info" emoji="💡">
+  **In Plain English:** Before training, we need to convert raw microscopy images into compact
+  numerical representations (features). This pipeline runs each image through a pre-trained vision
+  AI (DINOv3) that "summarizes" each image into a list of ~1000 numbers. These features are saved to
+  disk so training can iterate quickly without re-processing images. See the
+  [Glossary](/glossary) for term definitions.
+</Callout>
+
+End-to-end pipeline for extracting DINOv3 CLS token features from CPJUMP1 Cell Painting images.
+
+## Overview
+
+```text
+TIFF images (16-bit, 5 channels per site)
+    |
+    v
+image_loader: load + resize to 384x384 (save tensors)
+    |
+    v
+image_loader: replicate each channel to pseudo-RGB (5 x 3 x 384 x 384)
+    |
+    v
+feature_extractor: frozen DINOv3 ViT-L backbone
+    |
+    v
+Per-site CLS tokens: (5, 1024) tensor saved as .pt file
+    |
+    v
+dataset: group sites by well, pair with text from metadata
+    |
+    v
+MorphoCLIPSample ready for contrastive training
+```
+
+## Pipeline Stages
+
+### 1. Image Loading (`morphoclip.data.image_loader`)
+
+CPJUMP1 images follow the naming convention:
+
+```text
+r{row}c{col}f{field}p{plane}-ch{channel}sk1fk1fl1.tiff
+```
+
+**Channels** (Cell Painting assay):
+
+| Channel | Stain                      | Target                  |
+| ------- | -------------------------- | ----------------------- |
+| ch1     | MitoTracker / Alexa 647    | Mitochondria            |
+| ch2     | Phalloidin / Alexa 568     | Actin                   |
+| ch3     | WGA / Alexa 488 long       | Golgi / Plasma Membrane |
+| ch4     | Concanavalin A / Alexa 488 | Endoplasmic Reticulum   |
+| ch5     | Hoechst 33342              | DNA / Nucleus           |
+| ch6-ch8 | Brightfield z-planes       | Not used                |
+
+**Key functions:**
+
+- `discover_sites(image_dir)` - Scan a plate directory, return `{ImageKey: {channel: Path}}` for all complete sites
+- `load_site_as_tensor(channel_paths, resize=384)` - Load 5 channels as a `(5, 384, 384)` float32 tensor
+- `prepare_channels_for_dino(site_tensor)` - Replicate each grayscale channel to pseudo-RGB: `(5, H, W)` -> `(5, 3, H, W)`
+
+### 2. Feature Extraction (`morphoclip.data.feature_extractor`)
+
+Runs each pseudo-RGB channel image through a frozen DINOv3 backbone and extracts the CLS token.
+
+**Default model:** `facebook/dinov3-vitl16-pretrain-lvd1689m` (ViT-L/16, 300M params, 1024-dim CLS token)
+
+**Per-plate extraction (`extract_plate_features`):**
+
+1. Discover all sites in `{plate}/Images/`
+2. Load 5 channels per site, resize to 384x384
+3. Optionally save resized tensors to `data/tensors/{barcode}/`
+4. Replicate each channel to pseudo-RGB, normalize with ImageNet stats
+5. Batch through frozen DINOv3 -> CLS tokens
+6. Save `(5, 1024)` tensor per site to `data/features/{barcode}/r{row}c{col}f{field}.pt`
+
+**Prerequisites:**
+
+The DINOv3 model is gated on HuggingFace and requires authentication. You need a HuggingFace access token:
+
+1. Create a token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) with "read" repository access scope.
+2. Fill the access form and send it to the model owner at [model page](https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m)
+3. Add the token to your `.env` file in the project root:
+
+```bash
+HF_TOKEN=hf_your_token_here
+```
+
+The extraction script loads this automatically via `python-dotenv`.
+
+**CLI:**
+
+```bash
+uv run poe extract-features                      # all plates
+uv run poe extract-features --plate BR00116991   # single plate
+uv run poe extract-features --verify-only        # check completeness
+uv run poe extract-features --no-tensors         # skip tensor saving (saves disk space, slightly faster)
+```
+
+### 3. Metadata (`morphoclip.data.metadata`)
+
+Maps `(plate_barcode, well)` -> `PerturbationInfo` -> text description.
+
+**Data hierarchy:**
+
+```text
+data/metadata/
+  platemaps/2020_11_04_CPJUMP1/
+    barcode_platemap.csv           # barcode -> platemap name (51 plates)
+    platemap/
+      JUMP-Target-1_compound_platemap.txt   # well -> broad_sample (384 wells)
+      JUMP-Target-1_crispr_platemap.txt
+      JUMP-Target-1_orf_platemap.txt
+  external_metadata/
+    JUMP-Target-1_compound_metadata_targets.tsv  # broad_sample -> annotations
+    JUMP-Target-1_crispr_metadata.tsv
+    JUMP-Target-1_orf_metadata.tsv
+```
+
+**Perturbation types:** COMPOUND, CRISPR, ORF, NEGCON (DMSO), POSCON
+
+**Text granularity levels** (for multi-scale ablation):
+
+- `name_only`: "Chemical perturbation: gabapentin-enacarbil."
+- `name_target`: "Chemical perturbation: gabapentin-enacarbil. Target: CACNB4."
+- `full`: "Chemical perturbation: gabapentin-enacarbil. Target: CACNB4. Function: ... SMILES: ..."
+
+### 4. Dataset (`morphoclip.data.dataset`)
+
+`MorphoCLIPDataset` is a PyTorch Dataset that loads pre-extracted features and pairs them with text descriptions. Each sample represents one **well** (all sites aggregated).
+
+**Sample structure:**
+
+- `features`: `(num_sites, 5, 1024)` - stacked site features
+- `text`: text description from metadata
+- `plate`, `well`: identifiers
+- `pert_info`: full `PerturbationInfo` dataclass
+
+**`collate_fn`** pads variable site counts and returns a boolean `site_mask`.
+
+### 5. Splitting (`morphoclip.data.splits`)
+
+Three strategies for train/val/test splits:
+
+- **`cpjump1_official_representation`**: official CPJUMP1 representation split
+- **`cpjump1_official_gene_compound`**: official CPJUMP1 gene-compound target split
+- **`cellclip_cpjump_style`**: CellCLIP-style deterministic 75/25 split within benchmark slices
+
+## Configuration
+
+All paths and hyperparameters are configured in `configs/dataset.yml`:
+
+```yaml
+cpjump:
+  extraction:
+    model: "facebook/dinov3-vitl16-pretrain-lvd1689m"
+    device: "cuda"
+    batch_size: 48
+  dataset:
+    text_level: "full"
+    exclude_controls: true
+    split_strategy: "cpjump1_official_representation"
+    val_fraction: 0.1
+    test_fraction: 0.1
+    seed: 56
+```
+
+## Directory Layout (after extraction)
+
+```text
+data/
+  metadata/                    # downloaded via uv run poe fetch-dataset --metadata
+  raw/{batch}/{plate}/Images/  # raw TIFF images (optional, can delete after extraction)
+  features/{barcode}/          # extracted CLS tokens (5, 1024) per site
+  tensors/{barcode}/           # resized image tensors (5, 384, 384) per site
+```

@@ -1,0 +1,71 @@
+dataset:
+  dataset_config_path: "configs/dataset.yml"
+  feature_root: "data/features_cellclip_base"
+  split_strategy: "cpjump1_official_representation"
+  split_manifest_path: null
+  subset: "train"
+  eval_subset: "validate"
+  text_level: "full"
+  exclude_controls: true
+  max_sites_per_well: null
+  batch_size: 16
+  eval_batch_size: 16
+  num_workers: 4
+  pin_memory: true
+  val_fraction: 0.1
+  test_fraction: 0.1
+  seed: 42
+  max_train_wells: null
+  max_eval_wells: null
+
+model:
+  variant: "baseline"
+  embed_dim: 512
+  vision_layers: 12
+  vision_width: 1536
+  vision_heads: 8
+  input_channels: 5
+  context_length: 512
+  pooling: "attention"
+  text_model_name: "bert-base-cased"
+  tokenizer_name: "bert-base-cased"
+  chemberta_model_name: "seyonec/PubChem10M_SMILES_BPE_450k"
+  chemberta_tokenizer_name: "seyonec/PubChem10M_SMILES_BPE_450k"
+  chemberta_context_length: 512
+  chemberta_pooling: "mean"
+  chem_fusion_type: "film"
+  chem_prompt_policy: "remove_smiles"
+  freeze_chemberta: true
+  chemberta_tune_layers: 0
+  use_bias: false
+
+optimization:
+  loss_type: "cwcl"
+  lr: 5.0e-4
+  weight_decay: 0.2
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+  epochs: 100
+  warmup_steps: 100
+  grad_clip_norm: 20.0
+
+runtime:
+  seed: 42
+  device: "auto"
+  amp: true
+  output_root: "output/train_runs"
+  run_name: null
+  log_every_steps: 10
+  eval_every_epochs: 1
+  save_every_epochs: 1
+  max_train_steps: null
+
+tensorboard:
+  histogram_every_epochs: 5
+  flush_every_steps: 50
+
+distributed:
+  enabled: false
+  backend: "nccl"
+  gradient_accumulation_steps: 1
+  find_unused_parameters: false

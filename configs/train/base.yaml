@@ -1,0 +1,60 @@
+# MorphoCLIP training configuration (base defaults).
+# Override via YAML inheritance: add `extends: base.yaml` in a child config.
+
+dataset:
+  dataset_config_path: "configs/dataset.yml"     # CPJUMP1 metadata/plates config
+  feature_root: "data/features"                   # Pre-extracted DINOv3 CLS tokens (.pt files)
+  text_cache_path: "data/text/cached_text_features.pt" # Cached 768-d raw BERT embeddings
+  text_level: "full"                              # Prompt granularity: "full", "name_target", "name_only"
+  exclude_controls: true                          # Drop NEGCON/POSCON wells from training
+  split_strategy: "pert_type"                     # CRISPR/ORF->train, compound->val/test (local metadata only)
+  val_fraction: 0.1                               # 10% validation (also used for test split)
+  batch_size: 512                                 # Training batch size (wells per batch)
+  eval_batch_size: 512                            # Evaluation batch size
+  num_workers: 0                                  # 0 when preload=true (data in RAM), increase if preload=false
+  pin_memory: true                                # Auto-disabled on CPU, enables faster GPU transfers
+  preload: true                                   # Preload all features into RAM (faster but more memory)
+
+model:
+  embed_dim: 1024                   # DINOv3 ViT-L CLS token dimension
+  output_dim: 512                   # Shared contrastive space dimension
+  channel_aggregation: "ccf"        # Channel aggregation: "ccf" (CrossChannelFormer) or "mean_pool"
+  ccf_layers: 1                     # CrossChannelFormer transformer layers (ignored if mean_pool)
+  ccf_heads: 4                      # CrossChannelFormer attention heads
+  input_channels: 5                 # Fluorescence channels (Mito, Actin, Golgi, ER, DNA)
+  proj_hidden_dim: 512              # ProjectionHead hidden dimension
+  proj_dropout: 0.3                 # ProjectionHead dropout rate (stronger regularization)
+  text_input_dim: 768               # BioClinical ModernBERT hidden dimension
+
+optimization:
+  loss_type: "cwcl"                 # Loss function: "cwcl" (soft labels) or "infonce"
+  lr: 1.0e-4                        # AdamW learning rate
+  weight_decay: 0.2                 # AdamW weight decay
+  betas: [0.9, 0.999]              # AdamW beta coefficients
+  eps: 1.0e-8                       # AdamW epsilon for numerical stability
+  epochs: 100                       # Maximum training epochs
+  warmup_steps: 100                 # Linear LR warmup steps before cosine decay
+  grad_clip_norm: 1.0               # Max gradient norm for clipping
+  logit_scale_max: 4.6052           # Clamp ceiling for learnable temperature (ln(100), CLIP default)
+  use_cwa: false                    # Enable Cross-Well Alignment batch correction
+
+runtime:
+  seed: 42                          # Random seed for reproducibility
+  device: "auto"                    # Device: "auto", "cuda", or "cpu"
+  amp: true                         # Enable automatic mixed precision (fp16)
+  output_root: "output/morphoclip_runs" # Root directory for training runs
+  run_name: null                    # Run subdirectory name (null -> "default")
+  log_every_steps: 10               # Print training loss every N steps
+  eval_every_epochs: 1              # Run validation every N epochs
+  save_every_epochs: 1              # Save last.pt checkpoint every N epochs
+
+tensorboard:
+  histogram_every_epochs: 5         # Weight/embedding histograms every N epochs (0 to disable)
+  flush_every_steps: 50             # Flush TensorBoard writer every N steps
+
+distributed:
+  enabled: false                    # Set true + use torchrun for multi-GPU DDP
+  backend: "nccl"                   # NCCL for GPU, gloo for CPU
+  gradient_accumulation_steps: 1    # Effective batch = batch_size * num_gpus * accum_steps
+  gather_with_grad: true            # Gradient flow through all_gather (better contrastive loss)
+  find_unused_parameters: false     # Set true only if DDP throws unused-param errors

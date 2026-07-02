@@ -1,0 +1,147 @@
+import { Callout } from "nextra/components";
+
+# MorphoCLIP
+
+**Text-Supervised Contrastive Learning for Perturbation Matching in Cell Painting Images**
+
+**Authors:** Shubham Gajjar, Rongfei Jin, Sukhrobbek Ilyosbekov
+
+<Callout type="info" emoji="💡">
+  **In Plain English:** Drug discovery relies on testing thousands of chemicals and genetic changes
+  on cells, then photographing them to see what happened. The problem is matching "this drug changed
+  cells in the same way as turning off that gene" — current methods catch only 5-25% of known
+  matches. MorphoCLIP uses AI to read both the cell images and text descriptions of treatments,
+  learning to identify which drugs and genes have similar effects. See the
+  [Glossary](/glossary) for term definitions.
+</Callout>
+
+---
+
+## 1. Problem Statement
+
+Drug discovery depends on understanding a compound's mechanism of action (MoA) - specifically, which gene or protein pathway it modulates. One powerful strategy exploits _morphological similarity_: if a chemical treatment and a genetic perturbation (e.g., CRISPR knockout) produce visually similar changes in cells, the drug likely targets that gene's pathway. The CPJUMP1 benchmark (Chandrasekaran et al., 2024) operationalizes this as a retrieval task: given a compound's Cell Painting image, retrieve its known gene target from a gallery of genetic perturbation images, ranked by embedding similarity.
+
+Current methods achieve limited success. Handcrafted CellProfiler features with cosine similarity reach only 5-25% fraction matching. Recent deep learning approaches improve on this but face persistent challenges: batch effects confound learned representations, compound and gene perturbations live in separate embedding spaces, and most methods train on compounds only, leaving genetic perturbations as an afterthought at evaluation.
+
+## 2. Proposed Approach
+
+We propose **MorphoCLIP**, a contrastive learning framework that uses natural-language descriptions of perturbations as a structured supervision signal during training. The core hypothesis is that text supervision is _complementary_ to batch correction and gene-inclusive training, providing semantic structure that purely visual methods miss. Evidence from prior work motivates this combination: CellCLIP (Lu et al., 2025), which uses text supervision but lacks batch correction and gene training data, performs below the CellProfiler baseline on cross-class mAP. Meanwhile, CWA-MSN (Huang et al., 2025), which has batch correction and gene training but no text, outperforms CellCLIP. This suggests that no single ingredient suffices alone — MorphoCLIP's contribution is the three-way combination of text supervision, cross-well batch correction, and gene-inclusive training.
+
+**How it works at training time:** Each Cell Painting image is paired with a text description of its perturbation - either a compound description or a gene description (see Text Prompt Engineering below). A contrastive loss aligns images with their matching text descriptions in a shared 512-dimensional space. Crucially, both compound and gene perturbations are encoded as text during training, exposing the model to the full perturbation landscape rather than compounds alone.
+
+**How it works at evaluation:** For the standard CPJUMP1 benchmark, we follow the established protocol: image-to-image retrieval using the learned embeddings. Compound images are compared against gene perturbation images via cosine similarity. The text encoder is not needed at inference - its role is to shape the embedding space during training. We additionally report text-only retrieval (compound image to gene text) as a secondary analysis to validate that the learned space is semantically structured.
+
+**Architecture:**
+
+**Image Encoder.** A frozen DINOv3 ViT-L/16 (~300M params, 1024-dim CLS token; Simeoni et al., 2025) backbone extracts per-channel CLS tokens from each of the 5 fluorescence channels (DNA, ER, RNA, actin/Golgi/plasma membrane, mitochondria) at 384x384 resolution. DINOv3 is the latest self-supervised vision foundation model from Meta AI, offering improved feature quality over DINOv2 through gram anchoring and improved training recipes. A lightweight CrossChannelFormer (2-layer transformer) aggregates the per-channel tokens into a single image representation, followed by a projection head to 512 dimensions. Note that CellCLIP uses DINOv2-g (1.1B params) - a ~4x larger backbone. MorphoCLIP uses DINOv3-L as the default backbone, which provides strong feature quality while remaining efficient for pre-extraction (~7 minutes per plate on RTX 5080). LoRA adapters (rank 8-16) are tested as an ablation variant, not part of the default method; the default pipeline uses pre-extracted features from a fully frozen backbone.
+
+**Text Encoder.** A frozen BioClinical ModernBERT (Sounack et al., 2025; 150M params, 768d output) with a trainable projection head encodes perturbation descriptions into the shared latent space. BioClinical ModernBERT is the current SOTA biomedical encoder, built on ModernBERT with RoPE, Flash Attention, and GeGLU activations, and pre-trained on 53.5 billion tokens of PubMed, PMC, and clinical text - a substantial upgrade over the PubMedBERT (2020, 110M, 3.1B tokens) used by CellCLIP. Its biomedical pre-training corpus contains extensive molecular nomenclature, gene names, and pathway descriptions. Unlike SMILES-specialized models (e.g., ChemBERTa, SMI-TED) that cannot encode gene descriptions, BioClinical ModernBERT handles both compound and gene text in a single model. However, its ability to meaningfully encode SMILES strings (arbitrary chemical notation, not natural language) is uncertain and is tested explicitly in our multi-scale text ablation (see Section 5) and flagged as a risk (see Section 6).
+
+**Training Objective.** Continuously Weighted Contrastive Loss (CWCL; Huang et al., 2025) handles inactive perturbations and many-to-one mappings. Cross-well alignment (CWA; Huang et al., 2025) regularizes representations against batch effects during training — a critical component given that batch effects are the dominant confound in Cell Painting data.
+
+**Text Prompt Engineering.** The quality and format of text descriptions will significantly influence model performance. We define structured templates for each perturbation type, drawing on external biological databases:
+
+- **Compound template:** `"Chemical perturbation: {name}. Target: {target_protein} ({gene_symbol}). Function: {mechanism_of_action}. SMILES: {canonical_smiles}."` Example: `"Chemical perturbation: Aloxistatin. Target: Cathepsin L (CTSL). Function: Cysteine protease inhibitor. SMILES: CC(CC)C(=O)NC(C(=O)NC(CC=C)C=O)CC1=CC=CC=C1."` Sources: compound metadata from CPJUMP1, target annotations from ChEMBL.
+
+- **Gene template:** `"CRISPR knockout of {gene_symbol}. Protein: {protein_name}. Function: {protein_function}. GO terms: {biological_process_terms}."` Example: `"CRISPR knockout of TP53. Protein: Tumor protein p53. Function: Tumor suppressor, transcription factor for DNA damage response. GO terms: apoptotic process (GO:0006915), cell cycle arrest (GO:0007050), DNA damage response (GO:0006974)."` Sources: UniProt for protein function, Gene Ontology for GO terms.
+
+- **Missing annotation fallback:** When ChEMBL/UniProt annotations are unavailable, we fall back to perturbation-name-only descriptions (e.g., `"Chemical perturbation: Aloxistatin."` or `"CRISPR knockout of TP53."`). The multi-scale text ablation (Section 5) explicitly measures the marginal value of each annotation layer, so this fallback is well-characterized.
+
+**Negative Mining Strategy.** Contrastive learning is highly sensitive to how negative pairs are constructed. In the perturbation matching domain, two compounds targeting the same gene should be treated as soft-positives (high similarity), not hard negatives - standard contrastive losses would incorrectly push them apart. CWCL (Huang et al., 2025) addresses this by replacing binary positive/negative labels with continuously weighted similarity scores, preserving the many-to-one structure where multiple compounds map to one gene target. Cross-well alignment further ensures that replicates of the same perturbation in different wells and batches are pulled together, preventing batch effects from fragmenting the embedding space.
+
+## 3. Related Work & Novelty
+
+| Method           | Image Encoder               | Text/Pert. Encoder         | Trains on Genes? | Batch Correct (Train) | Cross-Class mAP           |
+| ---------------- | --------------------------- | -------------------------- | ---------------- | --------------------- | ------------------------- |
+| CellProfiler     | N/A (handcrafted)           | N/A                        | Yes              | Sphering              | Baseline                  |
+| CLOOME (2023)    | ResNet-50                   | Morgan FP                  | No               | No                    | Below baseline            |
+| MolPhenix (2024) | Phenom-1                    | GIN + MLP                  | No               | No                    | Below baseline            |
+| CellCLIP (2025)  | DINOv2-g (1.1B)             | PubMedBERT                 | No               | No                    | Below baseline            |
+| CWA-MSN (2025)   | ViT-S/16 (MAE)              | N/A (self-sup.)            | Yes              | Yes (CWA)             | Not reported              |
+| **MorphoCLIP**   | **DINOv3 ViT-L/16 (~300M)** | **BioClinical ModernBERT** | **Yes**          | **Yes (CWA)**         | **Target: beat baseline** |
+
+The key observation from this table: _no existing method combines text supervision with gene training data and batch correction._ CellCLIP has text but no genes and no batch correction. CWA-MSN has genes and batch correction but no text. MorphoCLIP combines all three. Notably, CellCLIP's underperformance relative to the CellProfiler baseline suggests that text supervision alone is insufficient without batch correction — it may even hurt when batch effects dominate the embedding space. This directly motivates MorphoCLIP's combined approach, where CWA neutralizes batch effects so that text supervision can contribute its semantic structure effectively.
+
+## 4. Dataset
+
+We use the **CPJUMP1** dataset (Chandrasekaran et al., 2024), publicly available on the Cell Painting Gallery (AWS S3, prefix `cpg0000-jump-pilot`). The dataset contains ~3 million Cell Painting images (field-of-view level; ~75 million individual cells) of U2OS and A549 cells treated with 303 compounds, 160 CRISPR knockouts, and matched ORF overexpression constructs across 6 experimental batches. Each well contains 7-16 sites; each site produces one image per fluorescence channel. Each image comprises 5 fluorescence channels (1080x1080 px, 16-bit TIFF) capturing distinct cellular compartments. Ground truth is defined by known compound-gene target relationships where each gene product is targeted by at least 2 compounds. The `2020_11_04_CPJUMP1` batch (source_4) contains 51 plates, ~1.5 million files, totaling 3.31 TiB of raw image data.
+
+**Practical data strategy.** Rather than converting or storing resized images, we adopt a stream-extract-delete pipeline. Raw TIFFs (~58-118 GiB per plate, ~27,600 files each) are downloaded temporarily, processed through the DINOv3 backbone to extract per-channel CLS features, and then deleted. We extract two outputs per plate: (1) frozen backbone CLS features (5 channels x 1024-dim per site, ~3 GB per plate) for the default training pipeline, and (2) resized image tensors (5 x 384x384, ~9 GB per plate) cached to disk for LoRA experiments that require backpropagation through the backbone. All 51 plates compress from 3.31 TiB raw to ~153 GB of cached features and ~459 GB of resized tensors. Feature extraction takes ~7 minutes per plate (~6 hours for all 51 plates) on an RTX 5080. This dual-cache strategy lets us seamlessly switch between frozen and LoRA training without re-downloading raw data. Pre-computed CellProfiler profiles (~1-5 GB) serve as baseline features.
+
+## 5. Evaluation Plan
+
+We evaluate MorphoCLIP on three established tasks following the CPJUMP1 benchmark protocol:
+
+| Task                             | Metrics                                 | Realistic Target        | Stretch Goal              |
+| -------------------------------- | --------------------------------------- | ----------------------- | ------------------------- |
+| Compound-to-gene image retrieval | Recall@1/5/10, mAP                      | 2-3x over CellProfiler  | Approach CellCLIP         |
+| Gene-gene recovery               | CORUM, HuMAP, Reactome, StringDB recall | Match CellCLIP (~0.354) | Approach CWA-MSN (~0.386) |
+| Replicate consistency            | Fraction retrieved above q &lt; 0.05    | Beat CellProfiler       | Match CellCLIP            |
+
+**Additional analyses:**
+
+- **Text-only retrieval:** Compound image to gene text description. No prior method reports this; it validates whether the learned space is semantically structured.
+
+- **Factorial ablation study.** The most important experiment disentangles the contribution of each component. We use a factorial design over three binary factors: text supervision, CWA batch correction, and gene training data.
+
+  | Variant         | CWA | Genes | Text | Tests                                             |
+  | --------------- | --- | ----- | ---- | ------------------------------------------------- |
+  | Full MorphoCLIP | Yes | Yes   | Yes  | Complete method                                   |
+  | No text         | Yes | Yes   | No   | Is text needed beyond CWA + genes? (CWA-MSN-like) |
+  | No genes        | Yes | No    | Yes  | Does CWA rescue text-only? (CellCLIP-like + CWA)  |
+  | No CWA          | No  | Yes   | Yes  | Is batch correction the key ingredient?           |
+
+  This design directly tests whether text supervision contributes beyond batch correction alone. If removing text (row 2) matches full performance, the paper pivots to documenting when text helps vs. doesn't — itself a valuable finding.
+
+  **Secondary ablations** (run on the best factorial configuration): channel importance (drop-one-channel analysis), LoRA vs frozen backbone, input resolution (224 vs 384).
+
+- **Multi-scale text ablation.** We test increasingly rich text descriptions to quantify the marginal value of each annotation layer:
+  1. Perturbation name only (e.g., "Aloxistatin" / "TP53")
+  2. Name + target/function (e.g., + "Cathepsin L inhibitor")
+  3. Name + target + SMILES/GO terms
+  4. Full description with pathway annotations (ChEMBL + UniProt + GO)
+
+  This directly measures how much domain knowledge injection helps and isolates whether SMILES strings provide useful signal through BioClinical ModernBERT.
+
+- **Few-shot and zero-shot evaluation.** We hold out a subset of compounds and genes during training. At inference, we test whether held-out compounds can be matched to their gene targets via text-only retrieval (compound image to gene text description). This is a capability that purely visual methods fundamentally cannot provide, and would demonstrate a compelling unique advantage of text-supervised approaches.
+
+- **Batch effect visualization:** UMAP of embeddings colored by plate/batch before and after CWA, demonstrating correction effectiveness.
+
+## 6. Risks and Mitigations
+
+| Risk                                                                                                  | Likelihood | Impact | Mitigation                                                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DINOv3-L features insufficient for microscopy (~4x smaller than CellCLIP's DINOv2-g)                  | Low        | High   | LoRA fine-tuning fits in 14 GB VRAM; included as ablation variant                                                                                                                  |
+| BioClinical ModernBERT cannot encode SMILES meaningfully (biomedical text model, not chemistry model) | Medium     | Medium | Morgan fingerprint hybrid encoder for compounds as fallback; multi-scale text ablation quantifies SMILES contribution independently                                                |
+| Text supervision does not help beyond CWA alone                                                       | Medium     | High   | Factorial ablation documents this cleanly; paper pivots to "efficient batch-corrected retrieval" contribution — the negative result itself is publishable                          |
+| CPJUMP1 data download/processing bottleneck (3.31 TiB raw across 51 plates)                           | Low        | Medium | Start with 2-3 plates, scale incrementally; stream-extract-delete pipeline compresses all 51 plates to ~153 GB frozen features + ~459 GB resized tensors (~7 min/plate extraction) |
+
+## 7. Infrastructure & Timeline
+
+All development and training runs on a single **NVIDIA RTX 5080 (16 GB VRAM)** local workstation. This constraint shapes every design decision.
+
+**Key efficiency strategy:** Since the DINOv3 backbone is frozen, features are pre-extracted once and cached to disk. Feature extraction takes ~7 minutes per plate (~6 hours for all 51 plates), producing ~3 GB of .pt files per plate. All subsequent training operates on these cached features, requiring only ~2 GB VRAM and ~3-5 minutes per epoch, enabling rapid iteration through 50+ ablation experiments in a single day.
+
+| Configuration                                  | Trainable Params | Est. VRAM | Time/Epoch |
+| ---------------------------------------------- | ---------------- | --------- | ---------- |
+| Pre-extracted DINOv3-L + CrossChFormer + heads | ~8M              | ~2 GB     | ~3-5 min   |
+| Frozen DINOv3-L + LoRA (r=8) + CrossChFormer   | ~20M             | ~14 GB    | ~45-90 min |
+
+**Building blocks.** MorphoCLIP will be implemented in PyTorch, building on the following existing resources:
+
+- CellCLIP codebase (github.com/suinleelab/CellCLIP) as reference for CrossChannelFormer architecture and CWCL implementation
+- CWA-MSN code for cross-well alignment implementation
+- CPJUMP1 benchmark repository (github.com/jump-cellpainting/2024_Chandrasekaran_NatureMethods_CPJUMP1) for evaluation scripts and data splits
+- `rclone` for selective S3 data access (see `scripts/fetch_dataset.py`)
+- PyTorch Lightning for training infrastructure, WandB for experiment tracking
+
+## 8. Key References
+
+- Chandrasekaran, S.N. et al. (2024). Three million images and morphological profiles of cells treated with matched chemical and genetic perturbations. _Nature Methods_, 21, 1114-1121.
+- Lu, M., Weinberger, E., Kim, C., and Lee, S.-I. (2025). CellCLIP: Learning perturbation effects in Cell Painting via text-guided contrastive learning. _NeurIPS 2025_.
+- Sanchez-Fernandez, A. et al. (2023). CLOOME: Contrastive learning unlocks bioimaging databases for queries with chemical structures. _Nature Communications_.
+- Huang, P.-J., Liao, Y.-H., Kim, S., Park, N., Park, J., and Shin, D. (2025). Efficient Cell Painting Image Representation Learning via Cross-Well Aligned Masked Siamese Network. _arXiv:2509.19896_.
+- Fradkin, P. et al. (2024). MolPhenix: How molecules impact cells. _NeurIPS 2024_.
+- Simeoni, O. et al. (2025). DINOv3. _arXiv:2508.10104_.
+- Bao, Y., Sivanandan, S., and Karaletsos, T. (2024). Channel Vision Transformers: An image is worth 1x16x16 words. _ICLR 2024_.
+- Sounack, T. et al. (2025). BioClinical ModernBERT: A state-of-the-art long-context encoder for biomedical and clinical NLP. _arXiv:2506.10896_.

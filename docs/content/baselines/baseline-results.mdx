@@ -1,0 +1,41 @@
+# Baseline Results (CellProfiler - Reproduced)
+
+We reproduced the baseline results from Chandrasekaran et al. (2024) using the benchmark code in [`2024_Chandrasekaran_NatureMethods_CPJUMP1/benchmark`](https://github.com/jump-cellpainting/2024_Chandrasekaran_NatureMethods_CPJUMP1/tree/main/benchmark). These results use **CellProfiler-extracted morphological features** (handcrafted shape, texture, and intensity features) with cosine similarity for perturbation matching.
+
+Outputs in `data/benchmark_results/`: `cellprofiler_replicability_fr.csv` / `_map.csv`, `cellprofiler_matching_fr.csv` / `_map.csv`, `cellprofiler_gene_compound_matching_fr.csv` / `_map.csv`.
+
+## 1. Perturbation Replicability
+
+Replicability measures whether the **same perturbation** produces consistent morphological profiles across replicates. A perturbation is considered replicable if its replicate profiles are more similar to each other than to profiles of other perturbations (measured by mean Average Precision).
+
+**Results:** `data/benchmark_results/cellprofiler_replicability_fr.csv` (by modality x cell line x timepoint). Per-perturbation mAP: `cellprofiler_replicability_map.csv` (3,084 perturbations).
+
+## 2. Sister Perturbation Matching
+
+Matching measures whether perturbations targeting the **same gene** produce similar morphological profiles. For compounds, two compounds targeting the same protein should match. For CRISPR, two guides targeting the same gene should match.
+
+**Results:** `data/benchmark_results/cellprofiler_matching_fr.csv`. Paper: ~5-25% of compounds and ~7-17% of CRISPR guides match their sister perturbations (per-target mAP in `cellprofiler_matching_map.csv`, 1,557 targets) - the core limitation we address.
+
+## 3. Gene-Compound Matching (Cross-Modal)
+
+The hardest task: can we match a **compound** to the **gene** it targets by comparing their morphological profiles? This is the most directly relevant task for drug mechanism-of-action discovery.
+
+**Results:** `data/benchmark_results/cellprofiler_gene_compound_matching_fr.csv` (gene-compound matching is very low; per-target mAP in `cellprofiler_gene_compound_matching_map.csv`, 1,162 pairs).
+
+## Summary of Baseline Performance
+
+| Task                             | Baseline (CellProfiler) | Realistic Target        | Stretch Goal              |
+| -------------------------------- | ----------------------- | ----------------------- | ------------------------- |
+| Compound-to-gene image retrieval | ~5-25%                  | 2-3x over CellProfiler  | Approach CellCLIP         |
+| Gene-gene recovery (CORUM)       | .361                    | Match CellCLIP (~0.354) | Approach CWA-MSN (~0.386) |
+| Replicate consistency            | Baseline                | Beat CellProfiler       | Match CellCLIP            |
+
+## EDA Highlights
+
+From the CPJUMP1 benchmark outputs:
+
+- **Replicability varies by modality:** Compounds are more replicable than CRISPR; gene knockouts yield more variable morphology.
+- **Long timepoints outperform short:** Longer perturbation exposure gives stronger, more consistent morphological changes.
+- **U2OS vs A549 differ:** Cell type context matters - motivates including cell type in text prompts.
+- **Most perturbations have low mAP:** mAP distributions are right-skewed; few perturbations match well, most near zero.
+- **Gene-compound matching is hardest:** Cross-modal (compound ↔ genetic) underperforms within-modality; need better representations.

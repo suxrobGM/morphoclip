@@ -1,0 +1,49 @@
+schedule_name: "chemberta_same_pert_aggressive"
+base_config: "configs/cellclip/official_chemberta_upstreamish_film_keep_cls_augmented.yaml"
+
+compare_full_benchmark_dirs:
+  baseline: "output/benchmark_full_baseline"
+  pretrained_clip: "output/benchmark_full_cellclip_hf"
+
+benchmark_timelines:
+  - "short"
+
+stage_budgets:
+  stage1:
+    max_train_steps: 1500
+    max_eval_wells: 1024
+    promote_top: 3
+  stage2:
+    max_train_steps: 4500
+    max_eval_wells: null
+    promote_top: 3
+  stage3:
+    max_train_steps: null
+    max_eval_wells: null
+    promote_top: null
+
+stage2_tuning_modes:
+  - "full"
+
+stage1_candidates:
+  - id: "same_pert_3"
+    dataset:
+      train_max_sites_per_well: 9
+      eval_max_sites_per_well: null
+      within_well_interp_sites: 0
+      same_pert_interp_sites: 3
+      interp_alpha: 0.4
+  - id: "same_pert_7"
+    dataset:
+      train_max_sites_per_well: 9
+      eval_max_sites_per_well: null
+      within_well_interp_sites: 0
+      same_pert_interp_sites: 7
+      interp_alpha: 0.4
+  - id: "same_pert_11"
+    dataset:
+      train_max_sites_per_well: 9
+      eval_max_sites_per_well: null
+      within_well_interp_sites: 0
+      same_pert_interp_sites: 11
+      interp_alpha: 0.4

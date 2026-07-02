@@ -1,0 +1,16 @@
+# Mean pooling experiment: replaces CrossChannelFormer with simple channel averaging.
+# Drops trainable params from ~14M to ~1.3M (projection heads only).
+# Run with: uv run poe train --config configs/train/mean_pool.yaml
+
+extends: base.yaml
+
+dataset:
+  batch_size: 512                   # Larger batch = more negatives + fills GPU
+  eval_batch_size: 512
+
+model:
+  channel_aggregation: "mean_pool"
+
+runtime:
+  eval_every_epochs: 5              # Evaluate every 5 epochs (training is fast)
+  save_every_epochs: 5              # Save checkpoint every 5 epochs

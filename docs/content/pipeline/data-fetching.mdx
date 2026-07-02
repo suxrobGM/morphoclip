@@ -1,0 +1,64 @@
+# Data Fetching
+
+We use the **CPJUMP1** dataset from the JUMP Cell Painting Consortium - a curated benchmark of 3M+ Cell Painting images covering 303 compounds and 160 genes across 2 cell lines (U2OS, A549) and multiple timepoints.
+
+Images are fetched from the Cell Painting Gallery S3 bucket using a unified downloader (`scripts/fetch_dataset.py`) that supports both **AWS CLI** and **rclone**. Dataset configuration lives in `configs/dataset.yml`.
+
+## Commands
+
+```bash
+# Check plate sizes before downloading (dry-run estimate)
+uv run poe check-plates
+
+# Fetch dataset (backend from config: cpjump.fetch.backend)
+uv run poe fetch-dataset
+
+# Override backend explicitly
+uv run poe fetch-dataset --backend awscli
+uv run poe fetch-dataset --backend rclone
+
+# Existing-plate behavior
+uv run poe fetch-dataset --on-existing-plate ask        # prompt y/n per existing plate
+uv run poe fetch-dataset --on-existing-plate skip       # reuse local raw files
+uv run poe fetch-dataset --on-existing-plate redownload # force sync even if present
+
+# Existing-compressed behavior
+uv run poe fetch-dataset --on-existing-compressed ask        # prompt per plate
+uv run poe fetch-dataset --on-existing-compressed skip       # do not recompress plate
+uv run poe fetch-dataset --on-existing-compressed recompress # overwrite compressed output
+
+# Metadata only
+uv run poe fetch-dataset --metadata
+
+# Dry-run transfer commands (recommended before full run)
+uv run poe fetch-dataset --dry-run --backend rclone
+```
+
+## Space-Restricted Download Mode
+
+If local disk is limited, run download + compression + cleanup in one pass:
+
+```bash
+uv run poe fetch-dataset \
+  --compress-after-download \
+  --delete-original-after-compress \
+  --compression-workers 8
+```
+
+This performs per plate:
+
+1. Download original TIFFs to `data/raw/<batch>/<plate>/Images/`
+2. Compress to `data/raw_compressed/<batch>/<plate>/Images/`
+3. Delete original TIFFs (if enabled)
+
+Default non-experiment compression settings are in `cpjump.compression.default`:
+
+- `codec: jpeg`
+- `quality: 50`
+- `normalization: percentile`
+
+Compression experiment/QC settings are separate and live under `cpjump.compression.experiment`.
+
+## Data Strategy
+
+Raw TIFFs (~58-118 GiB per plate) are streamed, processed through the frozen DINOv3 backbone to extract per-channel CLS features, then deleted. All 51 plates compress from 3.31 TiB to ~153 GB of cached features (+ ~459 GB resized tensors for LoRA experiments). Feature extraction takes ~7 minutes per plate on an RTX 5080. See [Feature Extraction Pipeline](/pipeline/feature-extraction) for full details.

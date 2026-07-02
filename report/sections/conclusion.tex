@@ -1,0 +1,15 @@
+\section{Conclusion}
+
+We have presented MorphoCLIP, a contrastive learning framework that maps Cell Painting images and natural-language perturbation descriptions into a shared 512-dimensional space. The design combines three ingredients that prior work has only paired in twos: text supervision, cross-well batch alignment, and joint training over both small molecules and genetic perturbations. The model trains on a single 16\,GB GPU thanks to a pre-extraction pipeline that caches the frozen-backbone outputs.
+
+The main empirical results are a text-to-image Recall@10 of 24.3\% on 817 CPJUMP1 candidates with a median rank of 28, achieved with $\sim$8M trainable parameters (versus 1.48B total in CellCLIP), and image-to-text performance roughly on par with CellCLIP's profile-based retrieval despite the much smaller trainable footprint. The same model handles compounds, CRISPR knockouts, and ORF overexpressions, which lets text act as a common perturbation representation across modalities.
+
+If the planned ablations confirm that the gains hold up when the three components are isolated, the practical use cases this opens up include searching for existing drugs whose cellular signature matches a target phenotype, predicting a likely mechanism of action by an unknown compound's neighbors in embedding space, and querying image databases in plain English without engineering bespoke features.
+
+\subsection{Limitations and Future Work}
+
+The two largest gaps in the current paper are the absence of completed ablations and the use of a single seed for the headline number. The factorial ablation in Table~\ref{tab:ablation_design} is designed to attribute performance to text supervision, CWA, and gene-inclusive training individually; until those runs land, the contribution of each component is asserted rather than measured. The follow-up multi-scale text ablation will say whether SMILES strings and GO-term injections actually add signal through BioClinical ModernBERT or are decorative.
+
+Beyond ablation completion, three directions are worth pursuing. First, scale: CPJUMP1 is the pilot, and the full JUMP corpus contains $\sim$140{,}000 perturbations across many labs, microscopes, and cell lines, which is the right setting to test generalization. Second, richer prompts: pulling pathway and mechanism annotations from UniProt, Reactome, and DrugBank should strengthen the text encoder's biological grounding, and the multi-scale ablation will quantify how much that helps. Third, zero-shot transfer: running the trained encoders on Cell Painting datasets from labs and cell lines not seen during training would tell us whether the learned representations are general or specific to CPJUMP1.
+
+We plan to release model weights, the evaluation suite, and an interactive natural-language retrieval demo on publication.

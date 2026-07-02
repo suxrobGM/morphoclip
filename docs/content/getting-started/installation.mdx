@@ -1,0 +1,42 @@
+# Installation
+
+## Prerequisites
+
+- [uv](https://docs.astral.sh/uv/) (manages Python, the virtual environment, and all dependencies)
+- [AWS CLI v2+](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) or rclone (for S3 data access)
+- [Hugging Face Token](https://huggingface.co/settings/tokens) (for model weights and pre-extracted features)
+- NVIDIA GPU + CUDA or Apple Silicon Mac (MPS) — optional but recommended
+
+uv is the single source of truth for the environment — no Conda or manual `pip`/`venv` steps. uv installs
+the correct Python 3.14 automatically (pinned via `.python-version`).
+
+## Install uv
+
+```bash
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+irm https://astral.sh/uv/install.ps1 | iex
+```
+
+## Quick Install
+
+PyTorch is selected with a mutually-exclusive extra that pulls the matching wheel index. Choose the one
+for your hardware:
+
+```bash
+uv sync --extra cu128    # CUDA 12.8 (RTX 50-series / Blackwell)
+uv sync --extra cu130    # CUDA 13.0
+uv sync --extra cpu      # CPU-only, or macOS (macOS gets MPS-enabled wheels from PyPI automatically)
+```
+
+This creates `.venv/`, installs all project dependencies, PyTorch with the correct backend, and the dev
+tools (pytest, ruff, mypy, poe). Run project tasks with `uv run poe <task>` (see [Quick Start](./quick-start)).
+
+## Verify your setup
+
+```bash
+uv run python -c "import torch, torchvision; print(torch.__version__, 'cuda:', torch.cuda.is_available())"
+uv run poe test
+```

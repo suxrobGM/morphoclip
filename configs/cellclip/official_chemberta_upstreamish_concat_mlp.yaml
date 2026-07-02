@@ -1,0 +1,8 @@
+extends: "official_chemberta_upstreamish_film_keep_smiles.yaml"
+
+model:
+  variant: "chemberta"
+  chem_fusion_type: "concat_mlp"
+
+runtime:
+  run_name: "cellclip_chemberta_upstreamish_concat_mlp"

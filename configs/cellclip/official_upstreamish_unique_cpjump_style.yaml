@@ -1,0 +1,11 @@
+extends: "official_upstreamish.yaml"
+
+dataset:
+  split_strategy: "cellclip_cpjump_style"
+  eval_subset: "test"
+  unique_perturbations: true
+  batch_size: 32
+  eval_batch_size: 32
+
+runtime:
+  run_name: "cellclip_unique_upstreamish_cpjump_style"

@@ -1,0 +1,134 @@
+# CellCLIP vs Stable Benchmark Workflow
+
+This document compares:
+
+- `baselines/CellCLIP/cpjump_matching_eval.py`
+- `scripts/benchmark_stable.py`
+
+Both scripts evaluate CPJUMP1 with the same three tasks (replicability, within-modality target matching, and compound-gene cross-modality matching), but the execution workflow and reliability are different.
+
+## At a glance
+
+| Area                    | `cpjump_matching_eval.py` (CellCLIP-style)                                                           | `benchmark_stable.py` (stable local pipeline)                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Main goal               | Reproduce CellCLIP/JUMP-style eval and optionally evaluate learned embeddings (`--feature_type emb`) | Run a reproducible, local, stable benchmark aligned to the same paper logic |
+| Data roots              | Hardcoded absolute paths (`/gscratch/...`) and placeholder paths (`path_to_*`)                       | Project-relative paths (`data/profiles`, `output/benchmark/input`)          |
+| Feature modes           | `profile` or `emb`                                                                                   | `profile` only                                                              |
+| Batch correction        | Optional KernelPCA on controls (`--batch_correction`)                                                | No PCA branch in this script                                                |
+| Pairwise metric backend | CellCLIP local `utils.run_pipeline` (old copairs API directly)                                       | `src/benchmark/metrics.py` wrapper in stable mode (`copairs_mode="stable"`) |
+| Failure handling        | Mostly assumes pair generation succeeds                                                              | Catches empty/unpaired runs and skips safely                                |
+| Outputs                 | Prints markdown summaries to stdout                                                                  | Saves CSVs, summary tables, and figures under output directory              |
+
+## Shared core workflow
+
+Both scripts do the same high-level sequence:
+
+1. Load experiment metadata and filter batch/density/antibiotics.
+2. Loop by cell type, then modality/timepoint.
+3. Run replicability (`pos_sameby=["Metadata_broad_sample"]`).
+4. Build consensus profiles for matching tasks.
+5. Run within-modality target matching.
+6. Run compound-vs-genetic cross-modality matching.
+7. Aggregate to mAP + fraction retrieved (FR).
+
+## Key workflow differences
+
+## 1) Input and environment assumptions
+
+- `cpjump_matching_eval.py` is tightly coupled to one filesystem layout:
+  - hardcoded `/gscratch/...` in embedding loading and test label filtering
+  - placeholder metadata paths like `path_to_cpjump1_metadata/...`
+- `benchmark_stable.py` is portable inside this repo:
+  - reads from `output/benchmark/input/*.tsv`
+  - reads profiles from `data/profiles/<batch>/<plate>/*_normalized_feature_select_negcon_batch.csv.gz`
+  - has CLI options for batch/output/cell filter/test mode
+
+Impact: the stable script is runnable in a clean local project; the CellCLIP-style script needs manual path surgery and external storage layout.
+
+## 2) Feature construction branch
+
+- `cpjump_matching_eval.py` supports two data modes:
+  - `profile`: tabular CellProfiler features
+  - `emb`: loads H5 embeddings, merges by plate+well, then uses `embeddings` vector column
+- `benchmark_stable.py` always uses profile features (`get_featuredata(...).values`).
+
+Impact: CellCLIP workflow can benchmark learned embedding exports directly; stable workflow is currently a clean profile baseline pipeline.
+
+### How embeddings are transformed for analysis (`cpjump_matching_eval.py`, `feature_type="emb"`)
+
+1. Load per-plate H5 tensor from `jumpcp/output_emb/wsl/<plate>.h5`.
+2. Read `embeddings` and reshape to 2D as `(-1, embed_dim)` so each row is one sample vector.
+3. If `--batch_correction` is enabled:
+   - Apply control-trained `KernelPCA` (`pca_kernel.transform(...)`).
+   - Apply `StandardScaler` on the PCA output, then transform to standardized vectors.
+4. Store each standardized row as a numpy vector in a DataFrame column named `embeddings`.
+5. Merge with profile metadata on `Metadata_Plate` + `Metadata_Well` so each embedding inherits labels (`Metadata_broad_sample`, `Metadata_gene`, etc.).
+6. For matching tasks, build consensus embeddings by median aggregation over replicates (`Metadata_broad_sample` group).
+7. Right before copairs scoring, convert the vector column to a matrix with `np.stack(df["embeddings"].values)` and pass that matrix to the mAP pipeline.
+
+Note: `scripts/benchmark_stable.py` does not run this embedding branch; it analyzes profile feature columns directly.
+
+## 3) Optional control-PCA correction
+
+- `cpjump_matching_eval.py` can train `KernelPCA` on negative controls and transform features before scoring.
+- `benchmark_stable.py` has no PCA/batch-correction branch in this script.
+
+Impact: CellCLIP workflow includes an extra correction stage that can change score distributions and comparability.
+
+## 4) Plate-level filtering differences
+
+- `cpjump_matching_eval.py` filters each plate to `jumpcp_testing_label2.csv` wells.
+- `benchmark_stable.py` does not apply that test-label subset filter.
+
+Impact: the evaluated sample universe differs even before metric computation.
+
+## 5) Replicability gate behavior before matching
+
+For genetic modality consensus filtering:
+
+- `benchmark_stable.py`: keeps only `above_q_threshold == True` for replicable genes.
+- `cpjump_matching_eval.py`: the q-threshold filter is commented out in that branch, so all genes from that description can pass.
+
+Impact: CellCLIP-style workflow can feed more/noisier genetic entries into downstream matching than stable workflow.
+
+## 6) Robustness and edge-case handling
+
+- `benchmark_stable.py` explicitly handles:
+  - missing plate files (`FileNotFoundError`)
+  - no valid copairs pairs (`UnpairedException` path)
+  - empty intermediate tables (skip with message)
+  - no target overlap in cross-modality (skip early)
+- `cpjump_matching_eval.py` has fewer defensive checks and generally assumes non-empty results.
+
+Impact: stable script is safer for mixed/incomplete local datasets.
+
+## 7) Results and artifacts
+
+- `cpjump_matching_eval.py`:
+  - prints final tables and mean/std to console
+  - does not persist result CSVs/figures in this script
+- `benchmark_stable.py`:
+  - writes result CSVs
+  - writes pivot summaries (`tables/`)
+  - writes barplots/boxplots (`figures/`)
+
+Impact: stable workflow is better for reproducible reporting and downstream analysis.
+
+## Notable implementation caveats in CellCLIP-style script
+
+These are behavior-level differences worth knowing when interpreting outputs:
+
+- In `load_emb_data`, perturbation is overwritten to `"crispr"` before metadata selection, which can affect control selection logic for embeddings.
+- `--emb_type` is parsed but not used in the script.
+- The script always loads and merges embedding data inside `process_modality`, even when `feature_type="profile"` (extra overhead).
+
+## Practical guidance
+
+- Use `scripts/benchmark_stable.py` when you want:
+  - a reproducible local benchmark run,
+  - robust handling of missing/incomplete data,
+  - saved artifacts for comparison and reporting.
+- Use `baselines/CellCLIP/cpjump_matching_eval.py` when you specifically need:
+  - the original CellCLIP-style embedding evaluation branch (`feature_type=emb`),
+  - optional control-based KernelPCA preprocessing,
+  - behavior closer to that codebase (including its dataset assumptions).

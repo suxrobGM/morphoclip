@@ -1,0 +1,46 @@
+# Text Encoder
+
+The MorphoCLIP text encoder encodes perturbation metadata into 512-d embeddings using BioClinical ModernBERT (150M params, frozen during training).
+
+## Architecture
+
+- **Base model**: BioClinical ModernBERT (frozen) — encodes text into 768-d embeddings
+- **Pooling**: CLS token pooling (default) or mean pooling (configurable via `pooling` parameter)
+- **Projection head** (trainable): Linear (768 → 512) → LayerNorm → GELU → Dropout → Linear (512 → 512) → L2 normalize
+- **Max sequence length**: 256 tokens
+- **Output**: 512-d L2-normalized embeddings in the shared contrastive space
+
+Raw 768-d BERT features are cached separately from projected 512-d output, allowing the projection head to be retrained without re-running BERT (~10x speedup).
+
+## Usage modes
+
+It can run in two modes:
+
+## 1. Quick test (no external data)
+
+Uses built-in sample metadata (5 perturbations).
+
+```bash
+uv run poe precompute-text
+```
+
+## 2. CPJUMP1 external metadata
+
+Load from `data/metadata/external_metadata/` TSV files. Fetch metadata first if needed:
+
+```bash
+uv run poe fetch-dataset --metadata   # downloads platemaps + external_metadata
+uv run poe precompute-text --metadata-dir data/metadata/external_metadata
+uv run poe precompute-text --metadata-dir data/metadata/external_metadata --limit 20  # first 20 only
+```
+
+## Metadata sources
+
+- **External TSVs** (recommended): `data/metadata/external_metadata/` — `JUMP-Target-1_compound_metadata_targets.tsv`, `JUMP-Target-1_crispr_metadata.tsv`, `JUMP-Target-1_orf_metadata.tsv`. Get via `uv run poe fetch-dataset --metadata`.
+- **Profile CSVs**: If you have `*_normalized_feature_select_negcon_batch.csv.gz` with `Metadata_PlateType`, `Metadata_Name`, etc., use `load_metadata_from_csv()` and `metadata_from_cpjump1_row()`.
+
+## Options
+
+- `--cell-line U2OS` — filter by cell line
+- `--limit N` — process first N perturbations only
+- `--cache-dir PATH` — HuggingFace model cache directory

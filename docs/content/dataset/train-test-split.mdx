@@ -1,0 +1,121 @@
+# Label Generation and Train/Test Split
+
+This document explains the two-step data flow:
+
+1. `scripts/label_generator.py` builds `labels.csv` from image filenames.
+2. `scripts/train_test_split.py` splits `labels.csv` into train/test label files.
+
+## Step 1: Label generation (`scripts/label_generator.py`)
+
+## Inputs
+
+- `--batch-folder`: batch directory containing:
+  - `<batch-folder>/<plate-folder>/Images/*.tiff`
+- `--profiles-root`: profile root containing:
+  - `data/profiles/<batch>/<plate>/<plate>_normalized_feature_select_negcon_batch.csv.gz`
+
+## Plate and filename parsing
+
+- `platecode` is extracted from plate folder name by splitting on `_` and taking the first token.
+- Image files are parsed with pattern:
+  - `rXXcXXfXXpXX-chXsk1fk1fl1.tiff` or `rXXcXXfXXpXX-chXXsk1fk1fl1.tiff`
+- Extracted fields:
+  - `row` (for example `r01`)
+  - `col` (for example `c12`)
+  - `site` (for example `f03`)
+  - `channel` (normalized as `ch01`, `ch02`, ...)
+
+## Well construction
+
+- `Well` is derived from row/col:
+  - row number -> ASCII letter (`1 -> A`, `2 -> B`, ...)
+  - column -> 2-digit number
+  - example: `r01,c01 -> A01`
+
+## Channel completeness grouping
+
+Rows are grouped by:
+
+- `platecode`, `row`, `col`, `site`, `Well`
+
+For each group:
+
+- `channel_count = nunique(channel)`
+- complete group: `channel_count >= 5`
+- incomplete group: `channel_count &lt; 5`
+
+## Metadata join
+
+For each plate, the matching profile CSV is loaded and only metadata columns are kept:
+
+- columns starting with `Meta_` or `Metadata_`
+
+Grouped image rows are left-joined with profile metadata on:
+
+- image: `Well`
+- profile: `Metadata_Well`
+
+## Label generator outputs
+
+- `labels.csv`: complete groups plus joined metadata
+- `incomplete_channel_wells.csv`: incomplete groups plus `channel_count` and joined metadata
+
+## Step 2: Train/test split (`scripts/train_test_split.py`)
+
+## Input expectations
+
+The split script reads `labels.csv` and derives:
+
+- plate identifier from `platecode` or `Metadata_Plate` or `batch`
+- well identifier from `Well` or `Metadata_Well` or (`row`, `col`)
+
+## Normalized fields used for split
+
+For each row:
+
+- `batch` = plate number
+- `Well` = normalized well id
+- `UNIQUE_SAMPLE_KEY` = `{batch}-{Well}`
+- `SAMPLE_KEY` = same as `UNIQUE_SAMPLE_KEY`
+- `treatment` = `Well`
+- `prompt` = empty string (`""`) placeholder
+
+## Split unit and grouping
+
+Split happens at unique well key level:
+
+1. Deduplicate by `UNIQUE_SAMPLE_KEY`.
+2. Group (default: `batch`).
+3. Sort unique treatments (wells) and take first `floor(train_ratio * N)` for train.
+4. Apply selected keys back to full rows.
+
+This preserves all rows for the same well (for example all sites of a well) in the same split.
+
+## Train/test split outputs
+
+- `jumpcp_training_label2.csv`
+- `jumpcp_testing_label2.csv`
+
+written to `--output-dir` (default: `output/benchmark/input`).
+
+## CLI example
+
+```bash
+./.venv/bin/python scripts/label_generator.py \
+  --batch-folder data/raw/2020_11_04_CPJUMP1 \
+  --profiles-root data/profiles \
+  --output-dir output
+
+./.venv/bin/python scripts/train_test_split.py \
+  --label-file output/labels.csv \
+  --output-dir output/benchmark/input \
+  --train-ratio 0.75 \
+  --group-columns batch
+```
+
+## Validation checks
+
+The split script validates:
+
+- required columns for splitting exist (`group-columns`, `treatment`, `UNIQUE_SAMPLE_KEY`)
+- train and test key sets are disjoint

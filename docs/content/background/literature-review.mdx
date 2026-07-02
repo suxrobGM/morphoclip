@@ -1,0 +1,179 @@
+# Literature Review
+
+**MorphoCLIP: Text-Supervised Contrastive Learning for Perturbation Matching in Cell Painting Images**
+
+## 1. Problem Statement
+
+A fundamental challenge in drug discovery is determining a compound's mechanism of action (MoA) — identifying which protein or biological pathway a drug targets. The Cell Painting assay enables high-throughput morphological profiling of cells, but current analytical methods (CellProfiler-based handcrafted features + cosine similarity) detect only 5–25% of expected compound–gene matches (Chandrasekaran et al., 2024). This project investigates whether Vision-Language Models can learn richer representations that substantially improve this match rate.
+
+## 2. Foundational Dataset
+
+### Chandrasekaran et al. (2024) — CPJUMP1
+
+- **Paper:** Three million images and morphological profiles of cells treated with matched chemical and genetic perturbations
+- **Venue:** Nature Methods, Vol 21, pp. 1114–1121
+- **Link:** https://doi.org/10.1038/s41592-024-02241-6
+
+**Summary:** Created the CPJUMP1 benchmark dataset — a carefully curated resource where each perturbed gene's protein product is a known target of at least two chemical compounds. This enables systematic evaluation of whether chemical and genetic perturbations targeting the same protein produce similar cell morphologies.
+
+**Dataset:**
+
+- ~3 million Cell Painting images, ~75 million cells
+- 3 perturbation types: compounds (303), CRISPR knockouts (160 genes), ORF overexpression (176 genes)
+- 2 cell lines (U2OS, A549), multiple timepoints
+- 5 fluorescent channels: DNA, ER, RNA, AGP (actin/Golgi/membrane), Mito
+- 384-well plates with DMSO negative controls
+
+**Baseline Method:** CellProfiler extracts ~1,000 handcrafted morphological features (shape, texture, intensity) per cell. Well-level profiles are created by averaging across cells. Perturbation matching is evaluated using cosine similarity and mean Average Precision (mAP).
+
+**Key Results:**
+
+- Only ~5–25% of compounds correctly match their sister compounds targeting the same protein
+- Only ~7–17% of CRISPR guides correctly match sister guides targeting the same gene
+- Cross-modal matching (compound ↔ genetic perturbation) is even harder
+- Possible causes: suboptimal annotations, off-target effects, or limitations in how morphology is measured
+
+**Relevance to MorphoCLIP:** This dataset provides the ground truth benchmark and evaluation framework. Our model's performance will be directly compared against these CellProfiler baselines.
+
+## 3. Contrastive Learning for Cell Painting
+
+### 3.1 CLOOME — Sánchez-Fernández et al. (2023)
+
+- **Paper:** CLOOME: Contrastive learning unlocks bioimaging databases for queries with chemical structures
+- **Venue:** Nature Communications
+
+**Approach:** First CLIP-style contrastive learning framework for Cell Painting. Trains two encoders jointly — a ResNet for microscopy images and an MLP for Morgan molecular fingerprints — to embed matched image–molecule pairs close together in a shared latent space.
+
+**Key Results:**
+
+- Top-1 retrieval accuracy >70× higher than random baseline on a database of ~2,000 candidate images
+- Learned embeddings transfer well to downstream tasks: activity prediction, MoA identification, image classification via linear probing
+
+**Limitations:**
+
+- Only handles chemical perturbations (not genetic — no CRISPR or ORF)
+- Uses ResNet without cross-channel reasoning — treats 5 Cell Painting channels like RGB, which loses channel-specific biological information
+- Limited to Morgan fingerprints for molecular representation
+
+**Relevance to MorphoCLIP:** CLOOME established that contrastive learning works for Cell Painting data. MorphoCLIP builds on this by unifying perturbation types via text and using channel-aware image encoding.
+
+### 3.2 MolPhenix — Fradkin et al. (2024)
+
+- **Paper:** How Molecules Impact Cells: Unlocking Contrastive PhenoMolecular Retrieval
+- **Venue:** NeurIPS 2024
+
+**Approach:** Builds on CLOOME with three design guidelines:
+
+1. Use a pre-trained phenomics model (Phenom-1) as the image encoder rather than training from scratch — dramatically accelerates training and improves performance
+2. Embedding averaging across replicates of the same perturbation — reduces noise
+3. Implicit and explicit concentration encoding — treats different drug concentrations as distinct classes
+
+Also introduced the S2L (Soft-to-Label) loss, a contrastive loss that shifts from multi-class classification to a soft multi-label problem, improving retrieval of active molecules.
+
+**Key Results:**
+
+- 8.78× improvement over CLOOME on active molecule retrieval
+- 77.33% top-1% retrieval on active molecules (zero-shot)
+- Pre-trained Phenom-1 embeddings are critical — training from scratch is far worse
+
+**Limitations:**
+
+- Chemical perturbations only (like CLOOME)
+- Relies on proprietary Phenom-1 model (not publicly available)
+- Assumes access to activity labels for evaluation
+
+**Relevance to MorphoCLIP:** Validates the importance of pre-trained image encoders and thoughtful loss design. Our approach should leverage pre-trained embeddings rather than training vision models from scratch.
+
+### 3.3 CellCLIP — Lu et al. (2025)
+
+- **Paper:** CellCLIP: Learning Perturbation Effects in Cell Painting via Text-Guided Contrastive Learning
+- **Venue:** NeurIPS 2025 (Poster)
+- **Link:** https://arxiv.org/abs/2506.06290
+- **Code:** https://github.com/suinleelab/CellCLIP
+
+**Approach:** A CLIP-style cross-modal contrastive learning framework that uses natural language descriptions as the universal perturbation representation — unifying compounds, CRISPR knockouts, and ORFs in a single text modality.
+
+**Key architectural innovations:**
+
+- **Text-based perturbation encoding:**
+  Prompt template: "A Cell Painting image of [cell_type] cells treated with [drug_name], SMILES: [SMILES_string]". For CRISPR: "...with CRISPR knockout of gene [GENE]". Uses pre-trained language model (e.g., PubMedBERT) as text encoder. SMILES string is the most critical component — removing it causes the largest performance drop.
+- **CrossChannelFormer:** Novel transformer architecture that processes each of the 5 Cell Painting channels separately, then uses cross-attention to reason about inter-channel relationships. Captures channel-specific biology (unlike CLOOME's naive channel stacking).
+- **Attention-based pooling (Multiple Instance Learning):** Multiple cells per perturbation are pooled into one embedding using learned attention weights. Identifies and emphasizes cells with the strongest perturbation signal. 6.7× training speedup vs. instance-level processing.
+- **CWCL (Continuously Weighted Contrastive Loss):** Replaces binary positive/negative labels with continuous similarity-based weights. Preserves morphological similarity structure in the cross-modal space.
+
+**Key Results:**
+
+- Outperforms CLOOME and MolPhenix on cross-modal retrieval
+- Strong zero-shot gene–gene relationship recovery on RxRx3-core benchmark
+- Works across ALL perturbation types (compounds + CRISPR + ORF)
+- Attention pooling identifies biologically meaningful cells
+
+**Limitations:**
+
+- Large model size (1.48B parameters)
+- Limited to datasets collected in prior works — no additional wet lab validation
+- High cost of generating Cell Painting data limits open benchmarking
+
+**Relevance to MorphoCLIP:** CellCLIP is our closest prior work and primary comparison. MorphoCLIP extends this direction by exploring richer text prompts with biological knowledge, alternative VLM backbones, and combined training strategies.
+
+### 3.4 CWA-MSN (2025)
+
+- **Paper:** Efficient Cell Painting Image Representation Learning via Cross-Well Aligned Masked Siamese Network
+- **Link:** https://arxiv.org/abs/2509.19896
+
+**Approach:** Self-supervised masked siamese network that aligns embeddings of cells subjected to the same perturbation across different wells/batches/plates. This cross-well alignment naturally handles batch effects without requiring explicit proxy labels.
+
+**Key Results:**
+
+- Outperforms CellCLIP (+9%) and OpenPhenom (+29%) on gene–gene benchmarks
+- Only 22M parameters (vs. CellCLIP's 1.48B) and 0.2M training images
+- Superior parameter and data efficiency
+
+**Relevance to MorphoCLIP:** Cross-well alignment is a powerful technique for handling batch effects. We should consider incorporating this as a regularization strategy alongside our contrastive learning objective.
+
+## 4. Self-Supervised and Foundation Models
+
+### 4.1 OpenPhenom / Phenom Series — Kraus et al. (2024), Kenyon-Dean et al. (2024)
+
+- **OpenPhenom:** Publicly available ViT-S/16, self-supervised on >10M Cell Painting images from RxRx3 + cpg0016
+- **Phenom-1:** 307M parameters, trained on 93M images (proprietary)
+- **Phenom-2:** 1.86B parameters, trained on 16M images (proprietary)
+
+These serve as strong unimodal baselines — image-only models without cross-modal alignment.
+
+### 4.2 SSL for Cell Painting — Moshkov et al. (2025)
+
+- **Venue:** Scientific Reports
+
+Trained DINO, MAE, and SimCLR on a JUMP Cell Painting subset. DINO (ViT-S/16) surpassed CellProfiler in drug target and gene family classification with remarkable zero-shot generalizability to unseen genetic perturbation datasets, without fine-tuning.
+
+## 5. Summary: Landscape of Methods
+
+| Method       | Year | Type            | Perturbations  | Image Encoder      | Perturbation Encoder | Params | Key Metric    |
+| ------------ | ---- | --------------- | -------------- | ------------------ | -------------------- | ------ | ------------- |
+| CellProfiler | —    | Handcrafted     | All            | Feature extraction | N/A                  | N/A    | mAP: 5–25%    |
+| CLOOME       | 2023 | Contrastive     | Compounds only | ResNet             | Morgan FP MLP        | ~25M   | 70× random    |
+| MolPhenix    | 2024 | Contrastive     | Compounds only | Phenom-1 (frozen)  | GNN (MolGPS)         | ~36M   | 8.78× CLOOME  |
+| OpenPhenom   | 2024 | Self-supervised | Unimodal       | ViT-S/16           | N/A                  | 25M    | CORUM: .300   |
+| CellCLIP     | 2025 | Contrastive     | All (via text) | CrossChannelFormer | LLM text encoder     | 1,477M | CORUM: .354   |
+| CWA-MSN      | 2025 | Self-supervised | Unimodal       | ViT-S/16 (masked)  | N/A                  | 22M    | CORUM: .386   |
+| MorphoCLIP   | 2025 | Contrastive     | All (via text) | VLM-adapted        | Biomedical LLM       | TBD    | Target: >.386 |
+
+## 6. Key Gaps and Opportunities
+
+- **Richer text prompts:** CellCLIP uses simple templates. Enriching with pathway information, protein function, DrugBank descriptions could improve the text encoder's biological understanding.
+- **Parameter efficiency:** CellCLIP is 1.48B params while CWA-MSN achieves better results with 22M. There is room for a parameter-efficient VLM approach.
+- **Batch effect handling:** Most contrastive methods don't explicitly address batch effects. Combining cross-well alignment (CWA-MSN) with cross-modal learning (CellCLIP) is unexplored.
+- **Evaluation on CPJUMP1 specifically:** Most recent methods evaluate on RxRx3-core. Directly improving the compound–gene match rate on CPJUMP1 (the original 5–25% problem) remains underexplored.
+- **VLM reasoning:** No prior work uses the generative capabilities of VLMs — the ability to describe what morphological changes a perturbation caused in natural language. This could enable interpretability and hypothesis generation.
+
+## References
+
+- Chandrasekaran, S.N., et al. (2024). Three million images and morphological profiles of cells treated with matched chemical and genetic perturbations. _Nature Methods_, 21, 1114–1121.
+- Lu, M., Weinberger, E., Kim, C., & Lee, S.-I. (2025). CellCLIP: Learning Perturbation Effects in Cell Painting via Text-Guided Contrastive Learning. NeurIPS 2025.
+- Sánchez-Fernández, A., et al. (2023). CLOOME: Contrastive learning unlocks bioimaging databases for queries with chemical structures. _Nature Communications_.
+- Fradkin, P., et al. (2024). How Molecules Impact Cells: Unlocking Contrastive PhenoMolecular Retrieval. NeurIPS 2024.
+- CWA-MSN (2025). Efficient Cell Painting Image Representation Learning via Cross-Well Aligned Masked Siamese Network. arXiv:2509.19896.
+- Kraus, O., et al. (2024). OpenPhenom. arXiv.
+- Moshkov, N., et al. (2025). Self-supervision advances morphological profiling by unlocking powerful image representations. _Scientific Reports_.
+- Seal, S., et al. (2024). Cell Painting: A Decade of Discovery and Innovation in Cellular Imaging. _Nature Methods_.

@@ -1,0 +1,8 @@
+extends: "official_upstreamish_unique_cpjump_style.yaml"
+
+model:
+  variant: "chemberta_film"
+  chem_prompt_policy: "remove_smiles"
+
+runtime:
+  run_name: "cellclip_chemberta_upstreamish_film_remove_smiles"

@@ -1,0 +1,65 @@
+\section{Experimental Setup}
+
+\subsection{Dataset}
+
+We evaluate on the CPJUMP1 pilot dataset~\cite{chandrasekaran2024jump}, a public benchmark from the JUMP Cell Painting Consortium hosted on the Cell Painting Gallery (AWS S3, prefix \texttt{cpg0000-jump-pilot}). CPJUMP1 contains 51 plates and 3.31\,TiB of raw 16-bit TIFF images. The collection covers three perturbation types (303 small-molecule compounds, 160 CRISPR gene knockouts, 176 ORF overexpressions), two cell lines (U2OS and A549), and several timepoints. Each gene target is linked to at least two compounds, which allows systematic evaluation of compound--gene matching. Each plate has 384 wells with 7--16 sites per well; each site produces five fluorescence channels at $1080 \times 1080$ pixels plus three brightfield channels that we do not use.
+
+\subsection{Data Pipeline}
+
+We use a stream-extract-delete pipeline to keep disk usage bounded. Raw TIFFs ($\sim$58--118\,GiB per plate) are downloaded to scratch space, passed through the frozen DINOv3 backbone, and removed once the per-channel CLS features are written. This compresses 3.31\,TiB of raw data into roughly 153\,GB of cached features ($\sim$3\,GB per plate). Extraction takes about 7 minutes per plate on an RTX 5080, or roughly 6 hours for all 51 plates. Text embeddings are pre-computed in the same way: each perturbation prompt is encoded by frozen BioClinical ModernBERT and the 768-d CLS tokens are cached to disk.
+
+The unit of training is a well with all of its sites aggregated. The cached feature tensor for a well has shape $(S, 5, 1024)$, where $S$ is the number of sites. We mean-pool over the site dimension before the CrossChannelFormer to obtain a single $(5, 1024)$ tensor per well.
+
+\subsection{Train/Test Split}
+
+We implement three split strategies and evaluate the model under each:
+\begin{itemize}
+    \item \textbf{Official representation} (default): CRISPR and ORF perturbations form the training set; compounds are split by timepoint into validation and test.
+    \item \textbf{Gene--compound holdout}: a 60/20/20 split at the target-gene level, so no target gene appears in both train and test.
+    \item \textbf{CellCLIP-style}: a 75/25 split within perturbation slices, matching CellCLIP's evaluation protocol.
+\end{itemize}
+All three splits keep wells from the same perturbation together; no well is split across partitions.
+
+\subsection{Evaluation Protocol}
+
+We report numbers on a held-out validation split of 2{,}220 wells spanning 817 candidate perturbations. Both retrieval directions are reported:
+\begin{itemize}
+    \item \textbf{Recall@$k$} for $k \in \{1, 5, 10\}$: the fraction of queries whose correct match appears in the top-$k$ retrieved candidates.
+    \item \textbf{Median rank}: the median position of the correct match in the full ranked list (lower is better).
+\end{itemize}
+Random retrieval over 817 candidates gives Recall@1 $\approx$ 0.12\% and median rank $\approx$ 408, which we use as the reference baseline throughout.
+
+\subsection{Baselines}
+
+We compare against three baselines. Each was reported on a different dataset or task formulation, so the comparisons below are indicative rather than strictly controlled, and we flag the relevant differences in the results section.
+\begin{itemize}
+    \item \textbf{CellProfiler}~\cite{carpenter2006cellprofiler}. Handcrafted features on CPJUMP1 sister-perturbation matching, fraction retrieved 4.3--25.1\% (mean $\sim$13\%)~\cite{chandrasekaran2024jump}.
+    \item \textbf{CellCLIP}~\cite{lu2025cellclip}. Contrastive model on the Bray dataset~\cite{ljosa2012annotated} with text-to-profile retrieval. Best Recall@10 7.4\%; CORUM gene--gene recall 0.354.
+    \item \textbf{CWA-MSN}~\cite{huang2025cwamsn}. Self-supervised siamese network with cross-well alignment. CORUM gene--gene recall 0.386 with 22M parameters.
+\end{itemize}
+
+\subsection{Implementation Details}
+
+Batch size 512 wells. AdamW optimizer with $\text{lr} = 10^{-4}$, weight decay 0.2, $(\beta_1, \beta_2) = (0.9, 0.999)$, $\varepsilon = 10^{-8}$. Schedule: 100-step linear warmup followed by cosine decay over 100 epochs. FP16 mixed precision; gradient clipping at norm 1.0. CrossChannelFormer: 1 transformer layer, 4 attention heads. Projection heads: hidden width 512, dropout 0.3. Temperature initialized to $\ln(1/0.07)$ and clamped at $\ln(100)$. Seed 42 for the headline number; the planned ablation runs use three seeds (42, 1337, 2024) to give variance estimates.
+
+\subsection{Planned Ablations}
+
+We design a $2^3$ factorial ablation over three binary factors (text supervision, CWA batch correction, and gene-inclusive training) to attribute performance to each component:
+
+\begin{table}[t]
+\centering
+\caption{Factorial ablation design.}
+\label{tab:ablation_design}
+\begin{tabular}{@{}lcccl@{}}
+\toprule
+Variant & CWA & Genes & Text & Tests \\
+\midrule
+Full MorphoCLIP & \checkmark & \checkmark & \checkmark & Complete method \\
+No text & \checkmark & \checkmark & & CWA-MSN--like \\
+No genes & \checkmark & & \checkmark & CellCLIP + CWA \\
+No CWA & & \checkmark & \checkmark & Batch corr.\ effect \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A second planned ablation varies prompt richness across four levels: (1)~perturbation name only, (2)~name plus target and function, (3)~name plus target plus SMILES or GO terms, and (4)~full description with pathway annotations. The goal is to measure how much of the gain comes from injecting structured domain knowledge into the prompt, and in particular whether SMILES strings carry useful signal through BioClinical ModernBERT, which was not pre-trained on chemical notation.

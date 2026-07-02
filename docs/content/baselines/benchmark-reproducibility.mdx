@@ -1,0 +1,174 @@
+# Benchmark Reproducibility
+
+## Reproducing the Paper-Compatible Baseline
+
+Use this path to reproduce the stable, paper-compatible benchmark behavior with
+the old copairs API.
+
+1. Pull repository submodules:
+
+```bash
+git submodule update --init --recursive
+```
+
+2. Create the Conda environment from `benchmark_environment.yml`:
+
+```bash
+conda env create -f benchmark_environment.yml
+conda activate analysis
+conda install -c conda-forge rclone
+```
+
+3. Copy benchmark profiles from the Cell Painting Gallery S3 bucket into
+   `data/profiles`:
+
+```bash
+rclone copy :s3,provider=AWS,region=us-east-1,no_check_bucket=true:cellpainting-gallery/cpg0000-jump-pilot/source_4/workspace/profiles data/profiles
+```
+
+4. Make sure benchmark metadata files are present:
+
+```bash
+mkdir -p output/benchmark/input
+cp baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/benchmark/output/experiment-metadata.tsv output/benchmark/input/
+cp baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/benchmark/input/JUMP-Target-1_compound_metadata_additional_annotations.tsv output/benchmark/input/
+```
+
+5. Run the stable benchmark test mode:
+
+```bash
+# quick check
+python scripts/benchmark/benchmark_stable.py --test-mode
+```
+
+## Stable Benchmark
+
+The stable CPJUMP1 benchmark in this repo is built around
+[`scripts/benchmark/benchmark_stable.py`](../../scripts/benchmark/benchmark_stable.py).
+It measures three tasks:
+
+- Replicability: whether replicate wells from the same perturbation match each other.
+- Within-modality target matching: whether perturbations in the same modality that hit the same target match each other.
+- Cross-modality matching: whether compounds and genetic perturbations that share a target match each other.
+
+The default stable workflow filters to batch `2020_11_04_CPJUMP1`, density `100`,
+antibiotics `absent`, and uses the timeline labels:
+
+- `short`: compound 24h, ORF 48h, CRISPR 96h
+- `long`: compound 48h, ORF 96h, CRISPR 144h
+
+## Inputs and Outputs
+
+Baseline benchmark input:
+
+- Profiles under `data/profiles/<batch>/<plate>/*_normalized_feature_select_negcon_batch.csv.gz`
+- Metadata under `output/benchmark/input/`
+
+CellCLIP benchmark input:
+
+- Benchmark-format CellCLIP profile CSVs under `data/profiles_cellclip_hf/<batch>/<plate>/`
+- These are produced from per-site feature tensors with
+  [`scripts/cellclip/export_cellclip_profiles.py`](../../scripts/cellclip/export_cellclip_profiles.py)
+
+Benchmark outputs:
+
+- CSVs in `output/<run_name>/`
+- Summary tables in `output/<run_name>/tables/`
+- Figures in `output/<run_name>/figures/`
+
+## Local Stable Workflow
+
+Use this path for the current repo-local benchmark flow.
+
+### Baseline Benchmark Details
+
+Run the stable CellProfiler-style benchmark on the default profile directory:
+
+```bash
+python scripts/benchmark/benchmark_stable.py \
+  --profiles-dir data/profiles \
+  --output-dir output/benchmark \
+  --batch 2020_11_04_CPJUMP1 \
+  --timelines short
+```
+
+Useful variants:
+
+- Add `--timelines short long` to run the full benchmark.
+- Add `--cell-filter A549` or `--cell-filter U2OS` to restrict to one cell type.
+- Add `--test-mode` to run a smaller smoke test.
+
+### CellCLIP Benchmark
+
+The local CellCLIP workflow has two stages:
+
+1. Export benchmark-format well profiles from a pretrained CellCLIP visual encoder.
+2. Run the same stable benchmark on those exported profiles.
+
+#### 1. Export CellCLIP Profiles
+
+```bash
+python scripts/cellclip/export_cellclip_profiles.py \
+  --ckpt-path /path/to/cellclip_checkpoint.pt \
+  --feature-root data/features_cellclip_base \
+  --output-profiles-root data/profiles_cellclip_hf \
+  --batch 2020_11_04_CPJUMP1 \
+  --timelines short
+```
+
+Notes:
+
+- If `--ckpt-path` is omitted, the script falls back to the checkpoint settings in `configs/benchmark.yml`.
+- The default output root is `data/profiles_cellclip_hf`.
+- This step expects precomputed per-site tensors in `data/features_cellclip_base` unless you override `--feature-root`.
+
+#### 2. Benchmark the Exported CellCLIP Profiles
+
+```bash
+python scripts/benchmark/benchmark_stable.py \
+  --profiles-dir data/profiles_cellclip_hf \
+  --output-dir output/benchmark_cellclip_hf \
+  --batch 2020_11_04_CPJUMP1 \
+  --timelines short \
+  --batch-correction \
+  --pca-kernel linear \
+  --pca-n-components 500
+```
+
+Notes:
+
+- `--batch-correction` enables the local eval-time `KernelPCA + StandardScaler` correction fit on pooled negative controls from the selected plates.
+- Drop `--batch-correction` if you want the raw exported CellCLIP profile benchmark.
+
+### Optional: One-Step CellCLIP Pipeline
+
+If you need to extract features, export CellCLIP profiles, and clean caches
+plate-by-plate in one run, use:
+
+```bash
+.venv/bin/python scripts/cellclip/run_cellclip_pipeline.py \
+  --ckpt-path /path/to/cellclip_checkpoint.pt \
+  --batch 2020_11_04_CPJUMP1 \
+  --timelines short
+```
+
+This is the heavier end-to-end path. If you already have per-site feature
+tensors, `export_cellclip_profiles.py` is the simpler entrypoint.
+
+### Optional: Compare Baseline vs CellCLIP (subject to change)
+
+After both runs finish, generate comparison tables and plots with:
+
+```bash
+python scripts/benchmark/compare_benchmark.py \
+  --baseline-dir output/benchmark \
+  --candidate-dir output/benchmark_cellclip_hf \
+  --output-dir output/benchmark_comparison
+```
+
+Recommended local comparison workflow:
+
+1. Run the baseline benchmark on `data/profiles`.
+2. Export CellCLIP profiles to `data/profiles_cellclip_hf`.
+3. Run the benchmark on `data/profiles_cellclip_hf`.
+4. Optionally run `compare_benchmark.py` to summarize the delta.

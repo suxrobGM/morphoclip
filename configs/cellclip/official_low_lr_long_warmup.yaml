@@ -1,0 +1,8 @@
+extends: "base.yaml"
+
+optimization:
+  lr: 1.0e-4
+  warmup_steps: 1000
+
+runtime:
+  run_name: "cellclip_official_low_lr_long_warmup"

@@ -1,0 +1,22 @@
+\section{Problem Statement}
+
+Given a Cell Painting image $\mathbf{x} \in \mathbb{R}^{5 \times H \times W}$ (five fluorescence channels at $1080 \times 1080$ pixels) and a textual description $t$ of the perturbation applied to the imaged cells, we learn encoders $f_{\text{img}}$ and $f_{\text{txt}}$ that map both modalities into a shared unit sphere:
+\begin{equation}
+    f_{\text{img}}(\mathbf{x}), \; f_{\text{txt}}(t) \in \mathbb{R}^d, \quad \|f_{\text{img}}(\mathbf{x})\|_2 = \|f_{\text{txt}}(t)\|_2 = 1.
+\end{equation}
+Matching image--text pairs should have high cosine similarity and non-matching pairs low similarity. We use $d = 512$.
+
+The trained encoders support three retrieval tasks:
+\begin{itemize}
+    \item \textbf{Text-to-image retrieval.} Given a perturbation description (e.g., ``a compound that inhibits tubulin and disrupts cell division''), retrieve cell images that exhibit the corresponding phenotype.
+    \item \textbf{Image-to-text retrieval.} Given a cell image, return the perturbation description that best matches the observed morphology.
+    \item \textbf{Image-to-image retrieval.} Compare compound images against genetic perturbation images by cosine similarity to identify shared targets, the standard CPJUMP1 task. The text encoder shapes the embedding space during training but is not used at inference for this task.
+\end{itemize}
+
+Three properties of the data make the problem harder than standard vision--language alignment.
+
+\paragraph{Batch effects.} The same perturbation produces visually different images across plates, days, and microscopes. Illumination drift, staining inconsistencies, and focus variation introduce technical variance that often dominates the biological signal. In CPJUMP1, replicability varies by modality (compounds replicate more cleanly than CRISPR) and by cell line (U2OS vs.\ A549)~\cite{chandrasekaran2024jump}. The mAP distribution is heavily right-skewed: most perturbations score close to zero.
+
+\paragraph{Fuzzy ground truth.} Biological perturbations do not admit clean positive/negative labels in the way natural image--caption pairs do. Two compounds may share a primary target but diverge on secondary effects; a CRISPR knockout and a small molecule can converge on the same pathway through different mechanisms. Labels live on a continuum of similarity, which calls for soft-positive loss formulations rather than InfoNCE-style hard negatives.
+
+\paragraph{Scale and compute.} CPJUMP1 contains 51 plates and 3.31\,TiB of raw 16-bit TIFF images, covering $\sim$3 million field-of-view images of $\sim$75 million cells. End-to-end training of full vision and language encoders at this scale is not feasible on a single consumer GPU. We address this with a pre-extraction and caching pipeline that decouples backbone forward passes from the contrastive training loop.

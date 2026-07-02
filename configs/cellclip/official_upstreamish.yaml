@@ -1,0 +1,14 @@
+extends: "base.yaml"
+
+dataset:
+  batch_size: 64
+  eval_batch_size: 64
+
+optimization:
+  lr: 1.0e-4
+  weight_decay: 0.1
+  epochs: 50
+  warmup_steps: 1000
+
+runtime:
+  run_name: "cellclip_official_upstreamish"

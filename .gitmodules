@@ -1,0 +1,6 @@
+[submodule "baselines/CellCLIP"]
+	path = baselines/CellCLIP
+	url = https://github.com/suinleelab/CellCLIP.git
+[submodule "baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1"]
+	path = baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1
+	url = https://github.com/jump-cellpainting/2024_Chandrasekaran_NatureMethods_CPJUMP1
