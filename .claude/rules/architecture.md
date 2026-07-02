@@ -37,9 +37,13 @@ CellCLIP uses a different architecture than MorphoCLIP (configurable BERT text e
 - `benchmark.plot`: Visualization utilities.
 - `benchmark.stable_helpers`: Batch correction helpers.
 
-## Baselines (`baselines/`)
+## Baselines
 
-Git submodules for comparison: `baselines/CellCLIP`, `baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1`, `baselines/cellprofiler`.
+External comparison repos are not vendored; reference them upstream by link
+([CellCLIP](https://github.com/suinleelab/CellCLIP),
+[Chandrasekaran 2024 CPJUMP1](https://github.com/jump-cellpainting/2024_Chandrasekaran_NatureMethods_CPJUMP1)).
+The small CPJUMP1 reference metadata the benchmark harness needs lives first-party
+under `data/reference/cpjump1/`.
 
 ## Dependency Flow (no cycles)
 

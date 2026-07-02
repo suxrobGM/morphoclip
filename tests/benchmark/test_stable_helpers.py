@@ -6,8 +6,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmark.data import ProfileLoader
-from benchmark.stable_helpers import (
+pytest.importorskip("sklearn", reason="scikit-learn not installed (benchmark extra)")
+
+from benchmark.data import ProfileLoader  # noqa: E402
+from benchmark.stable_helpers import (  # noqa: E402
     apply_batch_correction,
     fit_batch_correction,
     run_with_unpaired_guard,

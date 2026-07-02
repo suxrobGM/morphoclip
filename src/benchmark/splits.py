@@ -1,8 +1,7 @@
 """Benchmark-aligned split strategies requiring external metadata.
 
-These strategies depend on metadata from the Chandrasekaran 2024 baselines
-(``baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/datasplits/``) or
-the benchmark experiment metadata TSV.
+These strategies depend on the CPJUMP1 reference metadata
+(``data/reference/cpjump1/``) or the benchmark experiment metadata TSV.
 
 Strategies:
     - ``cpjump1_official_representation``
@@ -30,9 +29,7 @@ logger = logging.getLogger(__name__)
 
 METADATA_PATH = Path("output/benchmark/input/experiment-metadata.tsv")
 FALLBACK_METADATA_PATH = Path("output/benchmark/output/experiment-metadata.tsv")
-OFFICIAL_SPLIT_METADATA_PATH = Path(
-    "baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/datasplits/cpjump1_metadata.csv"
-)
+OFFICIAL_SPLIT_METADATA_PATH = Path("data/reference/cpjump1/cpjump1_metadata.csv")
 
 
 @dataclass(frozen=True, slots=True)

@@ -5,19 +5,14 @@
 Use this path to reproduce the stable, paper-compatible benchmark behavior with
 the old copairs API.
 
-1. Pull repository submodules:
+1. Install the benchmark extra (pulls the pinned "old API" copairs commit):
 
 ```bash
-git submodule update --init --recursive
+uv sync --extra benchmark
 ```
 
-2. Create the Conda environment from `benchmark_environment.yml`:
-
-```bash
-conda env create -f benchmark_environment.yml
-conda activate analysis
-conda install -c conda-forge rclone
-```
+2. Install `rclone` (via your platform package manager) to pull profiles from the
+   Cell Painting Gallery.
 
 3. Copy benchmark profiles from the Cell Painting Gallery S3 bucket into
    `data/profiles`:
@@ -26,19 +21,23 @@ conda install -c conda-forge rclone
 rclone copy :s3,provider=AWS,region=us-east-1,no_check_bucket=true:cellpainting-gallery/cpg0000-jump-pilot/source_4/workspace/profiles data/profiles
 ```
 
-4. Make sure benchmark metadata files are present:
+4. Stage the benchmark metadata into `output/benchmark/input/`. The CPJUMP1
+   reference metadata ships in this repo under `data/reference/cpjump1/`.
+   `experiment-metadata.tsv` is **not** vendored — generate it with the upstream
+   `0.create-experiment-metadata.ipynb` (Chandrasekaran 2024 repo) or download it
+   from the JUMP source, then place it in the same folder:
 
 ```bash
 mkdir -p output/benchmark/input
-cp baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/benchmark/output/experiment-metadata.tsv output/benchmark/input/
-cp baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/benchmark/input/JUMP-Target-1_compound_metadata_additional_annotations.tsv output/benchmark/input/
+cp data/reference/cpjump1/JUMP-Target-1_compound_metadata_additional_annotations.tsv output/benchmark/input/
+# provide experiment-metadata.tsv in output/benchmark/input/ (see note above)
 ```
 
 5. Run the stable benchmark test mode:
 
 ```bash
 # quick check
-python scripts/benchmark/benchmark_stable.py --test-mode
+uv run python scripts/benchmark/benchmark_stable.py --test-mode
 ```
 
 ## Stable Benchmark
@@ -146,7 +145,7 @@ If you need to extract features, export CellCLIP profiles, and clean caches
 plate-by-plate in one run, use:
 
 ```bash
-.venv/bin/python scripts/cellclip/run_cellclip_pipeline.py \
+uv run python scripts/cellclip/run_cellclip_pipeline.py \
   --ckpt-path /path/to/cellclip_checkpoint.pt \
   --batch 2020_11_04_CPJUMP1 \
   --timelines short

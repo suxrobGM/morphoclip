@@ -1,7 +1,8 @@
 # CellCLIP Replication Changelog
 
 This document tracks the local changes made to bring `src/cellclip` closer to
-the upstream `baselines/CellCLIP` training and benchmark behavior.
+the upstream [CellCLIP](https://github.com/suinleelab/CellCLIP) training and
+benchmark behavior. (The upstream repo is no longer vendored under `baselines/`.)
 
 It is focused on **replication fidelity**, not general feature development.
 

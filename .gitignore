@@ -27,10 +27,9 @@ data/.cache/
 !data/tensors/.gitkeep
 !data/visualizations/**
 
-# Generated baseline data. The vendored baseline repositories use Git LFS for
-# these files, and the local pointers are not useful without the LFS objects.
-baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/load_data_csv/
-baselines/2024_Chandrasekaran_NatureMethods_CPJUMP1/profiles/
+# First-party reference metadata (small, required by the benchmark harness)
+!data/reference/
+!data/reference/**
 
 # Environment / secrets
 .env
