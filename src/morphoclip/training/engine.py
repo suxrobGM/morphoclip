@@ -3,7 +3,7 @@
 import math
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import nn
@@ -70,10 +70,16 @@ def build_scheduler(
     return LambdaLR(optimizer, lr_lambda=lr_lambda)
 
 
+def _unwrap(module: nn.Module) -> nn.Module:
+    """Return the inner module, stripping a DDP wrapper if present."""
+    if hasattr(module, "module"):
+        return cast(nn.Module, module.module)
+    return module
+
+
 def _unwrap_state_dict(module: nn.Module) -> dict[str, Any]:
     """Get state_dict from a module, stripping DDP wrapper if present."""
-    inner = module.module if hasattr(module, "module") else module
-    return inner.state_dict()
+    return _unwrap(module).state_dict()
 
 
 def _get_logit_scale_data(logit_scale: nn.Parameter | nn.Module) -> torch.Tensor:
@@ -82,7 +88,7 @@ def _get_logit_scale_data(logit_scale: nn.Parameter | nn.Module) -> torch.Tensor
         return logit_scale.scale.data
     if hasattr(logit_scale, "module"):
         # DDP-wrapped LogitScaleModule
-        return logit_scale.module.scale.data
+        return cast(LogitScaleModule, logit_scale.module).scale.data
     return logit_scale.data
 
 
@@ -151,8 +157,8 @@ def load_checkpoint(
     ckpt = torch.load(path, map_location=device, weights_only=False)
 
     # Unwrap DDP if present on the target modules
-    img_target = image_encoder.module if hasattr(image_encoder, "module") else image_encoder
-    txt_target = text_projection.module if hasattr(text_projection, "module") else text_projection
+    img_target = _unwrap(image_encoder)
+    txt_target = _unwrap(text_projection)
 
     img_target.load_state_dict(ckpt["image_encoder"])
     txt_target.load_state_dict(ckpt["text_projection"])
@@ -162,7 +168,7 @@ def load_checkpoint(
     if isinstance(logit_scale, LogitScaleModule):
         logit_scale.scale.data.copy_(scale_data)
     elif hasattr(logit_scale, "module"):
-        logit_scale.module.scale.data.copy_(scale_data)
+        cast(LogitScaleModule, logit_scale.module).scale.data.copy_(scale_data)
     else:
         logit_scale.data.copy_(scale_data)
 
@@ -176,7 +182,8 @@ def load_checkpoint(
 
 def scale_param(logit_scale: nn.Module) -> nn.Parameter:
     """Get the raw scale parameter, unwrapping DDP if needed."""
-    return logit_scale.module.scale if hasattr(logit_scale, "module") else logit_scale.scale
+    inner = cast(LogitScaleModule, _unwrap(logit_scale))
+    return inner.scale
 
 
 def forward_step(
