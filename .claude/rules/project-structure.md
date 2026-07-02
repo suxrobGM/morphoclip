@@ -2,21 +2,26 @@
 
 ## Source Layout
 
-- MorphoCLIP library code lives under `src/morphoclip/`. Subpackages: `data`, `models`, `utils`.
+- MorphoCLIP library code lives under `src/morphoclip/`. Subpackages: `cli`, `data`, `models`, `utils`.
 - CellCLIP baseline code lives under `src/cellclip/`. Subpackages: `benchmark`, `training`. This is a separate package, not part of `morphoclip`.
 - General benchmark code lives under `src/benchmark/`. Shared by both MorphoCLIP and CellCLIP.
 - Each subpackage has an `__init__.py` that re-exports its public API via `__all__`.
+- The project is an installable package (hatchling build backend, `[tool.uv] package = true`). Do not reintroduce `sys.path.insert` hacks in package or CLI code.
 - Do not add new top-level packages under `src/` without a clear domain boundary.
+
+## CLI (`morphoclip.cli`)
+
+- Pipeline entry points are a single Typer app exposed as the `morphoclip` console command (`[project.scripts]`), also runnable via `python -m morphoclip.cli` (used by `torchrun`).
+- One module per command group under `src/morphoclip/cli/`: top-level commands (`train`, `eval`, `infer`, `split`, `benchmark`) plus sub-apps `data`, `features`, `text`, `cellclip`.
+- CLI command bodies are thin wrappers — business logic belongs in `src/` (`morphoclip.*`, `cellclip.*`, `benchmark.*`). Command-specific orchestration may live in the command module; large/reusable logic (e.g. the stable benchmark) lives in its package (`benchmark.stable`).
+- Imports that pull optional extras (e.g. `benchmark.stable` → copairs/sklearn) must be **lazy** (inside the command body) so `morphoclip --help` works without those extras installed.
+- Poe tasks in `[tool.poe.tasks]` wrap CLI commands (e.g. `train = "morphoclip train ..."`); run via `uv run poe <task>` or `uv run morphoclip <command>`.
 
 ## Scripts
 
-- Scripts live under `scripts/` organized by domain:
-  - `data/`, `features/`, `text/`, `training/` — MorphoCLIP pipeline stages
-  - `benchmark/` — general benchmark scripts (stable benchmark, comparison)
-  - `cellclip/` — CellCLIP-specific scripts (training, export, pipeline)
-- Every script starts with `sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))` to resolve imports.
-- Scripts are thin CLI wrappers — business logic belongs in `src/`.
-- Task entries in `pyproject.toml` under `[tool.poe.tasks]` (run via `uv run poe <task>`).
+- `scripts/` holds only dev/exploration one-offs (inspection, diagnostics, analysis, sanity checks), organized by domain (`data/`, `features/`, `text/`, `benchmark/`, `cellclip/`, `analysis/`, `sanitycheck/`).
+- These scripts start with `sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))` to resolve imports (they are not part of the installed package).
+- Do not add new pipeline entry points here — add a `morphoclip.cli` command instead.
 
 ## Tests
 

@@ -13,8 +13,8 @@
 - Always use full package paths: `from morphoclip.data.metadata import MetadataIndex`, `from cellclip.training.config import CellCLIPTrainingConfig`.
 - Never use relative imports within `src/` packages.
 - Group imports: stdlib, third-party, local (`morphoclip.*`, `cellclip.*`, `benchmark.*`), separated by blank lines.
-- CellCLIP code may import from `morphoclip.data` and `benchmark.data`, but `morphoclip` must never import from `cellclip`.
-- In scripts, place the `sys.path.insert` before local imports with `# noqa: E402` on the import lines.
+- CellCLIP code may import from `morphoclip.data` and `benchmark.data`, but `morphoclip` library code (`data`, `models`, `utils`) must never import from `cellclip`. The one exception is `morphoclip.cli`, the CLI composition root, which imports from `cellclip.*` and `benchmark.*` to expose their commands.
+- In the remaining dev scripts under `scripts/`, place the `sys.path.insert` before local imports with `# noqa: E402` on the import lines. Package and CLI code never use `sys.path.insert`.
 
 ## Naming
 

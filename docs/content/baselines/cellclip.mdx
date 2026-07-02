@@ -4,7 +4,7 @@ This document compares:
 
 - `cpjump_matching_eval.py` from the upstream
   [CellCLIP repo](https://github.com/suinleelab/CellCLIP) (no longer vendored here)
-- `scripts/benchmark/benchmark_stable.py`
+- the `morphoclip benchmark` command (`benchmark_stable.py`)
 
 Both scripts evaluate CPJUMP1 with the same three tasks (replicability, within-modality target matching, and compound-gene cross-modality matching), but the execution workflow and reliability are different.
 
@@ -67,7 +67,7 @@ Impact: CellCLIP workflow can benchmark learned embedding exports directly; stab
 6. For matching tasks, build consensus embeddings by median aggregation over replicates (`Metadata_broad_sample` group).
 7. Right before copairs scoring, convert the vector column to a matrix with `np.stack(df["embeddings"].values)` and pass that matrix to the mAP pipeline.
 
-Note: `scripts/benchmark/benchmark_stable.py` does not run this embedding branch; it analyzes profile feature columns directly.
+Note: `morphoclip benchmark` does not run this embedding branch; it analyzes profile feature columns directly.
 
 ## 3) Optional control-PCA correction
 
@@ -125,7 +125,7 @@ These are behavior-level differences worth knowing when interpreting outputs:
 
 ## Practical guidance
 
-- Use `scripts/benchmark/benchmark_stable.py` when you want:
+- Use `morphoclip benchmark` when you want:
   - a reproducible local benchmark run,
   - robust handling of missing/incomplete data,
   - saved artifacts for comparison and reporting.

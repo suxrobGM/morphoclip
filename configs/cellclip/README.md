@@ -51,7 +51,7 @@ Supported split strategies in the repo are now:
 Example:
 
 ```bash
-PYTHONPATH=src ./.venv/bin/python scripts/cellclip/train_cellclip.py \
+uv run morphoclip cellclip train \
   --config configs/cellclip/official_upstreamish.yaml \
   --run-name cellclip_official_upstreamish
 ```

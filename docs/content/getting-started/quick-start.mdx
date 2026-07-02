@@ -3,21 +3,21 @@
 This guide walks you through the full MorphoCLIP pipeline: downloading data, extracting features, and training the model.
 
 Tasks are defined under `[tool.poe.tasks]` in `pyproject.toml` and run through [poe](https://poethepoet.natn.io/)
-via `uv run poe <task>`. Each task is a thin wrapper around a `python scripts/...` call, so you can always run
-the underlying script directly if you prefer.
+via `uv run poe <task>`. Each task is a thin wrapper around a `morphoclip` CLI command, so you can always run
+the underlying command directly if you prefer.
 
 ## Command Reference
 
-| Task                            | Command                        | Underlying script                                                   |
+| Task                            | Command                        | Underlying command                                                  |
 | ------------------------------- | ------------------------------ | ------------------------------------------------------------------- |
 | Run tests                       | `uv run poe test`              | `pytest tests/ -v`                                                  |
-| Fetch dataset from S3           | `uv run poe fetch-dataset`     | `python scripts/data/fetch_dataset.py`                              |
-| Extract DINOv3 features         | `uv run poe extract-features`  | `python scripts/features/extract_features.py`                       |
-| Download pre-extracted features | `uv run poe download-features` | `python scripts/features/download_features.py`                      |
-| Pre-compute text embeddings     | `uv run poe precompute-text`   | `python scripts/text/precompute_text_embeddings.py`                 |
-| Train model                     | `uv run poe train`             | `python scripts/training/train.py --config configs/train/base.yaml` |
-| Evaluate model                  | `uv run poe eval`              | `python scripts/training/eval.py --checkpoint <path>`               |
-| Run inference                   | `uv run poe infer`             | `python scripts/training/infer.py --checkpoint <path>`              |
+| Fetch dataset from S3           | `uv run poe fetch-dataset`     | `uv run morphoclip data fetch`                                      |
+| Extract DINOv3 features         | `uv run poe extract-features`  | `uv run morphoclip features extract`                                |
+| Download pre-extracted features | `uv run poe download-features` | `uv run morphoclip features download`                               |
+| Pre-compute text embeddings     | `uv run poe precompute-text`   | `uv run morphoclip text precompute`                                 |
+| Train model                     | `uv run poe train`             | `uv run morphoclip train --config configs/train/base.yaml`          |
+| Evaluate model                  | `uv run poe eval`              | `uv run morphoclip eval --checkpoint <path>`                        |
+| Run inference                   | `uv run poe infer`             | `uv run morphoclip infer --checkpoint <path>`                       |
 
 ## Training Pipeline
 
@@ -32,12 +32,12 @@ uv run poe precompute-text
 uv run poe train
 
 # 4. Evaluate a trained checkpoint
-uv run python scripts/training/eval.py --checkpoint output/morphoclip_runs/default/checkpoints/best.pt
+uv run morphoclip eval --checkpoint output/morphoclip_runs/default/checkpoints/best.pt
 
 # 5. Run inference (top-k matching, embedding export, or profile export)
-uv run python scripts/training/infer.py --checkpoint output/morphoclip_runs/default/checkpoints/best.pt
-uv run python scripts/training/infer.py --checkpoint output/morphoclip_runs/default/checkpoints/best.pt --mode embed
-uv run python scripts/training/infer.py --checkpoint output/morphoclip_runs/default/checkpoints/best.pt --mode profile
+uv run morphoclip infer --checkpoint output/morphoclip_runs/default/checkpoints/best.pt
+uv run morphoclip infer --checkpoint output/morphoclip_runs/default/checkpoints/best.pt --mode embed
+uv run morphoclip infer --checkpoint output/morphoclip_runs/default/checkpoints/best.pt --mode profile
 ```
 
 ## Training Configuration
@@ -59,10 +59,10 @@ Replace `poe train` with a direct `torchrun` invocation and add `--distributed`:
 
 ```bash
 # MorphoCLIP on 4 GPUs
-uv run torchrun --nproc_per_node=4 scripts/training/train.py --config configs/train/base.yaml --distributed
+uv run torchrun --nproc_per_node=4 -m morphoclip.cli train --config configs/train/base.yaml --distributed
 
 # CellCLIP on 4 GPUs
-uv run torchrun --nproc_per_node=4 scripts/cellclip/train_cellclip.py --config configs/cellclip/cellclip_1024dim.yaml --distributed
+uv run torchrun --nproc_per_node=4 -m morphoclip.cli cellclip train --config configs/cellclip/cellclip_1024dim.yaml --distributed
 ```
 
 The batch size in the config is **per-GPU**, so effective batch = `batch_size x num_gpus`.

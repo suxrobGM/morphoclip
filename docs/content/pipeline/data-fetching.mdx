@@ -2,7 +2,7 @@
 
 We use the **CPJUMP1** dataset from the JUMP Cell Painting Consortium - a curated benchmark of 3M+ Cell Painting images covering 303 compounds and 160 genes across 2 cell lines (U2OS, A549) and multiple timepoints.
 
-Images are fetched from the Cell Painting Gallery S3 bucket using a unified downloader (`scripts/fetch_dataset.py`) that supports both **AWS CLI** and **rclone**. Dataset configuration lives in `configs/dataset.yml`.
+Images are fetched from the Cell Painting Gallery S3 bucket using a unified downloader (`morphoclip data fetch`, or `uv run poe fetch-dataset`) that supports both **AWS CLI** and **rclone**. Dataset configuration lives in `configs/dataset.yml`.
 
 ## Commands
 

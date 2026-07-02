@@ -1,7 +1,10 @@
-#!/usr/bin/env python
-"""Stable benchmark script aligned to the 2024 Chandrasekaran reference pipeline."""
+"""Stable benchmark evaluation aligned to the 2024 Chandrasekaran reference pipeline.
 
-import argparse
+This module holds the full orchestration for the CPJUMP1 "stable copairs" benchmark.
+The CLI wrapper (`morphoclip benchmark`) is a thin adapter over
+:func:`run_stable_benchmark`.
+"""
+
 import sys
 import warnings
 from pathlib import Path
@@ -9,10 +12,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-# Add src to path so we can use the local benchmark package directly.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
-
-from benchmark.data import (  # noqa: E402
+from benchmark.data import (
     ProfileLoader,
     add_negcon_indicator,
     compute_consensus,
@@ -25,12 +25,12 @@ from benchmark.data import (  # noqa: E402
     remove_empty_wells,
     remove_negcon_wells,
 )
-from benchmark.metrics import (  # noqa: E402
+from benchmark.metrics import (
     evaluate_cross_modality_matching,
     evaluate_matching,
     evaluate_replicability,
 )
-from benchmark.stable_helpers import (  # noqa: E402
+from benchmark.stable_helpers import (
     apply_batch_correction,
     compute_map_and_fr,
     concat_profiles,
@@ -48,9 +48,6 @@ from benchmark.stable_helpers import (  # noqa: E402
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-# --- Main benchmark function ---
-
 
 CONFIG_PATH = Path("configs/benchmark.yml")
 TIMELINE_CHOICES = ("short", "long")
@@ -78,10 +75,7 @@ def normalize_timelines(value) -> list[str]:
     if value is None:
         return list(TIMELINE_CHOICES)
 
-    if isinstance(value, str):
-        values = [value]
-    else:
-        values = list(value)
+    values = [value] if isinstance(value, str) else list(value)
 
     normalized: list[str] = []
     for item in values:
@@ -105,83 +99,65 @@ def resolve_path(project_root: Path, value: str | None) -> Path | None:
     return project_root / path
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Run CPJUMP1 benchmark evaluation (stable copairs mode)"
-    )
-    parser.add_argument("--config", type=Path, default=CONFIG_PATH)
-    parser.add_argument("--profiles-dir", type=str, default=None)
-    parser.add_argument("--output-dir", type=str, default=None)
-    parser.add_argument("--batch", type=str, default=None)
-    parser.add_argument(
-        "--test-mode", action="store_true", default=None, help="Use less data for testing"
-    )
-    parser.add_argument("--cell-filter", type=str, default=None, help="Filter to single cell type")
-    parser.add_argument("--batch-correction", action="store_true", default=None)
-    parser.add_argument("--pca-kernel", type=str, default=None)
-    parser.add_argument("--pca-n-components", type=int, default=None)
-    parser.add_argument("--split-manifest", type=str, default=None)
-    parser.add_argument(
-        "--split-subset",
-        type=str,
-        choices=("train", "val", "validate", "test"),
-        default=None,
-        help="Evaluate only one saved split subset from a split manifest.",
-    )
-    parser.add_argument(
-        "--timelines",
-        nargs="+",
-        choices=TIMELINE_CHOICES,
-        default=None,
-        help=(
-            "Timeline labels to evaluate. "
-            "'short' maps to 24h compound / 48h ORF / 96h CRISPR, "
-            "'long' maps to 48h compound / 96h ORF / 144h CRISPR."
-        ),
-    )
-    args = parser.parse_args()
-    config = load_benchmark_config(args.config)
+def run_stable_benchmark(
+    *,
+    config: Path = CONFIG_PATH,
+    profiles_dir: str | None = None,
+    output_dir: str | None = None,
+    batch: str | None = None,
+    test_mode: bool | None = None,
+    cell_filter: str | None = None,
+    batch_correction: bool | None = None,
+    pca_kernel: str | None = None,
+    pca_n_components: int | None = None,
+    split_manifest: str | None = None,
+    split_subset: str | None = None,
+    timelines: list[str] | None = None,
+) -> None:
+    """Run the CPJUMP1 benchmark evaluation (stable copairs mode).
 
-    profiles_dir_arg = args.profiles_dir or config.get("profiles_dir", "data/profiles")
-    output_dir_arg = args.output_dir or config.get("output_dir", "output/benchmark")
-    batch = args.batch or config.get("batch", "2020_11_04_CPJUMP1")
-    test_mode = args.test_mode if args.test_mode is not None else config.get("test_mode", False)
-    cell_filter = args.cell_filter or config.get("cell_filter")
-    batch_correction = (
-        args.batch_correction
-        if args.batch_correction is not None
-        else config.get("batch_correction", False)
+    All arguments are optional CLI overrides; unset values fall back to the
+    ``benchmark`` section of the YAML config at *config*.
+    """
+    cfg = load_benchmark_config(config)
+
+    profiles_dir_arg = profiles_dir or cfg.get("profiles_dir", "data/profiles")
+    output_dir_arg = output_dir or cfg.get("output_dir", "output/benchmark")
+    resolved_batch = batch or cfg.get("batch", "2020_11_04_CPJUMP1")
+    resolved_test_mode = test_mode if test_mode is not None else cfg.get("test_mode", False)
+    resolved_cell_filter = cell_filter or cfg.get("cell_filter")
+    resolved_batch_correction = (
+        batch_correction if batch_correction is not None else cfg.get("batch_correction", False)
     )
-    pca_kernel = args.pca_kernel or config.get("pca_kernel", "linear")
-    pca_n_components = int(args.pca_n_components or config.get("pca_n_components", 500))
-    split_manifest_arg = args.split_manifest or config.get("split_manifest")
-    split_subset_arg = args.split_subset or config.get("split_subset")
-    timelines = normalize_timelines(
-        args.timelines if args.timelines is not None else config.get("timelines")
+    resolved_pca_kernel = pca_kernel or cfg.get("pca_kernel", "linear")
+    resolved_pca_n_components = int(pca_n_components or cfg.get("pca_n_components", 500))
+    split_manifest_arg = split_manifest or cfg.get("split_manifest")
+    split_subset_arg = split_subset or cfg.get("split_subset")
+    resolved_timelines = normalize_timelines(
+        timelines if timelines is not None else cfg.get("timelines")
     )
 
-    project_root = Path(__file__).resolve().parent.parent.parent
-    profiles_dir = project_root / profiles_dir_arg
-    output_dir = project_root / output_dir_arg
-    figures_dir = output_dir / "figures"
-    tables_dir = output_dir / "tables"
+    project_root = Path(__file__).resolve().parents[2]
+    profiles_path = project_root / profiles_dir_arg
+    output_path = project_root / output_dir_arg
+    figures_dir = output_path / "figures"
+    tables_dir = output_path / "tables"
     split_manifest_path = resolve_path(project_root, split_manifest_arg)
-    split_subset = None
-    split_manifest = None
+    subset = None
+    manifest = None
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path.mkdir(parents=True, exist_ok=True)
     figures_dir.mkdir(parents=True, exist_ok=True)
     tables_dir.mkdir(parents=True, exist_ok=True)
 
     if split_manifest_path is not None:
         if split_subset_arg is None:
             raise ValueError("--split-subset is required when --split-manifest is provided")
-        split_subset = normalize_subset_label(split_subset_arg)
-        split_manifest = load_split_manifest(split_manifest_path, split_subset)
+        subset = normalize_subset_label(split_subset_arg)
+        manifest = load_split_manifest(split_manifest_path, subset)
     elif split_subset_arg is not None:
         raise ValueError("--split-subset requires --split-manifest")
 
-    # Load experiment metadata
     exp_meta_path = project_root / "output/benchmark/input/experiment-metadata.tsv"
     target_ann_path = (
         project_root
@@ -197,7 +173,7 @@ def main():
 
     experiment_df = (
         pd.read_csv(exp_meta_path, sep="\t")
-        .query(f"Batch=='{batch}'")
+        .query(f"Batch=='{resolved_batch}'")
         .query("Density==100")
         .query('Antibiotics=="absent"')
     )
@@ -206,17 +182,19 @@ def main():
             (experiment_df.Perturbation == "compound") & (experiment_df.Cell_line == "Cas9")
         ].index
     )
-    experiment_df = filter_experiment_metadata_to_split_subset(experiment_df, split_manifest)
+    experiment_df = filter_experiment_metadata_to_split_subset(experiment_df, manifest)
     experiment_df["timeline"] = experiment_df.apply(
         lambda row: get_timepoint_label(row["Perturbation"], row["Time"]),
         axis=1,
     )
-    experiment_df = experiment_df[experiment_df["timeline"].isin(timelines)].reset_index(drop=True)
+    experiment_df = experiment_df[experiment_df["timeline"].isin(resolved_timelines)].reset_index(
+        drop=True
+    )
 
     if experiment_df.empty:
         print(
             "ERROR: No experiments matched the selected timeline(s): "
-            f"{', '.join(timelines)} for batch {batch}"
+            f"{', '.join(resolved_timelines)} for batch {resolved_batch}"
         )
         sys.exit(1)
 
@@ -226,26 +204,23 @@ def main():
         columns={"broad_sample": "Metadata_broad_sample", "target_list": "Metadata_target_list"}
     )
 
-    # Test mode: limit data
-    if test_mode:
+    if resolved_test_mode:
         print("TEST MODE: Using limited data")
-        experiment_df = experiment_df.head(8)  # Limit experiments
+        experiment_df = experiment_df.head(8)
         print(experiment_df)
 
-    if cell_filter:
-        experiment_df = experiment_df.query(f"Cell_type=='{cell_filter}'")
+    if resolved_cell_filter:
+        experiment_df = experiment_df.query(f"Cell_type=='{resolved_cell_filter}'")
 
     if experiment_df.empty:
         print("ERROR: No experiments remained after applying filters.")
         sys.exit(1)
 
-    # Parameters
     replicate_feature = "Metadata_broad_sample"
-    batch_size = 100000 if not test_mode else 20000
-    null_size = 100000 if not test_mode else 10000
-    loader = ProfileLoader(profiles_dir)
+    batch_size = 100000 if not resolved_test_mode else 20000
+    null_size = 100000 if not resolved_test_mode else 10000
+    loader = ProfileLoader(profiles_path)
 
-    # Result containers
     replicability_map_df = pd.DataFrame()
     replicability_fr_df = pd.DataFrame()
     matching_map_df = pd.DataFrame()
@@ -256,34 +231,32 @@ def main():
     print("=" * 60)
     print("CPJUMP1 Benchmark Evaluation (Stable Mode)")
     print("=" * 60)
-    print(f"Profiles: {profiles_dir}")
-    print(f"Batch: {batch}")
-    print(f"Timelines: {', '.join(timelines)}")
-    print(f"Test mode: {test_mode}")
-    print(f"Cell filter: {cell_filter or 'all'}")
-    print(f"Batch correction: {batch_correction}")
-    if batch_correction:
-        print(f"PCA kernel: {pca_kernel}")
-        print(f"PCA components: {pca_n_components}")
-    if split_manifest is not None:
+    print(f"Profiles: {profiles_path}")
+    print(f"Batch: {resolved_batch}")
+    print(f"Timelines: {', '.join(resolved_timelines)}")
+    print(f"Test mode: {resolved_test_mode}")
+    print(f"Cell filter: {resolved_cell_filter or 'all'}")
+    print(f"Batch correction: {resolved_batch_correction}")
+    if resolved_batch_correction:
+        print(f"PCA kernel: {resolved_pca_kernel}")
+        print(f"PCA components: {resolved_pca_n_components}")
+    if manifest is not None:
         print(f"Split manifest: {split_manifest_path}")
-        split_well_count = (
-            split_manifest[["Metadata_Plate", "Metadata_Well"]].drop_duplicates().shape[0]
-        )
-        print(f"Split subset: {split_subset} ({split_well_count} wells)")
-    print(f"Output: {output_dir}")
+        split_well_count = manifest[["Metadata_Plate", "Metadata_Well"]].drop_duplicates().shape[0]
+        print(f"Split subset: {subset} ({split_well_count} wells)")
+    print(f"Output: {output_path}")
     print("=" * 60)
 
     count = 0
     correction_transform = None
-    if batch_correction:
+    if resolved_batch_correction:
         selected_plates = experiment_df["Assay_Plate_Barcode"].drop_duplicates().tolist()
         correction_transform = fit_batch_correction(
             loader=loader,
-            batch=batch,
+            batch=resolved_batch,
             plates=selected_plates,
-            kernel=pca_kernel,
-            n_components=pca_n_components,
+            kernel=resolved_pca_kernel,
+            n_components=resolved_pca_n_components,
         )
         print(
             "Fitted batch correction on "
@@ -302,13 +275,13 @@ def main():
             modality_1_timepoint_df = modality_1_experiments_df.query("Time==@modality_1_timepoint")
             modality_1_df = load_profiles_for_plates(
                 loader=loader,
-                batch=batch,
+                batch=resolved_batch,
                 plates=list(modality_1_timepoint_df.Assay_Plate_Barcode.unique()),
                 modality=modality_1_perturbation,
             )
             modality_1_df = filter_profiles_to_split_subset(
                 modality_1_df,
-                split_manifest,
+                manifest,
                 keep_negcon_on_selected_plates=True,
             )
 
@@ -430,14 +403,14 @@ def main():
 
                     modality_2_df = load_profiles_for_plates(
                         loader=loader,
-                        batch=batch,
+                        batch=resolved_batch,
                         plates=list(modality_2_timepoint_df.Assay_Plate_Barcode.unique()),
                         modality=modality_2_perturbation,
                         attach_gene_target=True,
                     )
                     modality_2_df = filter_profiles_to_split_subset(
                         modality_2_df,
-                        split_manifest,
+                        manifest,
                         keep_negcon_on_selected_plates=True,
                     )
 
@@ -449,14 +422,11 @@ def main():
                         continue
 
                     modality_2_df = apply_batch_correction(modality_2_df, correction_transform)
-                    # Remove empty wells
                     modality_2_df = remove_empty_wells(modality_2_df)
 
-                    # Description for modality 2
                     _time_2 = get_timepoint_label(modality_2_perturbation, modality_2_timepoint)
                     description_2 = f"{modality_2_perturbation}_{cell}_{_time_2}"
 
-                    # Calculate replicability mAP for genetic perturbation
                     if (
                         not replicability_map_df.empty
                         and replicability_map_df.Description.str.contains(description_2).any()
@@ -496,15 +466,12 @@ def main():
                         _map_df["timepoint"] = modality_2_timepoint
                         replicability_map_df = concat_profiles(replicability_map_df, _map_df)
 
-                    # Remove negcon wells
                     modality_2_df = remove_negcon_wells(modality_2_df)
 
-                    # Create consensus profiles
                     modality_2_consensus_df = compute_consensus(
                         modality_2_df, "Metadata_broad_sample"
                     )
 
-                    # Filter out non-replicable genes
                     replicable_genes = list(
                         replicability_map_df[
                             (replicability_map_df.Description == description_2)
@@ -517,9 +484,7 @@ def main():
                         id_col=replicate_feature,
                     )
 
-                    # Filter out reagents without a sister guide
-                    # Pandas compatibility: avoid reset_index column-name differences
-                    # across old/new versions by filtering directly on the Series.
+                    # Filter out reagents without a sister guide.
                     gene_counts = modality_2_consensus_df["Metadata_gene"].value_counts()
                     genes_without_sister = gene_counts[gene_counts == 1].index.to_list()
 
@@ -527,7 +492,6 @@ def main():
                         ~modality_2_consensus_df["Metadata_gene"].isin(genes_without_sister)
                     ].reset_index(drop=True)
 
-                    # Calculate CRISPR-CRISPR matching
                     if modality_2_perturbation == "crispr":
                         if (
                             matching_map_df.empty
@@ -572,7 +536,6 @@ def main():
                             _map_df["timepoint"] = modality_2_timepoint
                             matching_map_df = concat_profiles(matching_map_df, _map_df)
 
-                    # Filter out genes that are not perturbed by ORFs or CRISPRs
                     perturbed_genes = list(set(modality_2_consensus_df.Metadata_matching_target))
                     modality_1_targets_df = (
                         modality_1_consensus_df[
@@ -604,7 +567,6 @@ def main():
                         print("Skipping gene-compound matching - no overlapping targets")
                         continue
 
-                    # Calculate gene-compound matching mAP
                     description_cross = (
                         f"{modality_1_perturbation}_{cell}_{_time}"
                         f"-{modality_2_perturbation}_{cell}_{_time_2}"
@@ -664,15 +626,15 @@ def main():
     # --- Save results ---
     print("\nSaving results...")
 
-    replicability_map_df.to_csv(output_dir / "cellprofiler_replicability_map.csv", index=False)
-    replicability_fr_df.to_csv(output_dir / "cellprofiler_replicability_fr.csv", index=False)
-    matching_map_df.to_csv(output_dir / "cellprofiler_matching_map.csv", index=False)
-    matching_fr_df.to_csv(output_dir / "cellprofiler_matching_fr.csv", index=False)
+    replicability_map_df.to_csv(output_path / "cellprofiler_replicability_map.csv", index=False)
+    replicability_fr_df.to_csv(output_path / "cellprofiler_replicability_fr.csv", index=False)
+    matching_map_df.to_csv(output_path / "cellprofiler_matching_map.csv", index=False)
+    matching_fr_df.to_csv(output_path / "cellprofiler_matching_fr.csv", index=False)
     gene_compound_matching_map_df.to_csv(
-        output_dir / "cellprofiler_gene_compound_matching_map.csv", index=False
+        output_path / "cellprofiler_gene_compound_matching_map.csv", index=False
     )
     gene_compound_matching_fr_df.to_csv(
-        output_dir / "cellprofiler_gene_compound_matching_fr.csv", index=False
+        output_path / "cellprofiler_gene_compound_matching_fr.csv", index=False
     )
 
     # Summary tables
@@ -740,9 +702,5 @@ def main():
         print(gene_compound_matching_fr_df[["Description", "fr"]].to_string(index=False))
 
     print("\n" + "=" * 60)
-    print(f"Results saved to: {output_dir}")
+    print(f"Results saved to: {output_path}")
     print("=" * 60)
-
-
-if __name__ == "__main__":
-    main()

@@ -1,5 +1,5 @@
 # Multi-GPU DDP training configuration.
-# Launch with: torchrun --nproc_per_node=NUM_GPUS scripts/training/train.py --config configs/train/ddp.yaml --distributed
+# Launch with: torchrun --nproc_per_node=NUM_GPUS -m morphoclip.cli train --config configs/train/ddp.yaml --distributed
 
 extends: base.yaml
 

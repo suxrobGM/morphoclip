@@ -3,7 +3,7 @@
 This document explains the two-step data flow:
 
 1. `scripts/label_generator.py` builds `labels.csv` from image filenames.
-2. `scripts/train_test_split.py` splits `labels.csv` into train/test label files.
+2. `morphoclip split` splits `labels.csv` into train/test label files.
 
 ## Step 1: Label generation (`scripts/label_generator.py`)
 
@@ -60,7 +60,7 @@ Grouped image rows are left-joined with profile metadata on:
 - `labels.csv`: complete groups plus joined metadata
 - `incomplete_channel_wells.csv`: incomplete groups plus `channel_count` and joined metadata
 
-## Step 2: Train/test split (`scripts/train_test_split.py`)
+## Step 2: Train/test split (`morphoclip split`)
 
 ## Input expectations
 
@@ -106,7 +106,7 @@ uv run python scripts/label_generator.py \
   --profiles-root data/profiles \
   --output-dir output
 
-uv run python scripts/train_test_split.py \
+uv run morphoclip split \
   --label-file output/labels.csv \
   --output-dir output/benchmark/input \
   --train-ratio 0.75 \

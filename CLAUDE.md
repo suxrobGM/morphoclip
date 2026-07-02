@@ -21,6 +21,12 @@ uv run poe extract-features     # Extract DINOv3 CLS tokens
 uv run poe precompute-text      # Pre-compute text embeddings
 uv run poe train                # Train the model
 
+# Pipeline entry points are also a Typer CLI (poe tasks wrap this):
+uv run morphoclip --help                        # List all commands/groups
+uv run morphoclip data fetch                    # e.g. same as `poe fetch-dataset`
+uv run morphoclip train --config configs/train/base.yaml
+# Multi-GPU: torchrun --nproc_per_node=4 -m morphoclip.cli train --config configs/train/ddp.yaml --distributed
+
 # Documentation site (Nextra)
 cd docs && bun install          # Install docs dependencies (first time)
 cd docs && bun run dev          # Dev server at http://localhost:4000
@@ -31,21 +37,23 @@ cd docs && bun run build        # Static export to docs/out/
 
 ```text
 src/morphoclip/
+  cli/            # Typer `morphoclip` CLI: pipeline entry points (train, eval, infer, data, features, text, benchmark, cellclip)
   data/           # Dataset, metadata, image loading, perturbation types, splits
   models/         # Text encoder, projection head, prompt builder, prompt templates
   utils/          # Text embedding caching, S3 transfer utilities
-src/benchmark/    # General benchmark evaluation (metrics, plotting, stable helpers)
+src/benchmark/    # General benchmark evaluation (metrics, plotting, stable helpers, stable benchmark runner)
 src/cellclip/     # CellCLIP baseline (separate from MorphoCLIP)
   benchmark/      # CellCLIP visual encoder, checkpoint loading, export pipeline
   training/       # Local CellCLIP trainer (config, dataset, engine, losses, model)
 data/reference/   # First-party CPJUMP1 reference metadata (cpjump1_metadata.csv, JUMP-Target-1 annotations)
-scripts/
-  data/           # Dataset fetching, plate checks, label generation
-  features/       # DINOv3 feature extraction
-  text/           # Text embedding pre-computation
-  training/       # MorphoCLIP train, eval, inference, train/test split
-  benchmark/      # General benchmark scripts (stable benchmark, comparison)
-  cellclip/       # CellCLIP-specific scripts (training, export, pipeline)
+scripts/          # Dev/exploration one-offs only (pipeline entry points live in morphoclip.cli)
+  data/           # Dataset inspection, label generation
+  features/       # Feature diagnostics, DINO heatmap / downsampling inspection
+  text/           # Text embedding inspection
+  benchmark/      # Benchmark comparison
+  cellclip/       # Training-run analysis, scheduler
+  analysis/       # Metadata analysis, visualization
+  sanitycheck/    # GPU / setup checks
 tests/            # Mirrors src/ structure (data/, models/, benchmark/, cellclip/)
 configs/
   dataset.yml     # MorphoCLIP configuration (S3, plates, extraction, splits)
@@ -95,7 +103,7 @@ MorphoCLIP aligns image and text embeddings in a shared 512-d L2-normalized spac
 
 ## Key Architecture Decisions
 
-- **src-layout**: MorphoCLIP code under `src/morphoclip/`, CellCLIP baseline under `src/cellclip/`, general benchmark under `src/benchmark/`. Scripts are standalone CLI entry points
+- **src-layout**: MorphoCLIP code under `src/morphoclip/`, CellCLIP baseline under `src/cellclip/`, general benchmark under `src/benchmark/`. The project is an installable package (hatchling); pipeline entry points are a single Typer CLI (`morphoclip`, defined in `src/morphoclip/cli/`). Remaining `scripts/` files are dev/exploration one-offs
 - **Two template systems**: Verbose templates in `models/prompt_templates.py` (for BERT input), concise labels in `data/perturbation.py` (for dataset display)
 - **`PerturbationInfo` bridge**: `PromptBuilder.build_from_info()` connects the data layer to text generation
 - **Pre-computed features**: DINOv3 CLS tokens and BERT embeddings are both pre-extracted and cached to enable rapid training iteration (~3-5 min/epoch)
@@ -116,6 +124,6 @@ MorphoCLIP aligns image and text embeddings in a shared 512-d L2-normalized spac
 - Type hints on all public functions
 - Docstrings follow Google style (Args/Returns/Raises)
 - Imports use full package paths: `from morphoclip.data.metadata import MetadataIndex`, `from cellclip.training.config import ...`
-- Scripts use `sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))` for imports
+- Pipeline commands live in `morphoclip.cli` and import the package directly (no path hacks). Only the remaining dev scripts under `scripts/` use `sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))`
 - Tests mirror `src/` structure: `tests/data/`, `tests/models/`, `tests/cellclip/`, `tests/benchmark/`
 - Commit messages follow conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, etc.

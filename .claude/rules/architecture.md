@@ -56,6 +56,8 @@ morphoclip.models.text_encoder -> projection_head, prompt_builder
 morphoclip.utils.caching -> models.text_encoder (via TYPE_CHECKING)
 morphoclip.utils.s3 -> (standalone)
 benchmark -> (standalone, uses pandas/numpy/scipy)
+benchmark.stable -> benchmark.data, benchmark.metrics, benchmark.stable_helpers (copairs/sklearn; benchmark extra)
 cellclip.benchmark -> benchmark.data, morphoclip.data
 cellclip.training -> benchmark.data, morphoclip.data, cellclip.benchmark.model
+morphoclip.cli -> (composition root) morphoclip.*, cellclip.*, benchmark.* — the only morphoclip layer allowed to import cellclip
 ```
