@@ -10,7 +10,9 @@ import typer
 
 from morphoclip.cli import cellclip_cmds, data, features, text
 from morphoclip.cli.benchmark import benchmark
-from morphoclip.cli.evaluate import evaluate, infer, split
+from morphoclip.cli.evaluate import evaluate
+from morphoclip.cli.infer import infer
+from morphoclip.cli.split import split
 from morphoclip.cli.train import train
 
 app = typer.Typer(
