@@ -7,8 +7,6 @@ export. :func:`resolve_export_settings` collapses that shared logic into one
 bodies and are passed in.
 """
 
-from __future__ import annotations
-
 import warnings
 from dataclasses import dataclass
 from pathlib import Path

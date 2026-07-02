@@ -1,7 +1,5 @@
 """Benchmark export helpers for local CellCLIP profile generation."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

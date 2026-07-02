@@ -5,8 +5,6 @@ Explores patterns in compounds, CRISPR, and ORF perturbation metadata
 with multiple visualizations to guide model design and data selection.
 """
 
-from __future__ import annotations
-
 import sys
 from pathlib import Path
 

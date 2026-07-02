@@ -1,7 +1,5 @@
 """CSV / JSON / manifest I/O for the CellCLIP sweep scheduler."""
 
-from __future__ import annotations
-
 import csv
 import json
 from pathlib import Path

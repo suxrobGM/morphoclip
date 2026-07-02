@@ -6,8 +6,6 @@ owns the model/checkpoint-heavy embedding collection and the top-level
 :func:`build_run_summary`, and re-exports the moved helpers for existing callers.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Any
 

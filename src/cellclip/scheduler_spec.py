@@ -1,7 +1,5 @@
 """Config dataclasses, constants, and YAML helpers for the CellCLIP sweep scheduler."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime

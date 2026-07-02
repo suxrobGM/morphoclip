@@ -1,7 +1,5 @@
 """Stage job builders for the CellCLIP sweep scheduler."""
 
-from __future__ import annotations
-
 from typing import Any
 
 from cellclip.scheduler_spec import TUNING_MODE_OVERRIDES, ScheduleSpec, StageJob

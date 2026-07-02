@@ -1,7 +1,5 @@
 """Tests for the local CellCLIP benchmark runtime."""
 
-from __future__ import annotations
-
 import pandas as pd
 import torch
 

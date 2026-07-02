@@ -5,8 +5,6 @@ TensorBoard logging. Optimizer/scheduler/checkpointing live in
 :mod:`cellclip.training.optim`; evaluation in :mod:`cellclip.training.evaluate`.
 """
 
-from __future__ import annotations
-
 import math
 import time
 from contextlib import ExitStack

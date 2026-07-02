@@ -1,7 +1,5 @@
 """Tests for benchmark split-manifest data helpers."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import pandas as pd

@@ -1,7 +1,5 @@
 """Tests for local CellCLIP benchmark export helpers."""
 
-from __future__ import annotations
-
 import numpy as np
 import torch
 

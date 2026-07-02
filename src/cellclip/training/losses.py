@@ -1,7 +1,5 @@
 """Loss functions for local CellCLIP training."""
 
-from __future__ import annotations
-
 import torch
 from torch import nn
 

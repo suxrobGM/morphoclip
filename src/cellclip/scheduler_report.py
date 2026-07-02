@@ -1,7 +1,5 @@
 """Benchmark reporting helpers for the CellCLIP scheduler."""
 
-from __future__ import annotations
-
 import csv
 from pathlib import Path
 from typing import TYPE_CHECKING

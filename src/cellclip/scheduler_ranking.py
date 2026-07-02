@@ -1,7 +1,5 @@
 """Record scoring, ranking, and leaderboard rows for the CellCLIP scheduler."""
 
-from __future__ import annotations
-
 from typing import Any
 
 
