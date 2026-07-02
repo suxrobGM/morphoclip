@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmark import metrics
+from benchmark import copairs_backend, stable_map
 
 
 def test_compute_legacy_similarities_falls_back_to_serial(monkeypatch) -> None:
@@ -18,7 +18,7 @@ def test_compute_legacy_similarities_falls_back_to_serial(monkeypatch) -> None:
             return np.sum(x_norm * y_norm, axis=1)
 
     monkeypatch.setattr(
-        metrics,
+        copairs_backend,
         "_get_legacy_modules",
         lambda: {
             "backend": Backend,
@@ -37,7 +37,7 @@ def test_compute_legacy_similarities_falls_back_to_serial(monkeypatch) -> None:
         ]
     )
 
-    result = metrics._compute_legacy_similarities(
+    result = stable_map._compute_legacy_similarities(
         pairs=pairs,
         features=features,
         batch_size=2,
@@ -58,7 +58,7 @@ def test_compute_legacy_null_dists_falls_back_to_serial(monkeypatch) -> None:
             return np.full(num_perm, num_pos + num_neg, dtype=float)
 
     monkeypatch.setattr(
-        metrics,
+        copairs_backend,
         "_get_legacy_modules",
         lambda: {
             "backend": Backend,
@@ -72,7 +72,7 @@ def test_compute_legacy_null_dists_falls_back_to_serial(monkeypatch) -> None:
         ]
     )
 
-    null_dists = metrics._compute_legacy_null_dists(rel_k_list, null_size=4)
+    null_dists = stable_map._compute_legacy_null_dists(rel_k_list, null_size=4)
 
     assert null_dists.shape == (2, 4)
     # rel_k_list[0]: 2x3 array, sum=3 positives, size=6, neg=3 -> random_ap(4, 3, 3) -> [6]*4
@@ -83,14 +83,14 @@ def test_compute_legacy_null_dists_falls_back_to_serial(monkeypatch) -> None:
 
 def test_compute_legacy_similarities_handles_empty_pairs() -> None:
     try:
-        metrics._get_legacy_modules()
+        copairs_backend._get_legacy_modules()
     except RuntimeError:
         pytest.skip("Legacy copairs not installed")
 
     features = np.array([[1.0, 0.0]])
     pairs = pd.DataFrame(columns=["ix1", "ix2"])
 
-    result = metrics._compute_legacy_similarities(
+    result = stable_map._compute_legacy_similarities(
         pairs=pairs,
         features=features,
         batch_size=2,
