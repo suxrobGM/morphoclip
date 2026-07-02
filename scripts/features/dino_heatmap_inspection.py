@@ -18,7 +18,7 @@ import torch.nn.functional as F
 from PIL import Image
 from transformers import AutoImageProcessor, AutoModel
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from morphoclip.data.feature_extractor import DEFAULT_MODEL  # noqa: E402
 from morphoclip.data.image_loader import parse_filename  # noqa: E402

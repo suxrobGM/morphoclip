@@ -9,66 +9,18 @@ Examples:
 """
 
 import argparse
-import importlib.util
 import inspect
 import json
 import statistics
-import sys
 import tempfile
-import types
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from benchmark import splits as benchmark_splits
-
-PROJECT_ROOT = Path(__file__).parent.parent
-SRC_ROOT = PROJECT_ROOT / "src"
-DATA_ROOT = SRC_ROOT / "morphoclip" / "data"
-
-
-def _load_module(module_name: str, module_path: Path) -> Any:
-    spec = importlib.util.spec_from_file_location(module_name, module_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Unable to load module {module_name} from {module_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def _ensure_namespace_packages() -> None:
-    morphoclip_pkg = sys.modules.setdefault("morphoclip", types.ModuleType("morphoclip"))
-    if not hasattr(morphoclip_pkg, "__path__"):
-        morphoclip_pkg.__path__ = [str(SRC_ROOT / "morphoclip")]
-
-    data_pkg = sys.modules.setdefault("morphoclip.data", types.ModuleType("morphoclip.data"))
-    if not hasattr(data_pkg, "__path__"):
-        data_pkg.__path__ = [str(DATA_ROOT)]
-
-
-def _load_project_modules() -> dict[str, Any]:
-    _ensure_namespace_packages()
-    try:
-        perturbation = _load_module("morphoclip.data.perturbation", DATA_ROOT / "perturbation.py")
-        image_loader = _load_module("morphoclip.data.image_loader", DATA_ROOT / "image_loader.py")
-        metadata = _load_module("morphoclip.data.metadata", DATA_ROOT / "metadata.py")
-        dataset = _load_module("morphoclip.data.dataset", DATA_ROOT / "dataset.py")
-        splits = _load_module("morphoclip.data.splits", DATA_ROOT / "splits.py")
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(
-            "Dataset inspection requires the project dependencies. "
-            "Run via `uv run poe inspect-dataset ...` or install the dependencies first."
-        ) from exc
-
-    return {
-        "perturbation": perturbation,
-        "image_loader": image_loader,
-        "metadata": metadata,
-        "dataset": dataset,
-        "splits": splits,
-    }
+from morphoclip.data import dataset as dataset_module
+from morphoclip.data import metadata as metadata_module
+from morphoclip.data import perturbation
 
 
 def _load_config(config_path: Path) -> dict[str, Any]:
@@ -486,15 +438,6 @@ def main() -> None:
     parser.add_argument("--demo", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
-
-    try:
-        modules = _load_project_modules()
-    except RuntimeError as exc:
-        parser.error(str(exc))
-
-    perturbation = modules["perturbation"]
-    metadata_module = modules["metadata"]
-    dataset_module = modules["dataset"]
 
     extract_plate_barcode = perturbation.extract_plate_barcode
     row_col_from_well = perturbation.row_col_from_well
