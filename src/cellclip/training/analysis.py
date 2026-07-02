@@ -1,8 +1,13 @@
-"""Reusable post-training analysis for local CellCLIP runs."""
+"""Reusable post-training analysis for local CellCLIP runs.
+
+Pure retrieval/PCA metrics live in :mod:`cellclip.training.analysis_metrics` and
+serialization/reporting in :mod:`cellclip.training.analysis_report`; this module
+owns the model/checkpoint-heavy embedding collection and the top-level
+:func:`build_run_summary`, and re-exports the moved helpers for existing callers.
+"""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +16,19 @@ import torch
 import torch.nn.functional as F
 
 import benchmark.splits as benchmark_splits_module
+from cellclip.training.analysis_metrics import (
+    compute_grouped_retrieval_metrics,
+    compute_pca_stats,
+    compute_perturbation_retrieval_metrics,
+    compute_split_pca_stats,
+)
+from cellclip.training.analysis_report import (
+    build_comparison,
+    load_benchmark_tables,
+    render_report,
+    to_serializable,
+    write_analysis_outputs,
+)
 from cellclip.training.config import load_training_config
 from cellclip.training.dataset import (
     build_upstream_prompt,
@@ -21,23 +39,21 @@ from cellclip.training.engine import resolve_device
 from cellclip.training.model import build_cellclip_model
 from morphoclip.data.perturbation import extract_plate_barcode
 
-
-def to_serializable(value: Any) -> Any:
-    """Recursively convert analysis values into JSON-safe Python objects."""
-    if isinstance(value, dict):
-        return {str(key): to_serializable(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [to_serializable(item) for item in value]
-    if isinstance(value, tuple):
-        return [to_serializable(item) for item in value]
-    if isinstance(value, Path):
-        return str(value)
-    if hasattr(value, "item"):
-        try:
-            return value.item()
-        except ValueError:
-            pass
-    return value
+__all__ = [
+    "to_serializable",
+    "compute_pca_stats",
+    "compute_grouped_retrieval_metrics",
+    "compute_perturbation_retrieval_metrics",
+    "compute_split_pca_stats",
+    "load_benchmark_tables",
+    "build_comparison",
+    "render_report",
+    "write_analysis_outputs",
+    "resolve_checkpoint_path",
+    "summarize_subset_duplicates",
+    "collect_eval_embeddings",
+    "build_run_summary",
+]
 
 
 def resolve_checkpoint_path(run_dir: Path) -> Path:
@@ -49,97 +65,6 @@ def resolve_checkpoint_path(run_dir: Path) -> Path:
     if last.exists():
         return last
     raise FileNotFoundError(f"No CellCLIP checkpoint found under {run_dir / 'checkpoints'}")
-
-
-def compute_pca_stats(features: torch.Tensor) -> dict[str, float]:
-    """Summarize anisotropy using PCA energy concentration."""
-    if features.numel() == 0:
-        return {"samples": 0, "top1_fraction": 0.0, "top10_fraction": 0.0, "mean_norm": 0.0}
-    if features.shape[0] < 2:
-        return {
-            "samples": int(features.shape[0]),
-            "top1_fraction": 1.0,
-            "top10_fraction": 1.0,
-            "mean_norm": float(features.float().norm(dim=1).mean().item()),
-        }
-    centered = features.float() - features.float().mean(dim=0, keepdim=True)
-    singular_values = torch.linalg.svdvals(centered)
-    energy = singular_values.square()
-    fractions = energy / energy.sum().clamp(min=torch.finfo(energy.dtype).eps)
-    return {
-        "samples": int(features.shape[0]),
-        "top1_fraction": float(fractions[0].item()),
-        "top10_fraction": float(fractions[:10].sum().item()),
-        "mean_norm": float(features.float().norm(dim=1).mean().item()),
-    }
-
-
-def compute_grouped_retrieval_metrics(
-    image_features: torch.Tensor,
-    text_features: torch.Tensor,
-    prompts: list[str],
-    broad_samples: list[str],
-) -> dict[str, float]:
-    """Compute exact and grouped retrieval on eval embeddings."""
-    if image_features.numel() == 0:
-        return {"exact_R@1": 0.0, "prompt_R@1": 0.0, "broad_sample_R@1": 0.0}
-    logits = image_features @ text_features.t()
-    order = torch.argsort(logits, dim=1, descending=True)
-    size = logits.shape[0]
-    indices = torch.arange(size)
-    prompt_labels = prompts
-    broad_labels = broad_samples
-    metrics: dict[str, float] = {}
-    top1 = order[:, 0]
-    metrics["exact_R@1"] = float((top1 == indices).float().mean().item())
-    metrics["prompt_R@1"] = float(
-        sum(prompt_labels[int(j)] == prompt_labels[i] for i, j in enumerate(top1.tolist())) / size
-    )
-    metrics["broad_sample_R@1"] = float(
-        sum(broad_labels[int(j)] == broad_labels[i] for i, j in enumerate(top1.tolist())) / size
-    )
-    return metrics
-
-
-def compute_perturbation_retrieval_metrics(
-    image_features: torch.Tensor,
-    text_features: torch.Tensor,
-    prompts: list[str],
-    broad_samples: list[str],
-    pert_types: list[str],
-) -> dict[str, dict[str, float]]:
-    """Compute grouped retrieval stratified by perturbation type."""
-    metrics: dict[str, dict[str, float]] = {}
-    for pert_type in sorted(set(pert_types)):
-        indices = [idx for idx, label in enumerate(pert_types) if label == pert_type]
-        if not indices:
-            continue
-        metrics[pert_type] = compute_grouped_retrieval_metrics(
-            image_features[indices],
-            text_features[indices],
-            [prompts[idx] for idx in indices],
-            [broad_samples[idx] for idx in indices],
-        )
-    return metrics
-
-
-def compute_split_pca_stats(
-    image_features: torch.Tensor,
-    text_features: torch.Tensor,
-    pert_types: list[str],
-) -> dict[str, dict[str, dict[str, float]]]:
-    """Compute PCA stats for compound and non-compound slices."""
-    slices = {
-        "compound": [idx for idx, label in enumerate(pert_types) if label == "compound"],
-        "non_compound": [idx for idx, label in enumerate(pert_types) if label != "compound"],
-    }
-    stats: dict[str, dict[str, dict[str, float]]] = {}
-    for name, indices in slices.items():
-        stats[name] = {
-            "image": compute_pca_stats(image_features[indices]),
-            "text": compute_pca_stats(text_features[indices]),
-        }
-    return stats
 
 
 def summarize_subset_duplicates(
@@ -296,18 +221,6 @@ def collect_eval_embeddings(
     }
 
 
-def load_benchmark_tables(benchmark_dir: Path) -> dict[str, list[dict[str, Any]]]:
-    """Load benchmark summary tables when available."""
-    tables_dir = benchmark_dir / "tables"
-    if not tables_dir.exists():
-        return {}
-    tables: dict[str, list[dict[str, Any]]] = {}
-    for csv_path in sorted(tables_dir.glob("*summary.csv")):
-        frame = pd.read_csv(csv_path)
-        tables[csv_path.stem] = frame.to_dict(orient="records")
-    return tables
-
-
 def build_run_summary(
     run_dir: Path,
     *,
@@ -384,113 +297,3 @@ def build_run_summary(
     if compare_benchmark_dir is not None:
         summary["benchmark_tables"] = load_benchmark_tables(compare_benchmark_dir)
     return summary
-
-
-def build_comparison(primary: dict[str, Any], secondary: dict[str, Any]) -> dict[str, Any]:
-    """Build a compact comparison between two run summaries."""
-    comparison: dict[str, Any] = {}
-    for key in (
-        "eval_retrieval",
-        "compound_eval_retrieval",
-        "image_pca",
-        "text_pca",
-        "fusion_diagnostics",
-    ):
-        comparison[key] = {}
-        for metric_name, primary_value in primary.get(key, {}).items():
-            secondary_value = secondary.get(key, {}).get(metric_name)
-            if secondary_value is None:
-                continue
-            comparison[key][metric_name] = {
-                "primary": primary_value,
-                "secondary": secondary_value,
-                "delta": primary_value - secondary_value,
-            }
-    return comparison
-
-
-def render_report(
-    primary: dict[str, Any],
-    *,
-    secondary: dict[str, Any] | None = None,
-    comparison: dict[str, Any] | None = None,
-) -> str:
-    """Render a human-readable Markdown report."""
-    lines = [
-        "# CellCLIP Run Analysis",
-        "",
-        f"- Run: `{primary['run_dir']}`",
-        f"- Checkpoint: `{primary['checkpoint_path']}`",
-        "",
-        "## Eval Retrieval",
-    ]
-    for key, value in primary["eval_retrieval"].items():
-        lines.append(f"- {key}: {value:.6f}")
-    duplicate_train = json.dumps(
-        to_serializable(primary["duplicate_stats"]["train"]), sort_keys=True
-    )
-    duplicate_eval = json.dumps(to_serializable(primary["duplicate_stats"]["eval"]), sort_keys=True)
-    fusion_diagnostics = json.dumps(to_serializable(primary["fusion_diagnostics"]), sort_keys=True)
-    lines.extend(
-        [
-            "",
-            "## Compound Retrieval",
-            *(f"- {key}: {value:.6f}" for key, value in primary["compound_eval_retrieval"].items()),
-            "",
-            "## Perturbation Retrieval",
-            *(
-                f"- {name}: {json.dumps(to_serializable(metrics), sort_keys=True)}"
-                for name, metrics in primary["perturbation_retrieval"].items()
-            ),
-            "",
-            "## Duplicate Stats",
-            f"- Train: {duplicate_train}",
-            f"- Eval: {duplicate_eval}",
-            "",
-            "## Chem Diagnostics",
-            f"- Has SMILES fraction: {primary['has_smiles_fraction']:.6f}",
-            f"- Fusion: {fusion_diagnostics}",
-            "",
-            "## PCA Diagnostics",
-            f"- Image: {json.dumps(to_serializable(primary['image_pca']), sort_keys=True)}",
-            f"- Text: {json.dumps(to_serializable(primary['text_pca']), sort_keys=True)}",
-            f"- Split: {json.dumps(to_serializable(primary['split_pca']), sort_keys=True)}",
-        ]
-    )
-    if primary.get("benchmark_tables"):
-        lines.extend(["", "## Benchmark Tables"])
-        for name, rows in primary["benchmark_tables"].items():
-            lines.append(f"- {name}: {len(rows)} rows")
-    if secondary is not None and comparison is not None:
-        lines.extend(["", "## Comparison", f"- Compare run: `{secondary['run_dir']}`"])
-        for section, metrics in comparison.items():
-            lines.append(f"- {section}: {json.dumps(to_serializable(metrics), sort_keys=True)}")
-    return "\n".join(lines) + "\n"
-
-
-def write_analysis_outputs(
-    output_dir: Path,
-    primary: dict[str, Any],
-    *,
-    secondary: dict[str, Any] | None = None,
-    comparison: dict[str, Any] | None = None,
-) -> tuple[Path, Path]:
-    """Write analysis outputs to disk."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    summary_path = output_dir / "summary.json"
-    payload = {"primary": primary}
-    if secondary is not None:
-        payload["secondary"] = secondary
-    if comparison is not None:
-        payload["comparison"] = comparison
-    summary_path.write_text(
-        json.dumps(to_serializable(payload), indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-
-    report_path = output_dir / "report.md"
-    report_path.write_text(
-        render_report(primary, secondary=secondary, comparison=comparison),
-        encoding="utf-8",
-    )
-    return summary_path, report_path
