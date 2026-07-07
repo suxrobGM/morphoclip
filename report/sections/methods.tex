@@ -5,13 +5,13 @@ MorphoCLIP has two encoding branches and one contrastive objective. The image br
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/architecture.pdf}
-    \caption{MorphoCLIP architecture. A five-channel Cell Painting image ($1080 \times 1080$) is passed channel-by-channel through a frozen DINOv3 ViT-L/16, producing five 1024-d CLS tokens. A single-layer CrossChannelFormer (4 heads) mixes the channel tokens, and the result is projected to the shared 512-d space. The text prompt is encoded by frozen BioClinical ModernBERT (150M parameters) and projected to the same space. CWCL pulls matching pairs together and pushes non-matches apart. Only the shaded components (CrossChannelFormer and the two projection heads) are trained, totalling $\sim$8M parameters.}
+    \caption{MorphoCLIP architecture. A five-channel Cell Painting image ($1080 \times 1080$) is passed channel-by-channel through a frozen DINOv3 ViT-L/16, producing five 1024-d CLS tokens. A single-layer CrossChannelFormer (4 heads) attends over the channel tokens together with a learnable aggregation token, whose output becomes the site representation; site representations are mean-pooled into a well vector and projected to the shared 512-d space. The text prompt is encoded by frozen BioClinical ModernBERT (150M parameters) and projected to the same space. CWCL pulls matching pairs together and pushes non-matches apart. Only the shaded components (CrossChannelFormer and the two projection heads) are trained, about 14M parameters.}
     \label{fig:architecture}
 \end{figure*}
 
 \subsection{Image Encoder}
 
-Each Cell Painting site has five fluorescence channels (Table~\ref{tab:channels}). We process each channel independently: the single-channel image is replicated to pseudo-RGB at $384 \times 384$ resolution and passed through a frozen DINOv3 ViT-L/16~\cite{simeoni2025dinov3} (300M parameters), producing five 1024-dimensional CLS tokens per site,
+Each Cell Painting site has five fluorescence channels (Table~\ref{tab:channels}). We process each channel independently: the single-channel image is replicated to pseudo-RGB and passed through a frozen DINOv3 ViT-L/16~\cite{simeoni2025dinov3} (300M parameters), producing five 1024-dimensional CLS tokens per site,
 \begin{equation}
     \{\mathbf{z}_c\}_{c=1}^{5}, \quad \mathbf{z}_c \in \mathbb{R}^{1024}.
 \end{equation}
@@ -33,15 +33,17 @@ Ch & Stain & Target \\
 \end{tabular}
 \end{table}
 
-We use DINOv3 ViT-L rather than the DINOv2-g backbone of CellCLIP. The two have comparable feature quality on transfer benchmarks, but DINOv3 ViT-L is roughly $4\times$ smaller, which lets us pre-extract a full plate in $\sim$7 minutes on a single RTX 5080. Features are written to disk as \texttt{.pt} files ($\sim$3\,GB per plate) and reused across every training run, removing the need to re-run the backbone each epoch. A sanity check on the cached features shows that the per-channel encoding preserves channel-specific signal: mean intra-site cross-channel cosine similarity is 0.82, and the DNA channel is the most distinct from the others (mean similarity 0.73).
+We use DINOv3 ViT-L rather than the DINOv2-g backbone of CellCLIP. The two have comparable feature quality on transfer benchmarks, but DINOv3 ViT-L is roughly $4\times$ smaller, which lets us pre-extract a full plate in about seven minutes on a single RTX 5080. Features are written to disk as \texttt{.pt} files ($\sim$3\,GB per plate) and reused across every training run, removing the need to re-run the backbone each epoch.
 
-\paragraph{CrossChannelFormer (CCF).} To collapse the five channel tokens into a single image vector, we use a single-layer transformer encoder~\cite{vaswani2017attention} with 4 attention heads, following the channel-aware processing of CellCLIP~\cite{lu2025cellclip} and Channel ViT~\cite{bao2024channelvit}. The CCF lets the model attend across channels so it can pick up cross-channel co-occurrences, for example a joint signal in mitochondrial and ER channels. The transformer outputs are mean-pooled across the channel dimension:
+\paragraph{CrossChannelFormer (CCF).} To collapse the five channel tokens into a single site vector, we use a single-layer transformer encoder~\cite{vaswani2017attention} with 4 attention heads, following the channel-aware processing of CellCLIP~\cite{lu2025cellclip} and Channel ViT~\cite{bao2024channelvit}. Each channel token is L2-normalized and augmented with a learnable channel-type embedding $\mathbf{e}_c$ so the transformer can tell the five stains apart. A learnable aggregation token $\mathbf{q}$ is prepended, and the transformer output at that position is taken as the aggregated site representation:
 \begin{equation}
-    \mathbf{h}_{\text{img}} = \text{MeanPool}(\text{CCF}(\mathbf{z}_1, \mathbf{z}_2, \mathbf{z}_3, \mathbf{z}_4, \mathbf{z}_5)).
+    \mathbf{h}_{\text{site}} = \bigl[\,\text{CCF}\bigl(\mathbf{q},\, \mathbf{z}_1 + \mathbf{e}_1,\, \dots,\, \mathbf{z}_5 + \mathbf{e}_5\bigr)\,\bigr]_{0}.
 \end{equation}
-We also report a baseline that drops the CCF and averages the five channel tokens directly.
+This lets the model attend across channels and read out cross-channel co-occurrences, for example a joint signal in the mitochondrial and ER channels. We also report a baseline that drops the CCF and averages the five L2-normalized channel tokens directly.
 
-\paragraph{Image projection head.} A two-layer MLP with LayerNorm, GELU, and dropout ($p = 0.3$) maps $\mathbf{h}_{\text{img}}$ into the shared 512-dimensional space:
+\paragraph{Site-to-well aggregation.} The unit of training is a well. Per-site representations are combined into one well vector by masked mean pooling over the sites in the well, which keeps the well vector well-defined regardless of how many sites were imaged.
+
+\paragraph{Image projection head.} A two-layer MLP with LayerNorm, GELU, and dropout ($p = 0.3$) maps the pooled well vector $\mathbf{h}_{\text{img}}$ into the shared 512-dimensional space:
 \begin{equation}
     f_{\text{img}}(\mathbf{x}) = \text{L2Norm}\bigl(\mathbf{W}_2 \cdot \text{Drop}(\text{GELU}(\text{LN}(\mathbf{W}_1 \cdot \mathbf{h}_{\text{img}})))\bigr),
 \end{equation}
@@ -49,16 +51,16 @@ with $\mathbf{W}_1 \in \mathbb{R}^{512 \times 1024}$ and $\mathbf{W}_2 \in \math
 
 \subsection{Text Encoder}
 
-We convert the perturbation metadata into a verbose prompt using one of four modality-specific templates, populated from external biological databases:
+We convert the perturbation metadata into a verbose prompt using one of four modality-specific templates, populated from the CPJUMP1 metadata and external biological databases. Each template names the cell line, the perturbation, and its available annotations:
 
 \begin{itemize}
-    \item \textbf{Compound:} \textit{``Chemical perturbation: \{name\}. Target: \{target\_protein\} (\{gene\_symbol\}). Function: \{mechanism\_of\_action\}. SMILES: \{canonical\_smiles\}.''}
-    \item \textbf{CRISPR:} \textit{``CRISPR knockout of \{gene\_symbol\}. Protein: \{protein\_name\}. Function: \{protein\_function\}. GO terms: \{biological\_process\_terms\}.''}
-    \item \textbf{ORF:} \textit{``Overexpression of \{gene\_symbol\}. Protein: \{protein\_name\}. Function: \{protein\_function\}.''}
-    \item \textbf{Negative control:} \textit{``Negative control treatment (DMSO vehicle) applied to Cell Painting images.''}
+    \item \textbf{Compound:} \textit{``Cell Painting morphological profile of \{cell\_line\} cells treated with the compound \{compound\_name\}. Chemical structure (SMILES): \{smiles\}. Known target gene: \{target\_gene\}. Target protein function: \{gene\_function\}. Perturbation modality: chemical compound.''}
+    \item \textbf{CRISPR:} \textit{``\dots\ with CRISPR-Cas9 knockout of gene \{gene\_symbol\}. Gene description: \{gene\_description\}. Gene function: \{gene\_function\}. Perturbation modality: CRISPR knockout.''}
+    \item \textbf{ORF:} \textit{``\dots\ overexpressing gene \{gene\_symbol\} via open reading frame construct. Gene description: \{gene\_description\}. Gene function: \{gene\_function\}. Perturbation modality: ORF overexpression.''}
+    \item \textbf{Negative control:} \textit{``\dots\ treated with DMSO vehicle control. No active perturbation applied.''}
 \end{itemize}
 
-When an annotation field is missing, the prompt collapses to a perturbation-name-only description. Compound annotations come from ChEMBL and the CPJUMP1 metadata; gene annotations come from UniProt and Gene Ontology.
+Missing annotation fields are filled with ``unknown''. Compound annotations come from ChEMBL and the CPJUMP1 metadata; gene descriptions and functions come from UniProt.
 
 We encode each prompt with a frozen BioClinical ModernBERT~\cite{sounack2025bioclinical} (150M parameters, 768-d CLS token), pre-trained on 53.5B tokens of PubMed, PMC, and clinical text. A trainable projection head matches the image head and maps the CLS token to the 512-d space:
 \begin{equation}
@@ -78,12 +80,12 @@ where $\tilde{w}_{ij} = w_{ij} / \sum_k w_{ik}$ normalizes weights row-wise. The
 \end{equation}
 The temperature $\tau$ is a learnable parameter (LogitScale module), initialized to $\ln(1/0.07)$ and clamped at $\ln(100)$.
 
-\paragraph{Cross-Well Alignment (CWA).} Batch effects are the dominant confound in Cell Painting. CWA mitigates them by grouping embeddings by plate within each batch, subtracting the per-plate mean, and re-normalizing to the unit sphere:
+\paragraph{Cross-Well Alignment (CWA).} Batch effects are a dominant confound in Cell Painting. As an optional component, MorphoCLIP supports cross-well alignment: image embeddings are grouped by plate within each batch, the per-plate mean is subtracted, and the result is re-normalized to the unit sphere,
 \begin{equation}
     \tilde{\mathbf{f}}_w = \frac{\mathbf{f}_w - \bar{\mathbf{f}}_{p(w)}}{\|\mathbf{f}_w - \bar{\mathbf{f}}_{p(w)}\|_2}, \quad \bar{\mathbf{f}}_p = \frac{1}{|W_p|} \sum_{w \in W_p} \mathbf{f}_w,
 \end{equation}
-where $p(w)$ is the plate of well $w$ and $W_p$ is the set of wells from plate $p$ in the current batch. CWA is applied to image embeddings only and requires a batch sampler that draws from multiple plates.
+where $p(w)$ is the plate of well $w$ and $W_p$ is the set of wells from plate $p$ in the current batch. CWA is applied to image embeddings only and requires a batch sampler that draws from multiple plates. It is disabled in the runs reported here and is isolated in the planned ablation (Section~\ref{sec:ablation_design}).
 
 \subsection{Optimization}
 
-We train with AdamW~\cite{loshchilov2019adamw} at learning rate $10^{-4}$, weight decay $0.2$, $(\beta_1, \beta_2) = (0.9, 0.999)$, and $\varepsilon = 10^{-8}$. The schedule is a 100-step linear warmup followed by cosine decay over 100 epochs. We use FP16 mixed precision and gradient clipping at norm $1.0$. The batch size is 512 wells, chosen to give the contrastive objective a useful pool of in-batch negatives. The trainable parameter count is $\sim$8M (CCF plus the two projection heads), so the optimizer state fits comfortably in the 16\,GB of an RTX 5080. With pre-extracted features, an epoch takes 3--5 minutes wall-clock.
+We train with AdamW~\cite{loshchilov2019adamw} at learning rate $10^{-4}$, weight decay $0.2$, $(\beta_1, \beta_2) = (0.9, 0.999)$, and $\varepsilon = 10^{-8}$. The schedule is a 100-step linear warmup followed by cosine decay over 100 epochs, with the reported checkpoint selected by validation loss (early best, epoch 9). We use FP16 mixed precision and gradient clipping at norm $1.0$. The batch size is 256 wells, which sets the pool of in-batch negatives for the contrastive objective. The trainable parameter count is about 14M (the CrossChannelFormer plus the two projection heads), so the optimizer state fits comfortably in the 16\,GB of an RTX 5080. With pre-extracted features, an epoch takes 3--5 minutes wall-clock.

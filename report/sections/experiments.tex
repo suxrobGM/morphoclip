@@ -6,32 +6,26 @@ We evaluate on the CPJUMP1 pilot dataset~\cite{chandrasekaran2024jump}, a public
 
 \subsection{Data Pipeline}
 
-We use a stream-extract-delete pipeline to keep disk usage bounded. Raw TIFFs ($\sim$58--118\,GiB per plate) are downloaded to scratch space, passed through the frozen DINOv3 backbone, and removed once the per-channel CLS features are written. This compresses 3.31\,TiB of raw data into roughly 153\,GB of cached features ($\sim$3\,GB per plate). Extraction takes about 7 minutes per plate on an RTX 5080, or roughly 6 hours for all 51 plates. Text embeddings are pre-computed in the same way: each perturbation prompt is encoded by frozen BioClinical ModernBERT and the 768-d CLS tokens are cached to disk.
+We use a stream-extract-delete pipeline to keep disk usage bounded. Raw TIFFs ($\sim$58--118\,GiB per plate) are downloaded to scratch space, passed through the frozen DINOv3 backbone, and removed once the per-channel CLS features are written. This compresses 3.31\,TiB of raw data into roughly 153\,GB of cached features ($\sim$3\,GB per plate). Extraction takes about seven minutes per plate on an RTX 5080, or roughly six hours for all 51 plates. Text embeddings are pre-computed in the same way: each perturbation prompt is encoded by frozen BioClinical ModernBERT and the 768-d CLS tokens are cached to disk.
 
-The unit of training is a well with all of its sites aggregated. The cached feature tensor for a well has shape $(S, 5, 1024)$, where $S$ is the number of sites. We mean-pool over the site dimension before the CrossChannelFormer to obtain a single $(5, 1024)$ tensor per well.
+The unit of training is a well with all of its sites aggregated. The cached feature tensor for a well has shape $(S, 5, 1024)$, where $S$ is the number of sites. After the CrossChannelFormer produces one vector per site, the site vectors are mean-pooled into a single well representation.
 
-\subsection{Train/Test Split}
+\subsection{Train/Validation/Test Split}
 
-We implement three split strategies and evaluate the model under each:
-\begin{itemize}
-    \item \textbf{Official representation} (default): CRISPR and ORF perturbations form the training set; compounds are split by timepoint into validation and test.
-    \item \textbf{Gene--compound holdout}: a 60/20/20 split at the target-gene level, so no target gene appears in both train and test.
-    \item \textbf{CellCLIP-style}: a 75/25 split within perturbation slices, matching CellCLIP's evaluation protocol.
-\end{itemize}
-All three splits keep wells from the same perturbation together; no well is split across partitions.
+The runs reported here use a perturbation-stratified split. Each perturbation (\texttt{broad\_sample}) is hashed deterministically into train, validation, or test at an 80/10/10 ratio, with all three modalities present in every split and all wells of a perturbation kept together, so no perturbation is split across partitions. We also implement two alternative splits for later use: a gene-level holdout, in which no target gene appears in both train and test, and a CellCLIP-style within-slice split that matches CellCLIP's evaluation protocol.
 
 \subsection{Evaluation Protocol}
 
-We report numbers on a held-out validation split of 2{,}220 wells spanning 817 candidate perturbations. Both retrieval directions are reported:
+We report numbers on the held-out validation split, which contains 2{,}220 wells drawn from 98 perturbations (42 compound, 34 CRISPR, 22 ORF), so each perturbation is represented by about 24 replicate wells. Retrieval ranks each query against all 2{,}220 wells, and a query is counted correct when any well sharing its perturbation appears in the top~$k$. Because replicate wells share an identical text embedding, both retrieval directions face the same positive structure. Both directions are reported:
 \begin{itemize}
-    \item \textbf{Recall@$k$} for $k \in \{1, 5, 10\}$: the fraction of queries whose correct match appears in the top-$k$ retrieved candidates.
-    \item \textbf{Median rank}: the median position of the correct match in the full ranked list (lower is better).
+    \item \textbf{Recall@$k$} for $k \in \{1, 5, 10\}$: the fraction of queries whose first correct match appears in the top-$k$ retrieved candidates.
+    \item \textbf{Median rank}: the median position of the first correct match in the full ranked list (lower is better).
 \end{itemize}
-Random retrieval over 817 candidates gives Recall@1 $\approx$ 0.12\% and median rank $\approx$ 408, which we use as the reference baseline throughout.
+A like-for-like random baseline, computed by ranking the 2{,}220 wells uniformly at random against the same positive structure, gives Recall@1/5/10 of approximately 1.1\%/5.3\%/10.4\% and a median rank near 64. Because each perturbation has many replicate positives, this baseline is much higher than the na\"ive single-positive value; we use it as the reference throughout. This well-level protocol differs from the standard CPJUMP1 setup, which aggregates replicates into one profile per perturbation and ranks over the perturbation set; moving to that protocol is the first item of future work (Section~\ref{sec:conclusion}).
 
 \subsection{Baselines}
 
-We compare against three baselines. Each was reported on a different dataset or task formulation, so the comparisons below are indicative rather than strictly controlled, and we flag the relevant differences in the results section.
+We compare against three baselines. Each was reported on a different dataset or task formulation, so the comparisons are indicative rather than strictly controlled, and we flag the relevant differences in the results section.
 \begin{itemize}
     \item \textbf{CellProfiler}~\cite{carpenter2006cellprofiler}. Handcrafted features on CPJUMP1 sister-perturbation matching, fraction retrieved 4.3--25.1\% (mean $\sim$13\%)~\cite{chandrasekaran2024jump}.
     \item \textbf{CellCLIP}~\cite{lu2025cellclip}. Contrastive model on the Bray dataset~\cite{ljosa2012annotated} with text-to-profile retrieval. Best Recall@10 7.4\%; CORUM gene--gene recall 0.354.
@@ -40,9 +34,10 @@ We compare against three baselines. Each was reported on a different dataset or 
 
 \subsection{Implementation Details}
 
-Batch size 512 wells. AdamW optimizer with $\text{lr} = 10^{-4}$, weight decay 0.2, $(\beta_1, \beta_2) = (0.9, 0.999)$, $\varepsilon = 10^{-8}$. Schedule: 100-step linear warmup followed by cosine decay over 100 epochs. FP16 mixed precision; gradient clipping at norm 1.0. CrossChannelFormer: 1 transformer layer, 4 attention heads. Projection heads: hidden width 512, dropout 0.3. Temperature initialized to $\ln(1/0.07)$ and clamped at $\ln(100)$. Seed 42 for the headline number; the planned ablation runs use three seeds (42, 1337, 2024) to give variance estimates.
+Batch size 256 wells. AdamW optimizer with $\text{lr} = 10^{-4}$, weight decay 0.2, $(\beta_1, \beta_2) = (0.9, 0.999)$, $\varepsilon = 10^{-8}$. Schedule: 100-step linear warmup followed by cosine decay over 100 epochs, with the reported checkpoint selected by validation loss. FP16 mixed precision; gradient clipping at norm 1.0. CrossChannelFormer: 1 transformer layer, 4 attention heads. Projection heads: hidden width 512, dropout 0.3. Temperature initialized to $\ln(1/0.07)$ and clamped at $\ln(100)$. The headline number uses seed 42; the planned ablation runs use three seeds (42, 1337, 2024) for variance estimates.
 
 \subsection{Planned Ablations}
+\label{sec:ablation_design}
 
 We design a $2^3$ factorial ablation over three binary factors (text supervision, CWA batch correction, and gene-inclusive training) to attribute performance to each component:
 
@@ -62,4 +57,4 @@ No CWA & & \checkmark & \checkmark & Batch corr.\ effect \\
 \end{tabular}
 \end{table}
 
-A second planned ablation varies prompt richness across four levels: (1)~perturbation name only, (2)~name plus target and function, (3)~name plus target plus SMILES or GO terms, and (4)~full description with pathway annotations. The goal is to measure how much of the gain comes from injecting structured domain knowledge into the prompt, and in particular whether SMILES strings carry useful signal through BioClinical ModernBERT, which was not pre-trained on chemical notation.
+A second planned ablation varies prompt richness across four levels: (1)~perturbation name only, (2)~name plus target and function, (3)~name plus target plus SMILES or gene description, and (4)~full description with pathway annotations. The goal is to measure how much of the gain comes from injecting structured domain knowledge into the prompt, and in particular whether SMILES strings carry useful signal through BioClinical ModernBERT, which was not pre-trained on chemical notation.

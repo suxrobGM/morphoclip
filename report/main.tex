@@ -43,12 +43,14 @@
 \maketitle
 
 \begin{abstract}
-  Cell Painting microscopy produces multi-channel phenotypic images of cells under chemical or genetic perturbation, but matching those images back to the underlying perturbation is difficult and remains a bottleneck for phenotypic drug discovery.
+  Cell Painting microscopy produces multi-channel phenotypic images of cells under chemical or genetic perturbation, but matching those images back to the underlying perturbation remains a bottleneck for phenotypic drug discovery.
   We present MorphoCLIP, a contrastive learning framework that embeds Cell Painting images and natural-language descriptions of perturbations in a shared 512-dimensional space.
-  The image branch passes each of five fluorescence channels through a frozen DINOv3 ViT-L/16 backbone and aggregates the resulting CLS tokens with a single-layer CrossChannelFormer.
-  The text branch uses a frozen BioClinical ModernBERT with a trainable projection head. Training uses the Continuously Weighted Contrastive Loss (CWCL) to handle soft-positive relationships across perturbations that share a biological target.
-  On the CPJUMP1 benchmark (51 plates, 817 candidate perturbations), MorphoCLIP reaches text-to-image Recall@10 of 24.3\% with a median rank of 28, around two orders of magnitude above the random-retrieval baseline of 0.12\%.
-  Unlike prior contrastive methods restricted to small molecules, MorphoCLIP is trained jointly on compounds, CRISPR knockouts, and ORF overexpressions in a single model, and supports both retrieval directions at inference.
+  The image branch passes each of five fluorescence channels through a frozen DINOv3 ViT-L/16 backbone and aggregates the resulting CLS tokens with a single-layer CrossChannelFormer; the text branch uses a frozen BioClinical ModernBERT with a trainable projection head.
+  Training uses the Continuously Weighted Contrastive Loss (CWCL) to handle soft-positive relationships across perturbations that share a biological target, and the framework additionally supports cross-well alignment for batch correction.
+  Only about 14M parameters are trained, against roughly 1.5B total in the closest prior text-based method.
+  On a held-out CPJUMP1 validation split (2{,}220 wells drawn from 98 perturbations), text-to-image retrieval reaches Recall@10 of 24.3\% with a median rank of 28, roughly $2.3\times$ a like-for-like random baseline of 10.4\%; image-to-text retrieval is close to chance, which we analyze.
+  Unlike prior contrastive methods restricted to small molecules, MorphoCLIP is trained jointly on compounds, CRISPR knockouts, and ORF overexpressions in a single model.
+  We report these as preliminary results and set out the component ablations and perturbation-level evaluation needed to establish the contribution of each part of the design.
 \end{abstract}
 
 \begin{IEEEkeywords}

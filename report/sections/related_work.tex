@@ -16,7 +16,7 @@ CellCLIP~\cite{lu2025cellclip} is the closest prior work. It contributes (i)~tem
 
 \subsection{Batch-Effect Correction}
 
-CWA-MSN~\cite{huang2025cwamsn} attacks batch effects directly with cross-well alignment inside a masked siamese network. By aligning embeddings of cells subjected to the same perturbation across different wells and plates, it absorbs technical variance without an explicit batch label. With 22M parameters and 0.2M training images, CWA-MSN improves on CellCLIP by 9\% and on OpenPhenom by 29\% on gene--gene retrieval (CORUM recall 0.386). It has no text branch.
+CWA-MSN~\cite{huang2025cwamsn} addresses batch effects directly with cross-well alignment inside a masked siamese network. By aligning embeddings of cells subjected to the same perturbation across different wells and plates, it absorbs technical variance without an explicit batch label. With 22M parameters and 0.2M training images, CWA-MSN improves on CellCLIP by 9\% and on OpenPhenom by 29\% on gene--gene retrieval (CORUM recall 0.386). It has no text branch.
 
 \subsection{Foundation Models for Microscopy}
 
@@ -26,23 +26,23 @@ On the text side, BioClinical ModernBERT~\cite{sounack2025bioclinical} (150M par
 
 \subsection{Positioning of MorphoCLIP}
 
-Table~\ref{tab:landscape} places MorphoCLIP relative to these methods. The gap we target is the absence of any prior method that combines text supervision with both gene-inclusive training and batch-effect correction. CellCLIP has text but no gene training and no batch correction; CWA-MSN has genes and batch correction but no text. MorphoCLIP fills that intersection with a parameter-efficient architecture ($\sim$8M trainable parameters versus CellCLIP's 1.48B total).
+Table~\ref{tab:landscape} places MorphoCLIP relative to these methods. No prior method combines text supervision with both gene-inclusive training and batch-effect correction: CellCLIP has text but no gene-inclusive contrastive training and no batch correction; CWA-MSN has genes and batch correction but no text. MorphoCLIP is designed to fill that intersection with a parameter-efficient architecture ($\sim$14M trainable parameters against CellCLIP's 1.48B total). The batch-correction component is optional and is evaluated in the planned ablation rather than in the results reported here.
 
 \begin{table}[t]
 \centering
-\caption{Landscape of Cell Painting representation learning methods. MorphoCLIP uniquely combines text supervision, gene-inclusive training, and batch correction.}
+\caption{Landscape of Cell Painting representation learning methods. MorphoCLIP is designed to combine text supervision, gene-inclusive training, and batch correction. The parameter count is trainable parameters for MorphoCLIP and total parameters for the other learned methods.}
 \label{tab:landscape}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
 \toprule
-Method & Image Encoder & Pert.\ Types & Batch Corr.\ & Params \\
+Method & Image Encoder & Text & Pert.\ Types & Batch Corr.\ & Params \\
 \midrule
-CellProfiler~\cite{carpenter2006cellprofiler} & Handcrafted & All & Sphering & N/A \\
-CLOOME~\cite{sanchez2023cloome} & ResNet & Compounds & No & ${\sim}$25M \\
-MolPhenix~\cite{fradkin2024molphenix} & Phenom-1 & Compounds & No & ${\sim}$36M \\
-CellCLIP~\cite{lu2025cellclip} & DINOv2-g & All (text) & No & 1,477M \\
-CWA-MSN~\cite{huang2025cwamsn} & ViT-S/16 & Unimodal & CWA & 22M \\
-\textbf{MorphoCLIP} & DINOv3-L & All (text) & CWA & ${\sim}$8M \\
+CellProfiler~\cite{carpenter2006cellprofiler} & Handcrafted & No & All & Sphering & N/A \\
+CLOOME~\cite{sanchez2023cloome} & ResNet & No & Compounds & No & ${\sim}$25M \\
+MolPhenix~\cite{fradkin2024molphenix} & Phenom-1 & No & Compounds & No & ${\sim}$36M \\
+CellCLIP~\cite{lu2025cellclip} & DINOv2-g & Yes & All & No & 1,477M \\
+CWA-MSN~\cite{huang2025cwamsn} & ViT-S/16 & No & Unimodal & CWA & 22M \\
+\textbf{MorphoCLIP} & DINOv3-L & Yes & All & CWA (opt.) & ${\sim}$14M \\
 \bottomrule
 \end{tabular}%
 }

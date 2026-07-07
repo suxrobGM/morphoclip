@@ -1,12 +1,14 @@
 \section{Results and Discussion}
 
+We stress at the outset that the numbers below are preliminary. They come from a single text-only, batch-correction-off configuration (seed 42), evaluated at the well level rather than the perturbation-aggregated level of the standard CPJUMP1 protocol. We report them against a like-for-like random baseline and are explicit about where the model does and does not beat chance.
+
 \subsection{Cross-Modal Retrieval Performance}
 
-Table~\ref{tab:retrieval} reports retrieval performance of MorphoCLIP on the CPJUMP1 validation split alongside the published CellCLIP and CellProfiler numbers. The baselines were measured on different datasets and task formulations, so the cross-method comparisons are indicative; we discuss the caveats below.
+Table~\ref{tab:retrieval} reports retrieval performance of MorphoCLIP on the CPJUMP1 validation split alongside the published CellCLIP and CellProfiler numbers and the random baseline for our evaluation. The baselines were measured on different datasets and task formulations, so the cross-method comparisons are indicative; we discuss the caveats below.
 
 \begin{table}[t]
 \centering
-\caption{Cross-modal retrieval. MorphoCLIP is evaluated on CPJUMP1 (2{,}220 wells, 817 candidate perturbations). CellCLIP numbers are taken from the original paper, evaluated on the Bray dataset. CellProfiler uses profile-based sister-perturbation matching on CPJUMP1.}
+\caption{Cross-modal retrieval. MorphoCLIP is evaluated on the CPJUMP1 validation split (2{,}220 wells, 98 perturbations, ${\sim}$24 replicate wells each). The random row is a like-for-like baseline for this well-level pool. CellCLIP numbers are from the original paper on the Bray dataset; CellProfiler uses profile-based sister-perturbation matching on CPJUMP1.}
 \label{tab:retrieval}
 \begin{tabular}{@{}llrrr@{}}
 \toprule
@@ -17,35 +19,60 @@ CellProfiler & sister matching & \multicolumn{3}{c}{FR: 4.3--25.1\%} \\
 \multirow{2}{*}{CellCLIP} & perturb $\to$ profile & 1.18 & 4.49 & 7.37 \\
  & profile $\to$ perturb & 1.25 & 4.82 & 7.39 \\
 \midrule
+Random (our val) & either direction & 1.09 & 5.33 & 10.37 \\
+\midrule
 \multirow{2}{*}{\textbf{MorphoCLIP}} & image $\to$ text & 5.72 & 6.71 & 7.07 \\
  & text $\to$ image & 3.51 & \textbf{14.86} & \textbf{24.32} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The headline number is text-to-image Recall@10 of 24.3\%, two orders of magnitude above the random baseline of 0.12\% on the same 817-candidate pool, with a median rank of 28 (top 3.4\%). Image-to-text retrieval is substantially harder: Recall@10 is 7.07\% with a median rank of 289 (still below the random baseline of 408, but only by a factor of about $1.4\times$).
+The strongest result is text-to-image Recall@10 of 24.3\%, about $2.3\times$ the like-for-like random baseline of 10.4\% on the same 2{,}220-well pool, with a median rank of 28 against a random median near 64. Recall@5 (14.9\%) is likewise about $2.8\times$ random. Text-to-image retrieval is therefore modestly but consistently above chance.
+
+Image-to-text retrieval is close to chance in aggregate. Recall@1 (5.7\%) is several times the random rate of 1.1\%, so the model does resolve a subset of exact matches, but Recall@10 (7.1\%) sits below the random 10.4\%, and the median rank of 289 is far worse than the random median of 64. In this direction the model surfaces a few confident matches but does not order the broader positive set better than chance. We read this as a ceiling of the current well-level setup and single configuration, not as a settled property of the method.
 
 \subsection{Retrieval Asymmetry}
 
-The two directions are not symmetric: text-to-image R@10 is 24.3\% versus image-to-text R@10 of 7.1\%, with median ranks of 28 and 289 respectively. Most of this gap is structural rather than algorithmic. The validation split has many wells per perturbation, so a text query has multiple valid image positives to retrieve, while an image query must identify a single correct label out of 817. CellCLIP avoids this asymmetry because it operates on aggregated profiles (one vector per perturbation) rather than individual well images, making image-to-text and text-to-image largely equivalent on its setup.
+The two directions share the same positive structure: the mask of same-perturbation pairs is symmetric, so the random baseline is identical for both. The asymmetry in the learned model therefore comes from the embeddings, not from the candidate pool. Two factors plausibly contribute. First, the text side has only 98 distinct vectors (one per perturbation) with strong semantic structure from BioClinical ModernBERT, which makes a text query an easier anchor to match images against. Second, the image embeddings, aggregated from frozen DINOv3 features under heavy batch variation, are noisier, so an image query resolves its matching text less reliably. Aggregating replicate wells into a single per-perturbation profile before retrieval would remove much of this noise and is the natural next evaluation.
 
 \subsection{Comparison with Baselines}
 
-\paragraph{Versus CellCLIP.} On text-to-image retrieval, MorphoCLIP reaches R@10 = 24.3\% on a candidate pool of 817 perturbations, against CellCLIP's best reported R@10 of 7.4\% on its evaluation set. The two evaluations are not strictly comparable: the candidate pools differ in size and composition, and CellCLIP retrieves over aggregated profiles while MorphoCLIP retrieves over individual well images, which favors the text-to-image direction (see above). On the more directly comparable image-to-text direction, MorphoCLIP R@10 of 7.07\% is essentially tied with CellCLIP's profile-to-perturb R@10 of 7.39\%. The contribution we want to highlight is therefore not raw R@10 but parameter efficiency: $\sim$8M trainable parameters versus CellCLIP's 1.48B total, with comparable image-to-text performance and joint training over all three perturbation types instead of compounds only.
+\paragraph{Versus CellCLIP.} The comparison is not strictly controlled: CellCLIP is evaluated on the Bray dataset over aggregated profiles, whereas MorphoCLIP is evaluated on CPJUMP1 over individual wells with a different candidate pool. On the more directly comparable image-to-text direction, MorphoCLIP's Recall@10 of 7.07\% is close to CellCLIP's profile-to-perturb Recall@10 of 7.39\% -- but both sit at or below our random baseline for this well-level setup, so this should be read as a rough parity of order rather than evidence of a strong effect. The contribution we can defend without further experiments is efficiency and coverage: about 14M trainable parameters against CellCLIP's 1.48B total, with joint training over all three perturbation types instead of compounds only.
 
-\paragraph{Versus CellProfiler.} On CPJUMP1, CellProfiler's fraction retrieved ranges from 4.3\% to 25.1\% (mean $\sim$13\%) depending on the modality and matching task~\cite{chandrasekaran2024jump}. MorphoCLIP's text-to-image R@10 sits above the upper end of that range, on the easier text-query direction. The qualitative difference, independent of any number, is that MorphoCLIP supports natural-language querying of an image database, which CellProfiler does not.
+\paragraph{Versus CellProfiler.} On CPJUMP1, CellProfiler's fraction retrieved ranges from 4.3\% to 25.1\% (mean $\sim$13\%) depending on modality and matching task~\cite{chandrasekaran2024jump}. MorphoCLIP's text-to-image Recall@10 sits inside that range, on the easier text-query direction and under a different protocol, so the numbers are not directly comparable. The qualitative difference, independent of any single number, is that MorphoCLIP supports natural-language querying of an image database, which CellProfiler does not.
 
-\paragraph{Versus CWA-MSN.} A direct head-to-head comparison with CWA-MSN requires running both methods on the same gene--gene retrieval benchmarks (CORUM, HuMAP, Reactome). CWA-MSN's CORUM recall of 0.386 with 22M parameters is the relevant target. The factorial ablation in Table~\ref{tab:ablation_design} is designed to answer the more specific question of whether text supervision adds anything over CWA alone, which is the place we expect MorphoCLIP to provide a contribution.
+\paragraph{Versus CWA-MSN.} A head-to-head comparison requires running both methods on the same gene--gene retrieval benchmarks (CORUM, HuMAP, Reactome). CWA-MSN's CORUM recall of 0.386 with 22M parameters is the relevant target. The factorial ablation in Table~\ref{tab:ablation_design} is designed to answer the narrower question of whether text supervision adds anything over cross-well alignment alone.
 
 \subsection{Feature Analysis}
 
-We inspect the pre-extracted DINOv3 features to check that channel structure survives the frozen backbone. On plate BR00116991 (500 sites), a variance decomposition attributes 31.1\% of feature variance to differences between channels, 37.1\% to differences between sites, and 31.8\% to residual variation. The between-channel component is large enough to suggest that the per-channel encoding does carry channel-specific signal, even though DINOv3 was trained on natural images. A PCA over the $5 \times 1024$-dimensional feature space reaches 90\% of variance with 23 principal components, indicating moderate intrinsic dimensionality.
+We inspect the pre-extracted DINOv3 features to check that channel structure survives the frozen backbone. On plate BR00116991 (500 sites), a variance decomposition attributes 31.1\% of feature variance to differences between channels, 37.1\% to differences between sites, and 31.8\% to residual variation (Figure~\ref{fig:variance}). The between-channel component is large enough to suggest that the per-channel encoding carries channel-specific signal, even though DINOv3 was trained on natural images. A PCA over the $5 \times 1024$-dimensional feature space reaches 90\% of variance with 23 principal components (Figure~\ref{fig:pca}), indicating moderate intrinsic dimensionality.
 
-Cross-site same-channel similarity (mean 0.84) is higher than cross-channel similarity at the same site (mean 0.75), a gap of 0.09 that holds for every channel pair. The DNA/nucleus channel is the most distinct, with a mean similarity of 0.73 to the other four channels, consistent with its very different biological content.
+Cross-site same-channel similarity (mean 0.84) is higher than cross-channel similarity at the same site (mean 0.75), a gap of 0.09 that holds for every channel pair (Figure~\ref{fig:channelsim}). The DNA/nucleus channel is the most distinct, with a mean similarity of 0.73 to the other four channels, consistent with its very different biological content.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/variance_decomp.png}
+    \caption{Variance decomposition of the cached DINOv3 features on plate BR00116991: between-channel, between-site, and residual components.}
+    \label{fig:variance}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/channel_similarity.png}
+    \caption{Mean cosine similarity between fluorescence channels in the cached feature space. The DNA/nucleus channel is the most distinct.}
+    \label{fig:channelsim}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/pca_channels.png}
+    \caption{Cumulative explained variance of a PCA over the $5 \times 1024$-d feature space; 90\% is reached at 23 components.}
+    \label{fig:pca}
+\end{figure}
 
 \subsection{Computational Efficiency}
 
-Pre-extraction is what makes MorphoCLIP cheap to iterate on (Table~\ref{tab:efficiency}). The DINOv3 forward pass is the dominant cost; once features are cached, the contrastive training loop is small enough to fit comfortably on a single 16\,GB GPU.
+Pre-extraction is the main reason MorphoCLIP is cheap to iterate on (Table~\ref{tab:efficiency}). The DINOv3 forward pass is the dominant cost; once features are cached, the contrastive training loop is small enough to fit comfortably on a single 16\,GB GPU.
 
 \begin{table}[t]
 \centering
@@ -55,10 +82,10 @@ Pre-extraction is what makes MorphoCLIP cheap to iterate on (Table~\ref{tab:effi
 \toprule
 Configuration & Train.\ Params & VRAM & Time/epoch \\
 \midrule
-Pre-extracted + CCF (ours) & $\sim$8M & $\sim$2\,GB & 3--5 min \\
+Pre-extracted + CCF (ours) & $\sim$14M & $\sim$2\,GB & 3--5 min \\
 Frozen DINOv3 + LoRA ($r{=}8$, est.) & $\sim$20M & $\sim$14\,GB & 45--90 min \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Feature extraction is a one-time cost of about 7 minutes per plate ($\sim$6 hours for all 51). After that, an epoch over the cached features takes 3--5 minutes wall-clock, which is what enables the ablation study to run dozens of configurations on a single GPU in a day. Both DINOv3 (300M parameters) and BioClinical ModernBERT (150M parameters) stay frozen throughout; only the CrossChannelFormer and the two projection heads are updated.
+Feature extraction is a one-time cost of about seven minutes per plate ($\sim$six hours for all 51). After that, an epoch over the cached features takes 3--5 minutes wall-clock, which is what makes it practical to run the planned ablation across many configurations on a single GPU. Both DINOv3 (300M parameters) and BioClinical ModernBERT (150M parameters) stay frozen throughout; only the CrossChannelFormer and the two projection heads are updated.
