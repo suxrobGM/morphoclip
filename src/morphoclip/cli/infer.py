@@ -1,4 +1,7 @@
-"""`morphoclip infer` command: top-k matches, embedding export, or profile export."""
+"""`morphoclip infer` command: top-k text matches or embedding export.
+
+Benchmark-layout profile CSVs come from `morphoclip export-profiles`.
+"""
 
 import json
 from enum import StrEnum
@@ -11,7 +14,6 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from benchmark.export_utils import feature_columns
 from morphoclip.cli.logging import setup_logging
 from morphoclip.data.perturbation import PerturbationInfo
 from morphoclip.training.config import load_training_config
@@ -33,7 +35,6 @@ console = Console()
 class InferMode(StrEnum):
     match = "match"
     embed = "embed"
-    profile = "profile"
 
 
 def _encode_all_wells(image_encoder, text_projection, text_cache, loader, *, device, amp):
@@ -138,37 +139,6 @@ def _run_embed(image_embs, text_embs, plates, wells, pert_infos, *, output_dir):
     )
 
 
-def _profile_row(plate: str, well: str, info: PerturbationInfo) -> dict[str, str]:
-    """Build the ``Metadata_*`` columns for a single profile row."""
-    return {
-        "Metadata_Plate": plate,
-        "Metadata_Well": well,
-        "Metadata_broad_sample": info.broad_sample,
-        "Metadata_pert_type": info.pert_type.name,
-        "Metadata_target": info.target_list or "",
-        "Metadata_gene": info.gene or "",
-        "Metadata_control_type": info.control_type or "",
-    }
-
-
-def _run_profile(image_embs, plates, wells, pert_infos, *, output_dir):
-    output_dir.mkdir(parents=True, exist_ok=True)
-    dim = image_embs.shape[1]
-
-    metadata_df = pd.DataFrame(
-        [
-            _profile_row(plate, well, info)
-            for plate, well, info in zip(plates, wells, pert_infos, strict=True)
-        ]
-    )
-    features_df = pd.DataFrame(image_embs.numpy(), columns=feature_columns(dim))
-    df = pd.concat([metadata_df, features_df], axis=1)
-
-    output_path = output_dir / "morphoclip_profiles.csv.gz"
-    df.to_csv(output_path, index=False, compression="gzip")
-    console.print(f"Saved profiles: [green]{output_path}[/green] ({len(df)} wells, {dim}-d)")
-
-
 def _print_match_summary(results, top_k):
     ranks = [r["rank_of_gt"] for r in results if r["rank_of_gt"] is not None]
     if not ranks:
@@ -208,7 +178,7 @@ def infer(
         bool, typer.Option(help="Include control wells in inference.")
     ] = False,
 ) -> None:
-    """Run inference: top-k matches, embedding export, or profile export."""
+    """Run inference: top-k text matches or embedding export."""
     setup_logging()
 
     if not checkpoint.exists():
@@ -277,9 +247,4 @@ def infer(
             all_wells,
             all_pert_infos,
             output_dir=resolved_output_dir,
-        )
-
-    elif mode is InferMode.profile:
-        _run_profile(
-            image_embs, all_plates, all_wells, all_pert_infos, output_dir=resolved_output_dir
         )
