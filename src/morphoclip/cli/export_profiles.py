@@ -12,7 +12,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from morphoclip.benchmark.export import export_plate_profiles, load_export_models
+from morphoclip.benchmark.export import (
+    PlateNotInReferenceError,
+    export_plate_profiles,
+    load_export_models,
+)
 from morphoclip.cli.logging import setup_logging
 from morphoclip.training.inference import discover_plates
 
@@ -73,7 +77,7 @@ def export_profiles(
     table.add_column("Status")
     table.add_column("Output")
 
-    n_ok, n_failed = 0, 0
+    n_ok, n_skipped, n_failed = 0, 0, 0
     for plate in resolved_plates:
         try:
             output_path = export_plate_profiles(
@@ -87,6 +91,13 @@ def export_profiles(
                 batch_size=batch_size,
                 models=models,
             )
+        except PlateNotInReferenceError as exc:
+            # Expected for plates outside the benchmark-eligible subset
+            # (non-standard density, antibiotics present, compound x Cas9).
+            console.print(f"[yellow]Plate {plate} skipped: {exc}[/yellow]")
+            table.add_row(plate, "[yellow]skipped[/yellow]", "not in reference metadata")
+            n_skipped += 1
+            continue
         except (ValueError, FileNotFoundError) as exc:
             console.print(f"[red]Plate {plate} failed: {exc}[/red]")
             table.add_row(plate, "[red]failed[/red]", str(exc))
@@ -98,6 +109,9 @@ def export_profiles(
         n_ok += 1
 
     console.print(table)
-    console.print(f"\nExported {n_ok}/{len(resolved_plates)} plates ({n_failed} failed).")
+    console.print(
+        f"\nExported {n_ok}/{len(resolved_plates)} plates "
+        f"({n_skipped} skipped, {n_failed} failed)."
+    )
     if n_failed:
         raise typer.Exit(1)

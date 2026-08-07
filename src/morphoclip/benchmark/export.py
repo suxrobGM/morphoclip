@@ -29,6 +29,15 @@ logger = logging.getLogger(__name__)
 type ExportModels = tuple[nn.Module, MorphoCLIPTrainingConfig, torch.device]
 
 
+class PlateNotInReferenceError(ValueError):
+    """Raised when a plate has no rows in the CPJUMP1 reference metadata.
+
+    Expected for plates outside the benchmark-eligible subset (non-standard
+    seeding density, antibiotics present, or compound plates on the Cas9 line),
+    which callers normally skip rather than treat as a failure.
+    """
+
+
 def load_export_models(checkpoint: Path, device: str = "auto") -> ExportModels:
     """Load the image encoder and config from a checkpoint once, for reuse across plates.
 
@@ -58,8 +67,9 @@ def load_reference_metadata(csv_path: Path, plate: str) -> pd.DataFrame:
         DataFrame with one row per well for ``plate``.
 
     Raises:
-        ValueError: If the CSV lacks ``Metadata_Plate``/``Metadata_Well``, no
-            rows match ``plate``, or a well appears more than once.
+        ValueError: If the CSV lacks ``Metadata_Plate``/``Metadata_Well`` or a
+            well appears more than once.
+        PlateNotInReferenceError: If no rows match ``plate``.
     """
     df = pd.read_csv(csv_path, low_memory=False)
     for required_col in ("Metadata_Plate", "Metadata_Well"):
@@ -68,7 +78,9 @@ def load_reference_metadata(csv_path: Path, plate: str) -> pd.DataFrame:
 
     plate_df = df[df["Metadata_Plate"].astype(str) == str(plate)].reset_index(drop=True)
     if plate_df.empty:
-        raise ValueError(f"No reference metadata rows found for plate {plate!r} in {csv_path}")
+        raise PlateNotInReferenceError(
+            f"No reference metadata rows found for plate {plate!r} in {csv_path}"
+        )
 
     duplicated = plate_df["Metadata_Well"].duplicated(keep=False)
     if duplicated.any():
