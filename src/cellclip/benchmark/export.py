@@ -8,6 +8,15 @@ import torch
 import yaml
 
 from benchmark.data import get_timepoint_label
+
+# Re-exported for backward compatibility: these helpers now live in
+# ``benchmark.export_utils`` so ``morphoclip.benchmark.export`` can reuse them
+# without importing ``cellclip`` (see .claude/rules/architecture.md).
+from benchmark.export_utils import (  # noqa: F401
+    feature_columns,
+    negcon_center_profiles,
+    output_profile_path,
+)
 from morphoclip.data.image_loader import FEATURE_PATTERN
 from morphoclip.data.perturbation import well_from_row_col
 
@@ -164,48 +173,6 @@ def encode_well(
     pooled_sites = model.encode_mil(sites.unsqueeze(0).to(device))
     well_embedding = model.encode_image(pooled_sites).squeeze(0).detach().cpu().float()
     return well_embedding.numpy()
-
-
-def feature_columns(width: int) -> list[str]:
-    """Build exported feature column names."""
-    return [f"feature_{i:04d}" for i in range(width)]
-
-
-def negcon_center_profiles(
-    profiles: pd.DataFrame,
-    *,
-    control_col: str = "Metadata_control_type",
-) -> pd.DataFrame:
-    """Center exported features against plate-level negative controls.
-
-    The benchmark consumes files named ``normalized_feature_select_negcon_batch``.
-    Raw CellCLIP well embeddings have a strong shared offset across wells, so we
-    remove the negative-control reference mean before saving.
-    """
-    feature_cols = [col for col in profiles.columns if not col.startswith("Metadata")]
-    if not feature_cols:
-        return profiles
-
-    negcon_mask = profiles[control_col].eq("negcon") if control_col in profiles.columns else None
-    if negcon_mask is not None and bool(negcon_mask.any()):
-        reference = profiles.loc[negcon_mask, feature_cols]
-    else:
-        reference = profiles[feature_cols]
-
-    centered = profiles.copy()
-    reference_mean = reference.to_numpy(dtype=np.float32).mean(axis=0)
-    centered[feature_cols] = profiles[feature_cols].to_numpy(dtype=np.float32) - reference_mean
-    return centered
-
-
-def output_profile_path(output_profiles_root: Path, batch: str, plate: str) -> Path:
-    """Return the benchmark-compatible exported profile path for a plate."""
-    return (
-        output_profiles_root
-        / batch
-        / plate
-        / f"{plate}_normalized_feature_select_negcon_batch.csv.gz"
-    )
 
 
 def export_plate(
