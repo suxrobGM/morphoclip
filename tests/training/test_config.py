@@ -23,6 +23,48 @@ class TestMorphoCLIPTrainingConfig:
         assert config.runtime.device == "auto"
         assert config.dataset.batch_size == 32
 
+    def test_training_signal_fields_default_off(self) -> None:
+        """New features must default to current behavior."""
+        config = MorphoCLIPTrainingConfig()
+        assert config.dataset.batch_sampler == "random"
+        assert config.dataset.replicates_per_group == 2
+        assert config.optimization.target_weight == 0.0
+        assert config.optimization.lambda_img == 0.0
+        assert config.optimization.img_img_temperature is None
+        assert config.runtime.early_stop_patience is None
+
+    def test_training_signal_fields_settable(self) -> None:
+        config = training_config_from_dict(
+            {
+                "dataset": {"batch_sampler": "perturbation", "replicates_per_group": 4},
+                "optimization": {
+                    "target_weight": 0.6,
+                    "lambda_img": 0.3,
+                    "img_img_temperature": 0.1,
+                },
+                "runtime": {"early_stop_patience": 5},
+            }
+        )
+        assert config.dataset.batch_sampler == "perturbation"
+        assert config.dataset.replicates_per_group == 4
+        assert config.optimization.target_weight == 0.6
+        assert config.optimization.lambda_img == 0.3
+        assert config.optimization.img_img_temperature == 0.1
+        assert config.runtime.early_stop_patience == 5
+
+    def test_base_yaml_still_loads_with_current_behavior(self) -> None:
+        base_yaml = Path("configs/train/base.yaml")
+        if not base_yaml.exists():
+            pytest.skip("configs/train/base.yaml not available")
+        config = load_training_config(base_yaml)
+        assert config.optimization.loss_type == "cwcl"
+        # base.yaml must stay behavior-identical: every new knob stays off.
+        assert config.dataset.batch_sampler == "random"
+        assert config.optimization.target_weight == 0.0
+        assert config.optimization.lambda_img == 0.0
+        assert config.optimization.img_img_temperature is None
+        assert config.runtime.early_stop_patience is None
+
     def test_to_dict_roundtrip(self) -> None:
         config = MorphoCLIPTrainingConfig()
         d = config.to_dict()

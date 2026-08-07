@@ -141,6 +141,7 @@ def _train_loop(
 
     history: list[dict[str, float | int]] = []
     best_eval_loss = float("inf")
+    epochs_since_best = 0
     global_step = 0
     start_epoch = 1
     best_ckpt = run_dir / "checkpoints" / "best.pt"
@@ -265,6 +266,7 @@ def _train_loop(
                     loss_type=opt_cfg.loss_type,
                     use_cwa=opt_cfg.use_cwa,
                     amp=config.runtime.amp,
+                    target_weight=opt_cfg.target_weight,
                 )
                 train_metrics.update(eval_metrics)
                 progress.console.print(
@@ -275,11 +277,14 @@ def _train_loop(
 
                 if eval_metrics["eval_loss"] < best_eval_loss:
                     best_eval_loss = eval_metrics["eval_loss"]
+                    epochs_since_best = 0
                     _save(best_ckpt, epoch=epoch, best=best_eval_loss)
                     progress.console.print(
                         f"  [bold green]New best eval loss: {best_eval_loss:.5f} "
                         "(saved)[/bold green]"
                     )
+                else:
+                    epochs_since_best += 1
 
             # --- Periodic save (every epoch, main process only) ---
             if is_main:
@@ -305,6 +310,16 @@ def _train_loop(
 
             history.append(train_metrics)
             progress.update(epoch_task, advance=1)
+
+            # Early stopping is single-GPU only: eval runs on rank 0, so the
+            # other ranks never see the stop condition and would hang.
+            patience = config.runtime.early_stop_patience
+            if patience is not None and not use_ddp and epochs_since_best >= patience:
+                progress.console.print(
+                    f"  [bold yellow]Early stopping: no eval-loss improvement for "
+                    f"{epochs_since_best} epoch(s) (patience={patience}).[/bold yellow]"
+                )
+                break
 
     # --- Save history ---
     if is_main:

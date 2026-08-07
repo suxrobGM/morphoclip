@@ -197,12 +197,16 @@ def forward_step(
     use_cwa: bool,
     use_ddp: bool,
     dist_state: Any,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[str]]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[str], list[str]]:
     """Forward pass + optional CWA + gather across GPUs.
 
-    Returns (all_image, all_text, image_emb, text_emb, all_broad_samples).
+    Returns ``(all_image, all_text, image_emb, text_emb, all_broad_samples,
+    all_target_keys)``.  The gathered target keys feed the gene-aware CWCL
+    soft labels; they are plain strings so the existing
+    :func:`~morphoclip.training.distributed.gather_string_lists` handles them.
     """
     # Lazy imports to avoid circular dependency (engine <-> evaluate)
+    from morphoclip.data.perturbation import target_gene_key
     from morphoclip.training.batch_correction import cross_well_alignment
     from morphoclip.training.distributed import all_gather_tensors, gather_string_lists
     from morphoclip.training.evaluate import lookup_text_embeddings
@@ -220,16 +224,19 @@ def forward_step(
             image_emb = cross_well_alignment(image_emb, batch["plates"])
 
         broad_samples = [info.broad_sample for info in pert_infos]
+        target_keys = [target_gene_key(info) for info in pert_infos]
         if use_ddp:
             # gather_with_grad=True: preserve gradient flow through all_gather
             # so negatives on remote GPUs still contribute to the contrastive loss.
             all_image = all_gather_tensors(image_emb, with_grad=True)
             all_text = all_gather_tensors(text_emb, with_grad=True)
             all_broad = gather_string_lists(broad_samples, dist_state.world_size)
+            all_targets = gather_string_lists(target_keys, dist_state.world_size)
         else:
-            all_image, all_text, all_broad = image_emb, text_emb, broad_samples
+            all_image, all_text = image_emb, text_emb
+            all_broad, all_targets = broad_samples, target_keys
 
-    return all_image, all_text, image_emb, text_emb, all_broad
+    return all_image, all_text, image_emb, text_emb, all_broad, all_targets
 
 
 def optimizer_step(

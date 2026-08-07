@@ -20,8 +20,14 @@ from morphoclip.training.engine import (
     split_params,
 )
 from morphoclip.training.evaluate import compute_retrieval_metrics, evaluate_epoch
-from morphoclip.training.losses import compute_loss, cwcl_loss, infonce_loss
+from morphoclip.training.losses import (
+    compute_loss,
+    cwcl_loss,
+    infonce_loss,
+    replicate_image_loss,
+)
 from morphoclip.training.metrics import compute_alignment, compute_uniformity
+from morphoclip.training.samplers import PerturbationBatchSampler
 from morphoclip.training.tb_logger import TrainingLogger
 from morphoclip.training.trainer import train_morphoclip
 
@@ -30,6 +36,7 @@ __all__ = [
     "LogitScaleModule",
     "MorphoCLIPDistributedConfig",
     "MorphoCLIPTrainingConfig",
+    "PerturbationBatchSampler",
     "TrainingLogger",
     "build_optimizer",
     "build_scheduler",
@@ -43,6 +50,7 @@ __all__ = [
     "evaluate_epoch",
     "infonce_loss",
     "load_training_config",
+    "replicate_image_loss",
     "resolve_device",
     "save_checkpoint",
     "setup_distributed",

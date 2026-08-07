@@ -97,6 +97,55 @@ def generate_text(info: PerturbationInfo, level: str = "full") -> str:
     return " ".join(parts)
 
 
+def target_gene_key(info: PerturbationInfo) -> str:
+    """Build a canonical gene-set key for a perturbation.
+
+    Compounds use ``target_list`` (the CPJUMP1 annotation column, whose
+    entries are pipe-delimited, e.g. ``"CACNA1A|CACNB4"``); CRISPR and ORF
+    wells use ``gene``.  Any other modality (controls, unknown) has no
+    meaningful gene set and yields ``""``.
+
+    Tokens are split on ``|`` (and ``,``, tolerated for hand-edited
+    annotations), stripped, upper-cased, de-duplicated, sorted, and
+    re-joined with ``|`` so two perturbations hitting the same genes
+    produce byte-identical keys.
+
+    Args:
+        info: Perturbation metadata for one well.
+
+    Returns:
+        Canonical ``"GENE1|GENE2"`` key, or ``""`` when unknown/missing.
+    """
+    if info.pert_type == PerturbationType.COMPOUND:
+        raw = info.target_list
+    elif info.pert_type in (PerturbationType.CRISPR, PerturbationType.ORF):
+        raw = info.gene
+    else:
+        return ""
+
+    if not raw:
+        return ""
+
+    tokens = {
+        token.strip().upper()
+        for part in raw.split("|")
+        for token in part.split(",")
+        if token.strip()
+    }
+    return "|".join(sorted(tokens))
+
+
+def parse_target_gene_key(key: str) -> frozenset[str]:
+    """Parse a canonical key from :func:`target_gene_key` back to a gene set.
+
+    An empty key yields an empty set, which never intersects anything —
+    unknown targets must not be treated as shared targets.
+    """
+    if not key:
+        return frozenset()
+    return frozenset(token for token in key.split("|") if token)
+
+
 def well_from_row_col(row: int, col: int) -> str:
     """Convert numeric (row, col) to well position string.
 

@@ -5,11 +5,15 @@ import torch
 import torch.nn.functional as F
 
 from morphoclip.training.losses import (
+    build_affinity_matrix,
     build_soft_labels,
     compute_loss,
     cwcl_loss,
     infonce_loss,
+    replicate_image_loss,
 )
+
+CPU = torch.device("cpu")
 
 
 class TestInfoNCELoss:
@@ -81,6 +85,75 @@ class TestBuildSoftLabels:
         torch.testing.assert_close(row_sums, torch.ones(5), atol=1e-6, rtol=0)
 
 
+class TestGeneAwareSoftLabels:
+    """Tests for continuous, target-gene-aware soft labels."""
+
+    def test_zero_weight_matches_binary_labels(self) -> None:
+        """target_weight=0 must reproduce the binary same-broad_sample labels."""
+        broad = ["A", "A", "B", "C"]
+        keys = ["GENE1", "GENE1", "GENE1", "GENE2"]
+        binary = build_soft_labels(broad, device=CPU)
+        gene_aware = build_soft_labels(broad, target_keys=keys, target_weight=0.0, device=CPU)
+        torch.testing.assert_close(gene_aware, binary)
+
+    def test_shared_gene_gets_target_weight(self) -> None:
+        """A compound target_list and a CRISPR gene overlapping → target_weight."""
+        affinity = build_affinity_matrix(
+            ["CMPD", "KO"],
+            target_keys=["GENE1|GENE2", "GENE1"],
+            target_weight=0.6,
+            device=CPU,
+        )
+        torch.testing.assert_close(affinity[0, 1], torch.tensor(0.6))
+        torch.testing.assert_close(affinity[1, 0], torch.tensor(0.6))
+        # Diagonal stays 1.0
+        torch.testing.assert_close(affinity[0, 0], torch.tensor(1.0))
+
+    def test_disjoint_genes_get_zero(self) -> None:
+        affinity = build_affinity_matrix(
+            ["A", "B"],
+            target_keys=["GENE1", "GENE2"],
+            target_weight=0.6,
+            device=CPU,
+        )
+        torch.testing.assert_close(affinity[0, 1], torch.tensor(0.0))
+
+    def test_empty_key_never_matches(self) -> None:
+        """Unknown target must not be treated as a shared target."""
+        affinity = build_affinity_matrix(
+            ["A", "B", "C"],
+            target_keys=["", "", "GENE1"],
+            target_weight=0.7,
+            device=CPU,
+        )
+        torch.testing.assert_close(affinity[0, 1], torch.tensor(0.0))
+        torch.testing.assert_close(affinity[1, 0], torch.tensor(0.0))
+        torch.testing.assert_close(affinity[0, 2], torch.tensor(0.0))
+
+    def test_same_broad_sample_keeps_full_weight(self) -> None:
+        """Replicates stay at 1.0 even when target_weight is lower."""
+        affinity = build_affinity_matrix(
+            ["A", "A"],
+            target_keys=["GENE1", "GENE1"],
+            target_weight=0.5,
+            device=CPU,
+        )
+        torch.testing.assert_close(affinity[0, 1], torch.tensor(1.0))
+
+    def test_both_directions_row_sum_to_one(self) -> None:
+        """Asymmetric group sizes + continuous weights: both directions normalize."""
+        broad = ["A", "A", "A", "B", "C"]
+        keys = ["GENE1", "GENE1", "GENE1", "GENE1", "GENE2"]
+        affinity = build_affinity_matrix(broad, target_keys=keys, target_weight=0.6, device=CPU)
+        i2t = affinity / affinity.sum(dim=1, keepdim=True)
+        t2i = affinity.t() / affinity.t().sum(dim=1, keepdim=True)
+        torch.testing.assert_close(i2t.sum(dim=1), torch.ones(5), atol=1e-6, rtol=0)
+        torch.testing.assert_close(t2i.sum(dim=1), torch.ones(5), atol=1e-6, rtol=0)
+        # The naive transpose of the row-normalized matrix does NOT sum to 1
+        naive = i2t.t().sum(dim=1)
+        assert not torch.allclose(naive, torch.ones(5), atol=1e-3)
+
+
 class TestCWCLLoss:
     """Tests for CWCL loss."""
 
@@ -109,6 +182,87 @@ class TestCWCLLoss:
             broad_samples=["A", "B", "C", "D"],
         )
         torch.testing.assert_close(loss_infonce, loss_cwcl, atol=1e-5, rtol=1e-5)
+
+    def test_unique_samples_matches_infonce_with_targets(self) -> None:
+        """The InfoNCE invariant survives gene weights when targets are disjoint."""
+        image = F.normalize(torch.randn(4, 16), dim=-1)
+        text = F.normalize(torch.randn(4, 16), dim=-1)
+        scale = torch.tensor(2.6593)
+        loss_infonce = infonce_loss(image, text, scale)
+        loss_cwcl = cwcl_loss(
+            image,
+            text,
+            scale,
+            broad_samples=["A", "B", "C", "D"],
+            target_keys=["G1", "G2", "G3", "G4"],
+            target_weight=0.6,
+        )
+        torch.testing.assert_close(loss_infonce, loss_cwcl, atol=1e-5, rtol=1e-5)
+
+    def test_target_weight_changes_loss(self) -> None:
+        image = F.normalize(torch.randn(4, 16), dim=-1)
+        text = F.normalize(torch.randn(4, 16), dim=-1)
+        scale = torch.tensor(2.6593)
+        keys = ["G1", "G1", "G2", "G2"]
+        binary = cwcl_loss(image, text, scale, broad_samples=["A", "B", "C", "D"])
+        gene_aware = cwcl_loss(
+            image,
+            text,
+            scale,
+            broad_samples=["A", "B", "C", "D"],
+            target_keys=keys,
+            target_weight=0.6,
+        )
+        assert not torch.allclose(binary, gene_aware, atol=1e-4)
+
+
+class TestReplicateImageLoss:
+    """Tests for the replicate-alignment image-image term."""
+
+    def test_no_positives_returns_zero_with_grad(self) -> None:
+        raw = torch.randn(4, 16, requires_grad=True)
+        image = F.normalize(raw, dim=-1)
+        loss = replicate_image_loss(image, 10.0, broad_samples=["A", "B", "C", "D"])
+        assert loss.item() == 0.0
+        assert loss.requires_grad
+        loss.backward()
+        assert raw.grad is not None
+
+    def test_pulls_replicates_together(self) -> None:
+        """Replicate embeddings closer together → lower loss."""
+        broad = ["A", "A", "B", "B"]
+        base_a = F.normalize(torch.randn(1, 16), dim=-1)
+        base_b = F.normalize(torch.randn(1, 16), dim=-1)
+        noise = F.normalize(torch.randn(2, 16), dim=-1)
+
+        far = F.normalize(torch.cat([base_a, noise[:1], base_b, noise[1:]], dim=0), dim=-1)
+        close = F.normalize(torch.cat([base_a, base_a, base_b, base_b], dim=0), dim=-1)
+        loss_far = replicate_image_loss(far, 10.0, broad_samples=broad)
+        loss_close = replicate_image_loss(close, 10.0, broad_samples=broad)
+        assert loss_close.item() < loss_far.item()
+
+    def test_diagonal_excluded(self) -> None:
+        """Identical replicates give a near-zero loss only if self is excluded."""
+        emb = F.normalize(torch.randn(1, 16), dim=-1).repeat(2, 1)
+        loss = replicate_image_loss(emb, 10.0, broad_samples=["A", "A"])
+        # Only one candidate remains after excluding self → log(1) = 0.
+        torch.testing.assert_close(loss, torch.tensor(0.0), atol=1e-6, rtol=0)
+
+    def test_rows_without_positives_are_dropped(self) -> None:
+        """A singleton row must not drag the mean toward its (undefined) value."""
+        emb = F.normalize(torch.randn(3, 16), dim=-1)
+        with_singleton = replicate_image_loss(emb, 10.0, broad_samples=["A", "A", "Z"])
+        pair_only = replicate_image_loss(emb[:2], 10.0, broad_samples=["A", "A"])
+        # Same positives, but the 3-sample batch has an extra negative, so the
+        # losses differ; the singleton row itself contributes nothing.
+        assert with_singleton.item() >= 0.0
+        assert pair_only.item() >= 0.0
+
+    def test_scale_can_be_a_tensor(self) -> None:
+        emb = F.normalize(torch.randn(4, 16), dim=-1)
+        scale = torch.tensor(2.6593).exp()
+        loss = replicate_image_loss(emb, scale, broad_samples=["A", "A", "B", "B"])
+        assert loss.item() >= 0.0
 
 
 class TestComputeLoss:

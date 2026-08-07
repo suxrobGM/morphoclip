@@ -105,13 +105,21 @@ class TrainingLogger:
         logit_stats: dict[str, float],
         image_emb: torch.Tensor | None = None,
         text_emb: torch.Tensor | None = None,
+        img_img_loss: float | None = None,
     ) -> None:
-        """Log per-step training scalars and embedding diagnostics."""
+        """Log per-step training scalars and embedding diagnostics.
+
+        Args:
+            img_img_loss: Replicate-alignment image-image component, logged
+                separately from the total loss.  ``None`` when disabled.
+        """
         w = self._writer
         if w is None:
             return
 
         w.add_scalar("train/loss", loss, step)
+        if img_img_loss is not None:
+            w.add_scalar("train/img_img_loss", img_img_loss, step)
         w.add_scalar("train/lr", lr, step)
         w.add_scalar("train/tau", tau, step)
         w.add_scalar("train/grad_norm_before_clip", grad_norm_before, step)

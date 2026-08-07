@@ -43,6 +43,10 @@ class MorphoCLIPDatasetConfig:
     eval_batch_size: int = 32
     preload: bool = True
     val_fraction: float = 0.1
+    # "random" (plain shuffled DataLoader) or "perturbation"
+    # (PerturbationBatchSampler: replicate-aware, plate-mixed batches).
+    batch_sampler: str = "random"
+    replicates_per_group: int = 2  # Target replicates per perturbation chunk
 
 
 @dataclass(slots=True)
@@ -66,6 +70,14 @@ class MorphoCLIPOptimizationConfig:
     epochs: int = 20
     warmup_steps: int = 200
     use_cwa: bool = False
+    # Gene-aware CWCL: affinity given to pairs whose target gene sets
+    # intersect but whose broad_sample differs.  0.0 disables (binary labels).
+    target_weight: float = 0.0
+    # Weight of the replicate image-image alignment term (0.0 disables).
+    lambda_img: float = 0.0
+    # Fixed temperature for the image-image term; None reuses the shared
+    # learnable logit scale.
+    img_img_temperature: float | None = None
 
 
 @dataclass(slots=True)
@@ -79,6 +91,10 @@ class MorphoCLIPRuntimeConfig:
     run_name: str | None = None
     log_every_steps: int = 10
     max_train_steps: int | None = None
+    # Stop after this many epochs without a new best eval loss.  None
+    # disables.  Only applied when not running distributed — eval runs on
+    # rank 0 only, so the stop decision is not available on other ranks.
+    early_stop_patience: int | None = None
 
 
 @dataclass(slots=True)

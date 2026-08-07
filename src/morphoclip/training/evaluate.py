@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from morphoclip.data.perturbation import PerturbationInfo
+from morphoclip.data.perturbation import PerturbationInfo, target_gene_key
 from morphoclip.training.batch_correction import cross_well_alignment
 from morphoclip.training.engine import autocast_context
 from morphoclip.training.losses import compute_loss
@@ -46,8 +46,14 @@ def evaluate_epoch(
     loss_type: str,
     use_cwa: bool,
     amp: bool,
+    target_weight: float = 0.0,
 ) -> dict[str, float]:
     """Run one evaluation epoch.
+
+    The eval loss is deliberately text-alignment only — the replicate
+    image-image term is *not* included, so model selection stays comparable
+    across ablations.  *target_weight* is threaded through so the CWCL soft
+    labels match training semantics.
 
     Returns:
         Dict with ``eval_loss`` and retrieval metrics.
@@ -81,6 +87,8 @@ def evaluate_epoch(
                     text_emb,
                     logit_scale,
                     broad_samples=broad_samples,
+                    target_keys=[target_gene_key(info) for info in pert_infos],
+                    target_weight=target_weight,
                 )
 
             losses.append(float(loss.detach().cpu().item()))

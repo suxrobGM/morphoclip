@@ -7,7 +7,12 @@ imports of optional training/extraction helpers with extra dependencies.
 from morphoclip.data.dataset import MorphoCLIPDataset, MorphoCLIPSample, collate_fn
 from morphoclip.data.image_loader import ImageKey, discover_sites, load_site_as_tensor
 from morphoclip.data.metadata import MetadataIndex
-from morphoclip.data.perturbation import PerturbationInfo, PerturbationType
+from morphoclip.data.perturbation import (
+    PerturbationInfo,
+    PerturbationType,
+    parse_target_gene_key,
+    target_gene_key,
+)
 from morphoclip.data.splits import create_splits
 
 __all__ = [
@@ -21,4 +26,6 @@ __all__ = [
     "create_splits",
     "discover_sites",
     "load_site_as_tensor",
+    "parse_target_gene_key",
+    "target_gene_key",
 ]

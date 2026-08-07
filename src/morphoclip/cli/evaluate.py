@@ -140,6 +140,7 @@ def evaluate(
             loss_type=cfg.optimization.loss_type,
             use_cwa=cfg.optimization.use_cwa,
             amp=cfg.runtime.amp,
+            target_weight=cfg.optimization.target_weight,
         )
     )
 
