@@ -137,20 +137,38 @@ def _run_embed(image_embs, text_embs, plates, wells, pert_infos, *, output_dir):
     )
 
 
+def _profile_row(plate: str, well: str, info: PerturbationInfo) -> dict[str, str]:
+    """Build the metadata dict for a single profile row.
+
+    Args:
+        plate: Plate barcode.
+        well: Well position string.
+        info: Perturbation metadata for the well.
+
+    Returns:
+        Mapping of ``Metadata_*`` column names to values.
+    """
+    return {
+        "Metadata_Plate": plate,
+        "Metadata_Well": well,
+        "Metadata_broad_sample": info.broad_sample,
+        "Metadata_pert_type": info.pert_type.name,
+        "Metadata_target": info.target_list or "",
+        "Metadata_gene": info.gene or "",
+        "Metadata_control_type": info.control_type or "",
+    }
+
+
 def _run_profile(image_embs, plates, wells, pert_infos, *, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     dim = image_embs.shape[1]
     feature_cols = [f"feat_{i}" for i in range(dim)]
 
     metadata_df = pd.DataFrame(
-        {
-            "Metadata_Plate": plates,
-            "Metadata_Well": wells,
-            "Metadata_broad_sample": [info.broad_sample for info in pert_infos],
-            "Metadata_pert_type": [info.pert_type.name for info in pert_infos],
-            "Metadata_target": [info.target or "" for info in pert_infos],
-            "Metadata_gene_symbol": [info.gene_symbol or "" for info in pert_infos],
-        }
+        [
+            _profile_row(plate, well, info)
+            for plate, well, info in zip(plates, wells, pert_infos, strict=True)
+        ]
     )
     features_df = pd.DataFrame(image_embs.numpy(), columns=feature_cols)
     df = pd.concat([metadata_df, features_df], axis=1)
