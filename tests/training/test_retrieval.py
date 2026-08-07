@@ -162,7 +162,8 @@ class TestDedupeAndAggregate:
                 [0.0, 4.0, 0.0],
             ]
         )
-        profiles = aggregate_images(images, samples)
+        _, unique_ids, well_to_pert = dedupe_texts(images, samples)
+        profiles = aggregate_images(images, well_to_pert, len(unique_ids))
 
         assert profiles.shape == (3, 3)
         norms = profiles.norm(dim=-1)
@@ -175,40 +176,10 @@ class TestDedupeAndAggregate:
     def test_aggregate_matches_dedupe_order(self) -> None:
         samples = ["z", "y", "z", "x"]
         emb = torch.randn(4, 6, generator=torch.Generator().manual_seed(3))
-        _, unique_ids, _ = dedupe_texts(emb, samples)
-        profiles = aggregate_images(emb, samples)
+        _, unique_ids, well_to_pert = dedupe_texts(emb, samples)
+        profiles = aggregate_images(emb, well_to_pert, len(unique_ids))
         assert unique_ids == ["z", "y", "x"]
         assert profiles.shape[0] == len(unique_ids)
-
-
-class TestDiagonalFallback:
-    def test_identity_embeddings_recall_one(self) -> None:
-        emb = torch.eye(6)
-        metrics = compute_retrieval_metrics(emb, emb.clone())
-
-        assert metrics["image_to_text_R@1"] == 1.0
-        assert metrics["text_to_image_R@1"] == 1.0
-        assert metrics["image_to_text_mean_rank"] == 1.0
-        assert metrics["image_to_text_median_rank"] == 1.0
-
-    def test_no_random_or_pert_keys(self) -> None:
-        emb = torch.eye(6)
-        metrics = compute_retrieval_metrics(emb, emb.clone())
-        assert not any("random" in key for key in metrics)
-        assert not any(key.startswith("pert_") for key in metrics)
-        assert "n_wells" not in metrics
-        assert set(metrics) == {
-            "image_to_text_R@1",
-            "image_to_text_R@5",
-            "image_to_text_R@10",
-            "image_to_text_mean_rank",
-            "image_to_text_median_rank",
-            "text_to_image_R@1",
-            "text_to_image_R@5",
-            "text_to_image_R@10",
-            "text_to_image_mean_rank",
-            "text_to_image_median_rank",
-        }
 
 
 def test_defensive_normalization_is_scale_invariant() -> None:
@@ -231,9 +202,3 @@ def test_defensive_normalization_is_scale_invariant() -> None:
     assert baseline.keys() == scaled.keys()
     for key in baseline:
         assert math.isclose(baseline[key], scaled[key], rel_tol=1e-6, abs_tol=1e-6)
-
-
-def test_backward_compatible_import_from_evaluate() -> None:
-    from morphoclip.training.evaluate import compute_retrieval_metrics as legacy
-
-    assert legacy is compute_retrieval_metrics

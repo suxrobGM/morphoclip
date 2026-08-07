@@ -30,8 +30,8 @@ class TestMorphoCLIPTrainingConfig:
         assert config.dataset.batch_sampler == "random"
         assert config.dataset.replicates_per_group == 2
         assert config.optimization.target_weight == 0.0
-        assert config.optimization.lambda_img == 0.0
-        assert config.optimization.img_img_temperature is None
+        assert config.optimization.replicate_weight == 0.0
+        assert config.optimization.replicate_temperature is None
         assert config.runtime.early_stop_patience is None
 
     def test_training_signal_fields_settable(self) -> None:
@@ -40,8 +40,8 @@ class TestMorphoCLIPTrainingConfig:
                 "dataset": {"batch_sampler": "perturbation", "replicates_per_group": 4},
                 "optimization": {
                     "target_weight": 0.6,
-                    "lambda_img": 0.3,
-                    "img_img_temperature": 0.1,
+                    "replicate_weight": 0.3,
+                    "replicate_temperature": 0.1,
                 },
                 "runtime": {"early_stop_patience": 5},
             }
@@ -49,8 +49,8 @@ class TestMorphoCLIPTrainingConfig:
         assert config.dataset.batch_sampler == "perturbation"
         assert config.dataset.replicates_per_group == 4
         assert config.optimization.target_weight == 0.6
-        assert config.optimization.lambda_img == 0.3
-        assert config.optimization.img_img_temperature == 0.1
+        assert config.optimization.replicate_weight == 0.3
+        assert config.optimization.replicate_temperature == 0.1
         assert config.runtime.early_stop_patience == 5
 
     def test_base_yaml_still_loads_with_current_behavior(self) -> None:
@@ -63,8 +63,8 @@ class TestMorphoCLIPTrainingConfig:
         assert config.model.aggregator == "ccf-mean"
         assert config.dataset.batch_sampler == "random"
         assert config.optimization.target_weight == 0.0
-        assert config.optimization.lambda_img == 0.0
-        assert config.optimization.img_img_temperature is None
+        assert config.optimization.replicate_weight == 0.0
+        assert config.optimization.replicate_temperature is None
         assert config.runtime.early_stop_patience is None
 
     def test_mean_pool_yaml_uses_new_aggregator_field(self) -> None:
@@ -74,8 +74,8 @@ class TestMorphoCLIPTrainingConfig:
         config = load_training_config(mean_pool_yaml)
         assert config.model.aggregator == "meanpool-mean"
 
-    def test_legacy_channel_aggregation_rejected_in_strict_yaml(self, tmp_path: Path) -> None:
-        config_path = tmp_path / "legacy.yaml"
+    def test_unknown_model_key_rejected(self, tmp_path: Path) -> None:
+        config_path = tmp_path / "bad_model.yaml"
         config_path.write_text(yaml.dump({"model": {"channel_aggregation": "ccf"}}))
 
         with pytest.raises(ValueError, match="Unknown config key"):
@@ -162,60 +162,23 @@ class TestMorphoCLIPTrainingConfig:
 class TestTrainingConfigFromDict:
     """Tests for reconstructing configs from a plain dict (e.g. checkpoints)."""
 
-    def test_strict_rejects_unknown_keys(self) -> None:
+    def test_rejects_unknown_keys(self) -> None:
         with pytest.raises(ValueError, match="Unknown config key"):
-            training_config_from_dict(
-                {"optimization": {"betas": [0.9, 0.999]}},
-                strict=True,
-            )
+            training_config_from_dict({"optimization": {"betas": [0.9, 0.999]}})
 
-    def test_non_strict_skips_unknown_keys(self) -> None:
-        # Mirrors an older checkpoint's config dict, carrying fields the schema
-        # has since dropped.
-        old_dict = {
-            "dataset": {"batch_size": 16, "max_train_wells": 100},
-            "model": {"embed_dim": 1024, "output_dim": 512},
-            "optimization": {
-                "lr": 1e-4,
-                "betas": [0.9, 0.999],
-                "eps": 1e-8,
-                "grad_clip_norm": 1.0,
-                "logit_scale_max": 4.6052,
-            },
-            "runtime": {"seed": 7, "eval_every_epochs": 1, "save_every_epochs": 1},
-            "tensorboard": {"histogram_every_epochs": 5},
-            "distributed": {"enabled": False, "backend": "nccl"},
-        }
-        config = training_config_from_dict(old_dict, strict=False)
+    def test_populates_every_section(self) -> None:
+        config = training_config_from_dict(
+            {
+                "dataset": {"batch_size": 16},
+                "model": {"output_dim": 512, "aggregator": "wellformer"},
+                "optimization": {"lr": 1e-4, "replicate_weight": 0.5},
+                "runtime": {"seed": 7},
+                "distributed": {"enabled": False},
+            }
+        )
         assert config.dataset.batch_size == 16
-        assert config.model.output_dim == 512
+        assert config.model.aggregator == "wellformer"
         assert config.optimization.lr == 1e-4
+        assert config.optimization.replicate_weight == 0.5
         assert config.runtime.seed == 7
         assert config.distributed.enabled is False
-
-    @pytest.mark.parametrize(
-        ("legacy", "expected"),
-        [("ccf", "ccf-mean"), ("mean_pool", "meanpool-mean")],
-    )
-    def test_legacy_channel_aggregation_translated(self, legacy: str, expected: str) -> None:
-        """Old checkpoints embed model.channel_aggregation; map it explicitly."""
-        config = training_config_from_dict(
-            {"model": {"channel_aggregation": legacy, "ccf_layers": 1}},
-            strict=False,
-        )
-        assert config.model.aggregator == expected
-        assert config.model.ccf_layers == 1
-
-    def test_explicit_aggregator_wins_over_legacy_key(self) -> None:
-        config = training_config_from_dict(
-            {"model": {"channel_aggregation": "ccf", "aggregator": "wellformer"}},
-            strict=False,
-        )
-        assert config.model.aggregator == "wellformer"
-
-    def test_unrecognized_legacy_channel_aggregation_falls_back_to_default(self) -> None:
-        config = training_config_from_dict(
-            {"model": {"channel_aggregation": "mystery"}},
-            strict=False,
-        )
-        assert config.model.aggregator == "ccf-mean"

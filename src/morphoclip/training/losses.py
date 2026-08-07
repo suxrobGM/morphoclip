@@ -40,6 +40,38 @@ def infonce_loss(
     return (loss_i2t + loss_t2i) / 2
 
 
+def same_perturbation_mask(
+    broad_samples: list[str],
+    device: torch.device,
+) -> torch.Tensor:
+    """Boolean ``(B, B)`` mask of wells sharing a ``broad_sample``."""
+    unique = {s: idx for idx, s in enumerate(dict.fromkeys(broad_samples))}
+    ids = torch.tensor([unique[s] for s in broad_samples], device=device)
+    return ids.unsqueeze(0) == ids.unsqueeze(1)
+
+
+def _gene_overlap_matrix(
+    target_keys: list[str],
+    target_weight: float,
+    device: torch.device,
+) -> torch.Tensor:
+    """``(B, B)`` matrix holding *target_weight* where gene sets intersect."""
+    gene_ids: dict[str, int] = {}
+    membership_rows: list[list[int]] = []
+    for key in target_keys:
+        row = [gene_ids.setdefault(gene, len(gene_ids)) for gene in parse_target_gene_key(key)]
+        membership_rows.append(row)
+
+    n_rows, n_genes = len(target_keys), len(gene_ids)
+    membership = torch.zeros(n_rows, max(n_genes, 1))
+    for row_idx, gene_indices in enumerate(membership_rows):
+        for gene_idx in gene_indices:
+            membership[row_idx, gene_idx] = 1.0
+
+    membership = membership.to(device)
+    return (membership @ membership.t() > 0).float() * target_weight
+
+
 def build_affinity_matrix(
     broad_samples: list[str],
     *,
@@ -64,22 +96,12 @@ def build_affinity_matrix(
     Returns:
         Symmetric affinity matrix ``(B, B)``.
     """
-    unique = {s: idx for idx, s in enumerate(dict.fromkeys(broad_samples))}
-    ids = torch.tensor([unique[s] for s in broad_samples], device=device)
-    affinity = (ids.unsqueeze(0) == ids.unsqueeze(1)).float()
+    affinity = same_perturbation_mask(broad_samples, device).float()
 
     if target_keys is not None and target_weight > 0.0:
         if len(target_keys) != len(broad_samples):
             raise ValueError("target_keys must have the same length as broad_samples")
-        gene_to_rows: dict[str, list[int]] = {}
-        for row, key in enumerate(target_keys):
-            for gene in parse_target_gene_key(key):
-                gene_to_rows.setdefault(gene, []).append(row)
-
-        overlap = torch.zeros_like(affinity)
-        for rows in gene_to_rows.values():
-            idx = torch.tensor(rows, device=device)
-            overlap[idx.unsqueeze(1), idx.unsqueeze(0)] = target_weight
+        overlap = _gene_overlap_matrix(target_keys, target_weight, device)
         affinity = torch.maximum(affinity, overlap)
 
     affinity.fill_diagonal_(1.0)
@@ -90,38 +112,6 @@ def _row_normalize(affinity: torch.Tensor) -> torch.Tensor:
     """Normalize each row of an affinity matrix to sum to 1."""
     row_sums = affinity.sum(dim=1, keepdim=True).clamp(min=1e-12)
     return affinity / row_sums
-
-
-def build_soft_labels(
-    broad_samples: list[str],
-    *,
-    target_keys: list[str] | None = None,
-    target_weight: float = 0.0,
-    device: torch.device,
-) -> torch.Tensor:
-    """Build the row-normalized soft label matrix from perturbation identity.
-
-    Samples sharing a ``broad_sample`` get equal positive weight. A positive
-    *target_weight* additionally makes samples with intersecting target gene
-    sets soft positives, so a compound and a CRISPR knockout hitting the same
-    gene pull together. ``target_weight=0.0`` gives plain binary labels.
-
-    Args:
-        broad_samples: Perturbation ID per sample (length B).
-        target_keys: Optional canonical gene keys per sample.
-        target_weight: Affinity for gene-overlapping pairs (0 disables).
-        device: Target device.
-
-    Returns:
-        Soft label matrix ``(B, B)``, rows sum to 1.
-    """
-    affinity = build_affinity_matrix(
-        broad_samples,
-        target_keys=target_keys,
-        target_weight=target_weight,
-        device=device,
-    )
-    return _row_normalize(affinity)
 
 
 def cwcl_loss(
@@ -199,14 +189,9 @@ def replicate_image_loss(
     n = image_features.shape[0]
     eye = torch.eye(n, dtype=torch.bool, device=device)
 
-    unique = {s: idx for idx, s in enumerate(dict.fromkeys(broad_samples))}
-    ids = torch.tensor([unique[s] for s in broad_samples], device=device)
-    positives = (ids.unsqueeze(0) == ids.unsqueeze(1)) & ~eye
-
+    positives = same_perturbation_mask(broad_samples, device) & ~eye
     positive_counts = positives.sum(dim=1)
-    valid = positive_counts > 0
-    if not bool(valid.any()):
-        return image_features.sum() * 0.0
+    valid = (positive_counts > 0).to(image_features.dtype)
 
     logits = scale * image_features @ image_features.t()
     logits = logits.masked_fill(eye, float("-inf"))
@@ -214,7 +199,9 @@ def replicate_image_loss(
 
     weights = positives.float() / positive_counts.clamp(min=1).unsqueeze(1)
     per_row = -(weights * log_probs).sum(dim=1)
-    return per_row[valid].mean()
+    # Replicate-less rows have an all-zero weight row, so they contribute 0 to
+    # the sum. Masking instead of indexing keeps this sync-free.
+    return (per_row * valid).sum() / valid.sum().clamp(min=1)
 
 
 def compute_loss(

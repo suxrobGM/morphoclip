@@ -222,8 +222,6 @@ def infer(
     image_encoder, text_projection, ckpt, cfg = load_models_from_checkpoint(checkpoint, device)
     if config:
         cfg = load_training_config(str(config))
-    if batch_size:
-        cfg.dataset.eval_batch_size = batch_size
 
     console.print(f"Epoch: {ckpt['epoch']}, step: {ckpt['steps']}")
 
@@ -236,7 +234,7 @@ def infer(
         plates=resolved_plates,
         exclude_controls=not include_controls,
     )
-    loader = build_eval_dataloader(dataset, cfg, device)
+    loader = build_eval_dataloader(dataset, cfg, device, batch_size=batch_size)
     console.print(f"Plates: {len(resolved_plates)} | Wells: {len(dataset):,}\n")
 
     console.print("[bold]Encoding wells...[/bold]")

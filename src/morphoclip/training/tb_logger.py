@@ -20,7 +20,7 @@ from morphoclip.training.metrics import (
     compute_uniformity,
 )
 
-HISTOGRAM_EVERY_EPOCHS = 5  # Weight/embedding histograms every N epochs (0 to disable)
+HISTOGRAM_EVERY_EPOCHS = 5  # Weight/embedding histograms every N epochs
 FLUSH_EVERY_STEPS = 50  # Flush TensorBoard writer every N steps
 
 _CUSTOM_SCALARS_LAYOUT = {
@@ -105,21 +105,21 @@ class TrainingLogger:
         logit_stats: dict[str, float],
         image_emb: torch.Tensor | None = None,
         text_emb: torch.Tensor | None = None,
-        img_img_loss: float | None = None,
+        replicate_loss: float | None = None,
     ) -> None:
         """Log per-step training scalars and embedding diagnostics.
 
         Args:
-            img_img_loss: Replicate-alignment component, logged separately from
-                the total loss. ``None`` when the term is disabled.
+            replicate_loss: Replicate-alignment component, logged separately
+                from the total loss. ``None`` when the term is disabled.
         """
         w = self._writer
         if w is None:
             return
 
         w.add_scalar("train/loss", loss, step)
-        if img_img_loss is not None:
-            w.add_scalar("train/img_img_loss", img_img_loss, step)
+        if replicate_loss is not None:
+            w.add_scalar("train/replicate_loss", replicate_loss, step)
         w.add_scalar("train/lr", lr, step)
         w.add_scalar("train/tau", tau, step)
         w.add_scalar("train/grad_norm_before_clip", grad_norm_before, step)

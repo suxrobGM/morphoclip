@@ -70,20 +70,19 @@ def enter_no_sync(stack: ExitStack, *modules: nn.Module) -> None:
         stack.enter_context(cast(DDP, module).no_sync())
 
 
-def image_image_scale(
+def replicate_loss_scale(
     logit_scale: nn.Module,
     *,
-    img_img_temperature: float | None,
-) -> torch.Tensor:
+    replicate_temperature: float | None,
+) -> torch.Tensor | float:
     """Resolve the linear scale for the replicate image-image term.
 
-    Defaults to the shared learnable temperature; ``img_img_temperature`` pins
-    it to ``1 / temperature`` instead.
+    Defaults to the shared learnable temperature; ``replicate_temperature``
+    pins it to ``1 / temperature`` instead.
     """
-    if img_img_temperature is None:
+    if replicate_temperature is None:
         return scale_param(logit_scale).exp()
-    scale = scale_param(logit_scale)
-    return torch.tensor(1.0 / img_img_temperature, device=scale.device, dtype=scale.dtype)
+    return 1.0 / replicate_temperature
 
 
 def run_epoch(
@@ -110,7 +109,7 @@ def run_epoch(
 
     epoch_losses: list[float] = []
     step_loss_accum = 0.0
-    step_img_loss_accum = 0.0
+    step_replicate_accum: torch.Tensor | float = 0.0
     last_image_emb: torch.Tensor | None = None
     last_text_emb: torch.Tensor | None = None
 
@@ -124,7 +123,7 @@ def run_epoch(
             train_loader
         )
 
-        img_img_value = 0.0
+        replicate_value: torch.Tensor | float = 0.0
         sync_ctx = ExitStack()
         if is_accumulating and use_ddp:
             enter_no_sync(sync_ctx, image_encoder, text_projection, logit_scale)
@@ -140,6 +139,7 @@ def run_epoch(
                 use_cwa=opt_cfg.use_cwa,
                 use_ddp=use_ddp,
                 dist_state=ctx.dist_state,
+                target_weight=opt_cfg.target_weight,
             )
             with autocast_context(device, config.runtime.amp):
                 loss = compute_loss(
@@ -153,24 +153,26 @@ def run_epoch(
                 )
                 # Added here rather than inside compute_loss so eval_loss stays
                 # text alignment only.
-                if opt_cfg.lambda_img > 0.0:
-                    img_img_loss = replicate_image_loss(
+                if opt_cfg.replicate_weight > 0.0:
+                    replicate_loss = replicate_image_loss(
                         all_image,
-                        image_image_scale(
+                        replicate_loss_scale(
                             logit_scale,
-                            img_img_temperature=opt_cfg.img_img_temperature,
+                            replicate_temperature=opt_cfg.replicate_temperature,
                         ),
                         broad_samples=all_broad,
                     )
-                    img_img_value = float(img_img_loss.detach())
-                    loss = loss + opt_cfg.lambda_img * img_img_loss
+                    # Kept as a tensor: calling .item() here would sync the
+                    # device before backward is even queued.
+                    replicate_value = replicate_loss.detach()
+                    loss = loss + opt_cfg.replicate_weight * replicate_loss
                 loss = loss / accum_steps
             grad_scaler.scale(loss).backward()
 
         last_image_emb = image_emb.detach()
         last_text_emb = text_emb.detach()
         step_loss_accum += float(loss.detach().cpu().item()) * accum_steps
-        step_img_loss_accum += img_img_value
+        step_replicate_accum = step_replicate_accum + replicate_value
 
         if not is_accumulating:
             grad_norm_before, grad_norm_after = optimizer_step(
@@ -185,9 +187,9 @@ def run_epoch(
 
             global_step += 1
             loss_val = step_loss_accum / accum_steps
-            img_img_val = step_img_loss_accum / accum_steps
+            replicate_total = step_replicate_accum
             step_loss_accum = 0.0
-            step_img_loss_accum = 0.0
+            step_replicate_accum = 0.0
             if use_ddp:
                 loss_val = all_reduce_scalar(loss_val)
             epoch_losses.append(loss_val)
@@ -196,14 +198,15 @@ def run_epoch(
                 sp = scale_param(logit_scale)
                 current_lr = float(ctx.scheduler.get_last_lr()[0])
                 current_tau = sp.exp().item()
-                img_img_note = (
-                    f" img_img=[magenta]{img_img_val:.5f}[/magenta]"
-                    if opt_cfg.lambda_img > 0.0
+                replicate_val = float(replicate_total) / accum_steps
+                replicate_note = (
+                    f" replicate=[magenta]{replicate_val:.5f}[/magenta]"
+                    if opt_cfg.replicate_weight > 0.0
                     else ""
                 )
                 progress.console.print(
                     f"  [dim]step={global_step}/{total_steps} "
-                    f"loss=[green]{loss_val:.5f}[/green]{img_img_note} "
+                    f"loss=[green]{loss_val:.5f}[/green]{replicate_note} "
                     f"lr={current_lr:.6f} tau={current_tau:.4f}[/dim]"
                 )
                 with torch.no_grad():
@@ -220,7 +223,7 @@ def run_epoch(
                     logit_stats=logit_stats,
                     image_emb=image_emb.detach(),
                     text_emb=text_emb.detach(),
-                    img_img_loss=img_img_val if opt_cfg.lambda_img > 0.0 else None,
+                    replicate_loss=replicate_val if opt_cfg.replicate_weight > 0.0 else None,
                 )
                 logger.log_model_health(
                     global_step,

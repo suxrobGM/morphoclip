@@ -36,8 +36,6 @@ class MorphoCLIPDatasetConfig:
     exclude_controls: bool = True
     max_sites_per_well: int | None = None
     batch_size: int = 32
-    # Explicit rather than derived from batch_size: the profile exporter
-    # overwrites it to set a per-plate batch size.
     eval_batch_size: int = 32
     preload: bool = True
     val_fraction: float = 0.1
@@ -74,10 +72,10 @@ class MorphoCLIPOptimizationConfig:
     # whose broad_sample differs. 0.0 gives binary labels.
     target_weight: float = 0.0
     # Weight of the replicate image-image alignment term (0.0 disables).
-    lambda_img: float = 0.0
-    # Fixed temperature for the image-image term; None reuses the shared
+    replicate_weight: float = 0.0
+    # Fixed temperature for the replicate term; None reuses the shared
     # learnable logit scale.
-    img_img_temperature: float | None = None
+    replicate_temperature: float | None = None
 
 
 @dataclass(slots=True)
@@ -176,78 +174,27 @@ def _load_raw_config(path: Path, seen: set[Path] | None = None) -> dict[str, Any
     return _merge_dicts(merged, raw)
 
 
-def _merge_dataclass(instance: Any, raw: dict[str, Any], *, strict: bool = True) -> Any:
+def _merge_dataclass(instance: Any, raw: dict[str, Any]) -> Any:
     """Merge raw dict values into a dataclass instance.
 
     Args:
         instance: Dataclass instance to update in place.
         raw: Mapping of field names to override values.
-        strict: If ``True``, raise on keys the dataclass no longer has;
-            if ``False``, warn and skip them.
 
     Returns:
         The mutated *instance*.
 
     Raises:
-        ValueError: If *strict* is ``True`` and *raw* contains an unknown key.
+        ValueError: If *raw* contains a key the dataclass does not define.
     """
     for key, value in raw.items():
         if not hasattr(instance, key):
-            if strict:
-                raise ValueError(f"Unknown config key: {type(instance).__name__}.{key}")
-            logger.warning(
-                "Skipping unknown config key %s.%s (likely from an older checkpoint)",
-                type(instance).__name__,
-                key,
-            )
-            continue
+            raise ValueError(f"Unknown config key: {type(instance).__name__}.{key}")
         setattr(instance, key, value)
     return instance
 
 
-# Checkpoints from before the aggregator refactor embed the old
-# ``model.channel_aggregation`` field.
-LEGACY_CHANNEL_AGGREGATION = {"ccf": "ccf-mean", "mean_pool": "meanpool-mean"}
-
-
-def _translate_legacy_model_section(raw: dict[str, Any]) -> dict[str, Any]:
-    """Rewrite a legacy ``model`` section onto the current schema.
-
-    Translates ``channel_aggregation`` into ``aggregator``; an explicit
-    ``aggregator`` always wins.
-
-    Args:
-        raw: The checkpoint's ``model`` section.
-
-    Returns:
-        A copy of *raw* with legacy keys translated and removed.
-    """
-    if "channel_aggregation" not in raw:
-        return raw
-
-    translated = dict(raw)
-    legacy = translated.pop("channel_aggregation")
-    if "aggregator" in translated:
-        return translated
-
-    mapped = LEGACY_CHANNEL_AGGREGATION.get(legacy)
-    if mapped is None:
-        logger.warning(
-            "Unrecognized legacy model.channel_aggregation=%r; using default aggregator",
-            legacy,
-        )
-        return translated
-
-    logger.info("Translating legacy model.channel_aggregation=%r to aggregator=%r", legacy, mapped)
-    translated["aggregator"] = mapped
-    return translated
-
-
-def training_config_from_dict(
-    config_dict: dict[str, Any],
-    *,
-    strict: bool = True,
-) -> MorphoCLIPTrainingConfig:
+def training_config_from_dict(config_dict: dict[str, Any]) -> MorphoCLIPTrainingConfig:
     """Reconstruct a training config from a plain nested dict.
 
     Used for YAML-loaded configs and for configs embedded in a checkpoint.
@@ -255,23 +202,19 @@ def training_config_from_dict(
     Args:
         config_dict: Nested dict with ``dataset``/``model``/``optimization``/
             ``runtime``/``distributed`` sections.
-        strict: If ``True``, raise on keys the current schema lacks. Pass
-            ``False`` for older checkpoints: unknown keys are skipped and
-            legacy names are translated. Strict mode does neither, so a stale
-            YAML config still fails loudly.
 
     Returns:
         Populated training config.
+
+    Raises:
+        ValueError: If any section contains a key the schema does not define.
     """
     config = MorphoCLIPTrainingConfig()
-    model_section = config_dict.get("model", {})
-    if not strict:
-        model_section = _translate_legacy_model_section(model_section)
-    _merge_dataclass(config.dataset, config_dict.get("dataset", {}), strict=strict)
-    _merge_dataclass(config.model, model_section, strict=strict)
-    _merge_dataclass(config.optimization, config_dict.get("optimization", {}), strict=strict)
-    _merge_dataclass(config.runtime, config_dict.get("runtime", {}), strict=strict)
-    _merge_dataclass(config.distributed, config_dict.get("distributed", {}), strict=strict)
+    _merge_dataclass(config.dataset, config_dict.get("dataset", {}))
+    _merge_dataclass(config.model, config_dict.get("model", {}))
+    _merge_dataclass(config.optimization, config_dict.get("optimization", {}))
+    _merge_dataclass(config.runtime, config_dict.get("runtime", {}))
+    _merge_dataclass(config.distributed, config_dict.get("distributed", {}))
     return config
 
 
@@ -328,4 +271,4 @@ def load_training_config(
     for item in overrides or []:
         raw = _merge_dicts(raw, _parse_dotted_override(item))
 
-    return training_config_from_dict(raw, strict=True)
+    return training_config_from_dict(raw)

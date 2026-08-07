@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from benchmark.data import get_feature_columns
+
 
 def feature_columns(width: int) -> list[str]:
     """Build exported feature column names.
@@ -40,7 +42,7 @@ def negcon_center_profiles(
         A copy of ``profiles`` with feature columns centered. Falls back to
         centering against all wells when no negative controls are present.
     """
-    feature_cols = [col for col in profiles.columns if not col.startswith("Metadata")]
+    feature_cols = get_feature_columns(profiles)
     if not feature_cols:
         return profiles
 

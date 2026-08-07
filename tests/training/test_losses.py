@@ -5,8 +5,8 @@ import torch
 import torch.nn.functional as F
 
 from morphoclip.training.losses import (
+    _row_normalize,
     build_affinity_matrix,
-    build_soft_labels,
     compute_loss,
     cwcl_loss,
     infonce_loss,
@@ -14,6 +14,11 @@ from morphoclip.training.losses import (
 )
 
 CPU = torch.device("cpu")
+
+
+def build_soft_labels(broad_samples, **kwargs):
+    """Row-normalized labels, the form ``cwcl_loss`` feeds to cross-entropy."""
+    return _row_normalize(build_affinity_matrix(broad_samples, **kwargs))
 
 
 class TestInfoNCELoss:

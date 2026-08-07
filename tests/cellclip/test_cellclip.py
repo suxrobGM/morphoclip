@@ -3,8 +3,9 @@
 import pandas as pd
 import torch
 
+from benchmark.export_utils import negcon_center_profiles
 from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
-from cellclip.benchmark.export import encode_well, negcon_center_profiles
+from cellclip.benchmark.export import encode_well
 from cellclip.benchmark.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
 
 

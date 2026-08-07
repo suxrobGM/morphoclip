@@ -8,10 +8,7 @@ import torch
 import yaml
 
 from benchmark.data import get_timepoint_label
-
-# Re-exported for callers that still import them from here; they moved to
-# benchmark.export_utils so morphoclip can reuse them without importing cellclip.
-from benchmark.export_utils import (  # noqa: F401
+from benchmark.export_utils import (
     feature_columns,
     negcon_center_profiles,
     output_profile_path,

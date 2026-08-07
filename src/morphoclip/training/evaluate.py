@@ -10,8 +10,6 @@ from morphoclip.training.engine import autocast_context
 from morphoclip.training.losses import compute_loss
 from morphoclip.training.retrieval import compute_retrieval_metrics
 
-__all__ = ["compute_retrieval_metrics", "evaluate_epoch", "lookup_text_embeddings"]
-
 
 def lookup_text_embeddings(
     pert_infos: list[PerturbationInfo],
@@ -85,7 +83,11 @@ def evaluate_epoch(
                     text_emb,
                     logit_scale,
                     broad_samples=broad_samples,
-                    target_keys=[target_gene_key(info) for info in pert_infos],
+                    target_keys=(
+                        [target_gene_key(info) for info in pert_infos]
+                        if target_weight > 0.0
+                        else None
+                    ),
                     target_weight=target_weight,
                 )
 

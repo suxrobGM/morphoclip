@@ -296,3 +296,27 @@ def verify_plate_features(
             missing.append(key)
 
     return len(existing_files), len(expected_keys), missing
+
+
+def repack_feature_file(path: Path) -> tuple[int, int]:
+    """Rewrite one cached feature file so it stores only its own tensor.
+
+    Files written before the extractor cloned its slices serialize the whole
+    batch's backing storage, roughly 48x the tensor. Re-saving a contiguous
+    copy keeps the values identical.
+
+    Args:
+        path: Path to a cached ``.pt`` feature file.
+
+    Returns:
+        Tuple of ``(bytes_before, bytes_after)``.
+    """
+    before = path.stat().st_size
+    tensor = torch.load(path, map_location="cpu")
+    if tensor.untyped_storage().nbytes() <= tensor.nbytes:
+        return before, before
+
+    tmp_path = path.with_suffix(".pt.tmp")
+    torch.save(tensor.clone(), tmp_path)
+    tmp_path.replace(path)
+    return before, path.stat().st_size

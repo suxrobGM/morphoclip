@@ -89,12 +89,10 @@ class PerturbationBatchSampler(Sampler[list[int]]):
         for position, key in enumerate(group_keys):
             self._groups.setdefault(key, []).append(position)
 
-        self._epoch = 0
         self._batches: list[list[int]] = self._build_batches(0)
 
     def set_epoch(self, epoch: int) -> None:
         """Reshuffle for *epoch* (deterministic given the base seed)."""
-        self._epoch = epoch
         self._batches = self._build_batches(epoch)
 
     def __iter__(self) -> Iterator[list[int]]:

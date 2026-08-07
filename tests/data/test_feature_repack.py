@@ -2,7 +2,7 @@
 
 import torch
 
-from morphoclip.cli.features import repack_feature_file
+from morphoclip.data.feature_extractor import repack_feature_file
 
 
 def _write_sliced_feature(path, n_sites: int = 8, channels: int = 5, dim: int = 64):

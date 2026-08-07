@@ -1,6 +1,5 @@
 """Data loading and split creation for MorphoCLIP training."""
 
-import logging
 from pathlib import Path
 
 import torch
@@ -18,9 +17,7 @@ from morphoclip.training.samplers import (
     resolve_base_indices,
     unwrap_dataset,
 )
-from morphoclip.utils.device import resolve_num_workers, supports_pin_memory
-
-logger = logging.getLogger(__name__)
+from morphoclip.utils.device import loader_workers, supports_pin_memory
 
 EpochSampler = DistributedSampler | PerturbationBatchSampler
 
@@ -114,26 +111,25 @@ def build_train_data(
     batch_sampler: PerturbationBatchSampler | None = None
     if ds_cfg.batch_sampler == "perturbation":
         if use_ddp:
-            logger.warning(
-                "dataset.batch_sampler='perturbation' is not supported under DDP; "
-                "falling back to DistributedSampler with random batches."
+            raise ValueError(
+                "dataset.batch_sampler='perturbation' does not shard across ranks "
+                "and cannot be combined with DDP; use 'random' or run single-GPU."
             )
-        else:
-            group_keys, plate_keys = build_sampler_keys(train_set, metadata)
-            batch_sampler = PerturbationBatchSampler(
-                group_keys,
-                plate_keys,
-                batch_size=ds_cfg.batch_size,
-                replicates_per_group=ds_cfg.replicates_per_group,
-                seed=config.runtime.seed,
-            )
+        group_keys, plate_keys = build_sampler_keys(train_set, metadata)
+        batch_sampler = PerturbationBatchSampler(
+            group_keys,
+            plate_keys,
+            batch_size=ds_cfg.batch_size,
+            replicates_per_group=ds_cfg.replicates_per_group,
+            seed=config.runtime.seed,
+        )
     elif ds_cfg.batch_sampler != "random":
         raise ValueError(
             f"Unknown dataset.batch_sampler {ds_cfg.batch_sampler!r} "
             "(expected 'random' or 'perturbation')"
         )
 
-    num_workers = resolve_num_workers(0 if ds_cfg.preload else 4)
+    num_workers = loader_workers(preloaded=ds_cfg.preload)
     pin = supports_pin_memory(device)
     if batch_sampler is not None:
         # DataLoader rejects batch_size/shuffle/sampler alongside batch_sampler.

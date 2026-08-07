@@ -11,6 +11,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from benchmark.split_contexts import OFFICIAL_SPLIT_METADATA_PATH
 from morphoclip.benchmark.export import (
     PlateNotInReferenceError,
     export_plate_profiles,
@@ -21,7 +22,7 @@ from morphoclip.training.inference import discover_plates
 
 console = Console()
 
-DEFAULT_METADATA_CSV = Path("data/reference/cpjump1/cpjump1_metadata.csv")
+DEFAULT_METADATA_CSV = OFFICIAL_SPLIT_METADATA_PATH
 DEFAULT_OUTPUT_ROOT = Path("data/profiles_morphoclip")
 DEFAULT_BATCH = "2020_11_04_CPJUMP1"
 
@@ -80,15 +81,13 @@ def export_profiles(
     for plate in resolved_plates:
         try:
             output_path = export_plate_profiles(
-                checkpoint,
+                models,
                 plate,
                 metadata_csv=metadata_csv,
                 output_root=output_root,
                 batch=batch,
                 negcon_center=negcon_center,
-                device=device,
                 batch_size=batch_size,
-                models=models,
             )
         except PlateNotInReferenceError as exc:
             console.print(f"[yellow]Plate {plate} skipped: {exc}[/yellow]")

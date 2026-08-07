@@ -7,6 +7,7 @@ against CellCLIP or CellProfiler profiles.
 """
 
 import logging
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +15,7 @@ import pandas as pd
 import torch
 from torch import nn
 
+from benchmark.data import get_metadata_columns
 from benchmark.export_utils import feature_columns, negcon_center_profiles, output_profile_path
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.inference import (
@@ -55,6 +57,12 @@ def load_export_models(checkpoint: Path, device: str = "auto") -> ExportModels:
     return image_encoder, config, torch_device
 
 
+@lru_cache(maxsize=4)
+def _read_reference_csv(csv_path: Path) -> pd.DataFrame:
+    """Read the reference metadata CSV once, shared across plates."""
+    return pd.read_csv(csv_path, low_memory=False)
+
+
 def load_reference_metadata(csv_path: Path, plate: str) -> pd.DataFrame:
     """Load and filter first-party CPJUMP1 reference metadata to one plate.
 
@@ -70,7 +78,7 @@ def load_reference_metadata(csv_path: Path, plate: str) -> pd.DataFrame:
             well appears more than once.
         PlateNotInReferenceError: If no rows match ``plate``.
     """
-    df = pd.read_csv(csv_path, low_memory=False)
+    df = _read_reference_csv(csv_path)
     for required_col in ("Metadata_Plate", "Metadata_Well"):
         if required_col not in df.columns:
             raise ValueError(f"Reference metadata {csv_path} is missing column {required_col!r}")
@@ -160,7 +168,7 @@ def build_plate_profile(
     if kept_rows.empty:
         raise ValueError("No wells align between embeddings and reference metadata")
 
-    metadata_cols = [c for c in metadata_df.columns if c.startswith("Metadata_")]
+    metadata_cols = get_metadata_columns(metadata_df)
     feature_matrix = np.vstack(
         [embedding_by_well[str(well)] for well in kept_rows["Metadata_Well"]]
     )
@@ -181,8 +189,6 @@ def _encode_plate_wells(
 ) -> tuple[np.ndarray, list[str]]:
     """Encode every well cached for ``plate`` through the image encoder."""
     image_encoder, config, device = models
-    if batch_size is not None:
-        config.dataset.eval_batch_size = batch_size
 
     dataset = build_eval_dataset(config, plates=[plate], exclude_controls=False)
     if len(dataset) == 0:
@@ -190,7 +196,7 @@ def _encode_plate_wells(
             f"No cached features found for plate {plate!r} under "
             f"{config.dataset.feature_root}"
         )
-    loader = build_eval_dataloader(dataset, config, device)
+    loader = build_eval_dataloader(dataset, config, device, batch_size=batch_size)
 
     all_embeddings: list[torch.Tensor] = []
     all_wells: list[str] = []
@@ -205,16 +211,14 @@ def _encode_plate_wells(
 
 
 def export_plate_profiles(
-    checkpoint: Path,
+    models: ExportModels,
     plate: str,
     *,
     metadata_csv: Path,
     output_root: Path,
     batch: str = "2020_11_04_CPJUMP1",
     negcon_center: bool = True,
-    device: str = "auto",
     batch_size: int | None = None,
-    models: ExportModels | None = None,
 ) -> Path:
     """Export a benchmark-layout profile CSV for one plate.
 
@@ -223,23 +227,18 @@ def export_plate_profiles(
     the path :func:`benchmark.export_utils.output_profile_path` expects.
 
     Args:
-        checkpoint: Path to a trained MorphoCLIP checkpoint.
+        models: ``(image_encoder, config, device)`` from
+            :func:`load_export_models`, loaded once and reused across plates.
         plate: Plate barcode to export.
         metadata_csv: Path to the CPJUMP1 reference metadata CSV.
         output_root: Root directory for exported profiles.
         batch: Batch name used in the output path.
         negcon_center: If ``True``, center features against plate negcon wells.
-        device: Device string (``"auto"``, ``"cuda"``, ``"cpu"``, ...).
         batch_size: Override the checkpoint's eval batch size.
-        models: Preloaded ``(image_encoder, config, device)`` from
-            :func:`load_export_models`, to avoid reloading the checkpoint per
-            plate. Loaded from ``checkpoint`` when ``None``.
 
     Returns:
         Path to the written profile CSV.
     """
-    if models is None:
-        models = load_export_models(checkpoint, device)
     embeddings, wells = _encode_plate_wells(models, plate, batch_size=batch_size)
     metadata_df = load_reference_metadata(metadata_csv, plate)
     profile_df = build_plate_profile(embeddings, wells, metadata_df)

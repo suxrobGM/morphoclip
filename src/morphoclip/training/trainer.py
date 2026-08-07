@@ -286,8 +286,6 @@ def _train_loop(
                 else:
                     epochs_since_best += 1
 
-            # --- Periodic save (every epoch, main process only) ---
-            if is_main:
                 _save(last_ckpt, epoch=epoch, best=best_eval_loss)
 
             if use_ddp:
@@ -295,8 +293,7 @@ def _train_loop(
 
             logger.log_epoch(epoch, train_metrics, eval_metrics)
             if (
-                HISTOGRAM_EVERY_EPOCHS > 0
-                and epoch % HISTOGRAM_EVERY_EPOCHS == 0
+                epoch % HISTOGRAM_EVERY_EPOCHS == 0
                 and result.last_image_emb is not None
                 and result.last_text_emb is not None
             ):

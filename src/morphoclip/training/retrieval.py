@@ -56,36 +56,27 @@ def dedupe_texts(
 
 def aggregate_images(
     image_features: torch.Tensor,
-    broad_samples: list[str],
+    well_to_pert: torch.Tensor,
+    n_pert: int,
 ) -> torch.Tensor:
     """Average image embeddings per perturbation and re-normalize.
 
     Args:
         image_features: ``(N, D)`` per-well image embeddings.
-        broad_samples: Perturbation ID per well (length N).
+        well_to_pert: ``(N,)`` row in the perturbation axis per well, as
+            returned by :func:`dedupe_texts`.
+        n_pert: Number of unique perturbations.
 
     Returns:
-        ``(P, D)`` L2-normalized mean profiles, ordered to match the
-        first-occurrence order produced by :func:`dedupe_texts`.
+        ``(P, D)`` L2-normalized mean profiles, in ``well_to_pert`` order.
     """
-    id_to_idx: dict[str, int] = {}
-    assignments: list[int] = []
-    for sample in broad_samples:
-        idx = id_to_idx.get(sample)
-        if idx is None:
-            idx = len(id_to_idx)
-            id_to_idx[sample] = idx
-        assignments.append(idx)
-
-    n_pert = len(id_to_idx)
     device = image_features.device
     dtype = image_features.dtype
-    index = torch.tensor(assignments, dtype=torch.long, device=device)
 
     sums = torch.zeros(n_pert, image_features.shape[1], dtype=dtype, device=device)
-    sums.index_add_(0, index, image_features)
+    sums.index_add_(0, well_to_pert, image_features)
     counts = torch.zeros(n_pert, dtype=dtype, device=device)
-    counts.index_add_(0, index, torch.ones(len(assignments), dtype=dtype, device=device))
+    counts.index_add_(0, well_to_pert, torch.ones_like(well_to_pert, dtype=dtype))
     return F.normalize(sums / counts.unsqueeze(1), dim=-1)
 
 
@@ -148,32 +139,15 @@ def _any_of_m_random(prefix: str, n_candidates: int, replicates: list[int]) -> d
     return results
 
 
-def _diagonal_metrics(
-    image_features: torch.Tensor,
-    text_features: torch.Tensor,
-) -> dict[str, float]:
-    """Legacy diagonal-only retrieval over an ``(N, N)`` score matrix."""
-    logits = image_features @ text_features.t()
-    positives = torch.eye(logits.shape[0], dtype=torch.bool, device=logits.device)
-    return {
-        **_rank_metrics("image_to_text", logits, positives),
-        **_rank_metrics("text_to_image", logits.t(), positives.t()),
-    }
-
-
 def compute_retrieval_metrics(
     image_features: torch.Tensor,
     text_features: torch.Tensor,
-    broad_samples: list[str] | None = None,
+    broad_samples: list[str],
 ) -> dict[str, float]:
     """Compute well-level and perturbation-level retrieval metrics.
 
     Both inputs are re-normalized because CWA batch correction in the eval loop
     can leave embeddings off the unit sphere.
-
-    With ``broad_samples=None`` this falls back to diagonal-only scoring (N
-    images vs N texts, no perturbation-level or random-baseline keys), which
-    only synthetic callers and tests use.
 
     Args:
         image_features: ``(N, D)`` image embeddings.
@@ -189,9 +163,6 @@ def compute_retrieval_metrics(
     image_features = F.normalize(image_features.float(), dim=-1)
     text_features = F.normalize(text_features.float(), dim=-1)
 
-    if broad_samples is None:
-        return _diagonal_metrics(image_features, text_features)
-
     unique_texts, unique_ids, well_to_pert = dedupe_texts(text_features, broad_samples)
     n_wells = image_features.shape[0]
     n_pert = len(unique_ids)
@@ -200,7 +171,7 @@ def compute_retrieval_metrics(
     i2t_scores = image_features @ unique_texts.t()  # (N, P)
     t2i_scores = unique_texts @ image_features.t()  # (P, N)
 
-    pert_images = aggregate_images(image_features, broad_samples)
+    pert_images = aggregate_images(image_features, well_to_pert, n_pert)
     pert_scores = pert_images @ unique_texts.t()  # (P, P)
     pert_positives = torch.eye(n_pert, dtype=torch.bool, device=pert_scores.device)
 

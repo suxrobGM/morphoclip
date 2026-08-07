@@ -1,5 +1,6 @@
 """Local CellCLIP runtime for benchmark export workflows."""
 
+from benchmark.export_utils import output_profile_path
 from cellclip.benchmark.checkpoint import (
     DEFAULT_CHECKPOINT_FILENAME,
     DEFAULT_CHECKPOINT_REPO,
@@ -10,7 +11,6 @@ from cellclip.benchmark.export import (
     export_plate,
     load_yaml_section,
     normalize_timelines,
-    output_profile_path,
     resolve_path,
     select_target_plates,
 )

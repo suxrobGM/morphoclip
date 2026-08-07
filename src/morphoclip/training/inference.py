@@ -22,7 +22,7 @@ from morphoclip.training.config import (
     MorphoCLIPTrainingConfig,
     training_config_from_dict,
 )
-from morphoclip.utils.device import resolve_num_workers, supports_pin_memory
+from morphoclip.utils.device import loader_workers, supports_pin_memory
 
 
 def load_checkpoint(
@@ -31,8 +31,9 @@ def load_checkpoint(
 ) -> tuple[dict, MorphoCLIPTrainingConfig]:
     """Load checkpoint and reconstruct config.
 
-    Merges non-strictly: older checkpoints embed fields the schema has dropped
-    (``betas``, ``eval_every_epochs``), so unknown keys are logged and skipped.
+    Raises:
+        ValueError: If the checkpoint has no embedded config, or its config
+            carries a key the current schema does not define.
     """
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
     if "config" not in ckpt:
@@ -41,7 +42,7 @@ def load_checkpoint(
             "Was it saved by the MorphoCLIP trainer?"
         )
 
-    config = training_config_from_dict(ckpt["config"], strict=False)
+    config = training_config_from_dict(ckpt["config"])
     return ckpt, config
 
 
@@ -104,16 +105,24 @@ def build_eval_dataloader(
     dataset,
     config: MorphoCLIPTrainingConfig,
     device: torch.device,
+    *,
+    batch_size: int | None = None,
 ) -> DataLoader:
-    """Construct a non-shuffling DataLoader matching trainer conventions."""
-    ds_cfg = config.dataset
-    num_workers = 0 if ds_cfg.preload else 4
+    """Construct a non-shuffling DataLoader matching trainer conventions.
+
+    Args:
+        dataset: Dataset to iterate.
+        config: Training config supplying the default eval batch size.
+        device: Device the batches feed.
+        batch_size: Override for ``config.dataset.eval_batch_size``.
+    """
     return DataLoader(
         dataset,
-        batch_size=ds_cfg.eval_batch_size,
+        batch_size=batch_size or config.dataset.eval_batch_size,
         shuffle=False,
         collate_fn=collate_fn,
-        num_workers=resolve_num_workers(num_workers),
+        # build_eval_dataset never preloads, so the dataset reads from disk.
+        num_workers=loader_workers(preloaded=False),
         pin_memory=supports_pin_memory(device),
     )
 
