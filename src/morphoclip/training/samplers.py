@@ -1,10 +1,9 @@
 """Batch samplers for MorphoCLIP training.
 
-:class:`PerturbationBatchSampler` builds batches that deliberately contain
-replicate wells of the same perturbation (so CWCL soft positives and the
-replicate image-image term actually have positives to work with) while
-keeping at least two plates per batch (so CWA has a real batch effect to
-remove rather than a single-plate mean).
+:class:`PerturbationBatchSampler` puts replicate wells of the same perturbation
+in one batch, so CWCL soft positives and the replicate image-image term have
+positives to work with, while keeping at least two plates per batch so CWA
+removes a real batch effect rather than a single-plate mean.
 """
 
 import logging
@@ -22,8 +21,6 @@ def resolve_base_indices(dataset: Dataset) -> list[int]:
     """Resolve each sampler position to its index in the base dataset.
 
     Walks arbitrarily nested :class:`~torch.utils.data.Subset` wrappers.
-    Position ``i`` of *dataset* corresponds to ``result[i]`` in the
-    underlying (non-Subset) dataset.
 
     Args:
         dataset: A dataset, possibly wrapped in one or more ``Subset``s.
@@ -47,14 +44,13 @@ def unwrap_dataset(dataset: Dataset) -> Dataset:
 class PerturbationBatchSampler(Sampler[list[int]]):
     """Group replicate wells into batches while keeping plates mixed.
 
-    Each epoch: positions are grouped by perturbation, shuffled within
-    group, split into chunks of *replicates_per_group*, and the shuffled
-    chunks are greedily packed into batches.  A single fix-up pass then
-    swaps chunks between batches so that every batch spans at least two
-    plates where possible.
+    Each epoch: group positions by perturbation, shuffle within group, split
+    into chunks of *replicates_per_group*, then greedily pack the shuffled
+    chunks into batches. One fix-up pass swaps chunks between batches so every
+    batch spans at least two plates where possible.
 
-    Batches for the current epoch are materialized eagerly so ``__len__``
-    is exact (the training loop uses it for the step schedule).
+    Batches are built eagerly so ``__len__`` is exact; the training loop uses
+    it for the step schedule.
 
     Args:
         group_keys: Perturbation ID (``broad_sample``) per sampler position.
@@ -162,7 +158,7 @@ class PerturbationBatchSampler(Sampler[list[int]]):
     ) -> bool:
         """Swap one chunk of ``batches[index]`` with a later, plate-diversifying one.
 
-        A one-chunk batch cannot be repaired: replacing its only chunk just
+        A one-chunk batch cannot be repaired: swapping its only chunk just
         moves the single-plate batch to a different plate.
         """
         if len(batches[index]) < 2:

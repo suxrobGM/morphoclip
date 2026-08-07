@@ -1,8 +1,7 @@
 """`morphoclip export-profiles` command: export benchmark-layout profile CSVs.
 
-Encodes well embeddings from a trained MorphoCLIP checkpoint and writes them
-in the per-plate CSV layout the benchmark harness (``morphoclip benchmark``,
-``benchmark.stable.run_stable_benchmark``) expects.
+Writes checkpoint well embeddings in the per-plate CSV layout the benchmark
+harness (``morphoclip benchmark``) expects.
 """
 
 from pathlib import Path
@@ -92,8 +91,6 @@ def export_profiles(
                 models=models,
             )
         except PlateNotInReferenceError as exc:
-            # Expected for plates outside the benchmark-eligible subset
-            # (non-standard density, antibiotics present, compound x Cas9).
             console.print(f"[yellow]Plate {plate} skipped: {exc}[/yellow]")
             table.add_row(plate, "[yellow]skipped[/yellow]", "not in reference metadata")
             n_skipped += 1

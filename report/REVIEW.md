@@ -218,6 +218,38 @@ Three findings, in order of importance:
    current framing ("optional / evaluated in ablation") is no longer sufficient now that the
    ablation exists and is strongly negative.
 
+### The winning run on the standard benchmark — and why the gain needs a caveat
+
+`abl_imgimg` exported and benchmarked against the `ccf_preload` baseline, fraction retrieved:
+
+| Track | Baseline | `abl_imgimg` | Δ |
+|---|---|---|---|
+| Replicability (mean of 12) | 0.178 | **0.248** | **+0.070** |
+| ↳ compound A549 long | 0.513 | 0.650 | +0.137 |
+| ↳ CRISPR A549 long | 0.183 | 0.376 | +0.193 |
+| ↳ ORF (all four) | ~0.01 | ~0.03 | ~+0.02 |
+| Target matching (mean of 8) | 0.339 | 0.262 | −0.077 |
+| Gene–compound cross-modality | 0.005 | 0.000 | −0.005 |
+
+Replicability improves on **every one of the twelve** tracks (+39% relative). But this must be
+reported with the caveat that it is partly definitional: the replicate-alignment loss directly
+optimizes similarity between replicate wells, and replicability fraction-retrieved measures
+exactly replicate retrieval. Claiming it as an independent win would be teaching to the test.
+
+The honest reading:
+
+- **Independent evidence exists** — perturbation-level text↔image retrieval also improved
+  (+18.9%), and that metric is not what the loss optimizes.
+- **Target matching did not improve** (0.339 → 0.262 mean), though the per-track numbers are
+  noisy: `crispr_U2OS_short` moves 1.000 → 0.667 on what is almost certainly a handful of
+  perturbations. These tracks need seed replication before any claim rests on them.
+- **Cross-modality gene–compound matching remains at zero.** This is the task the method is
+  ultimately pitched at, and none of the three training-signal changes moved it. It should be
+  stated plainly as an open failure rather than omitted.
+
+Better replicate alignment therefore buys a tighter within-perturbation cluster without yet
+buying the cross-modality structure that would make compound→gene matching work.
+
 ### Two infrastructure findings worth a methods sentence
 
 - **Feature cache was 44x oversized.** `torch.save` on a bare slice serializes the slice's

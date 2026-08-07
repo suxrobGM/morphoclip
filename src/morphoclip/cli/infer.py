@@ -138,16 +138,7 @@ def _run_embed(image_embs, text_embs, plates, wells, pert_infos, *, output_dir):
 
 
 def _profile_row(plate: str, well: str, info: PerturbationInfo) -> dict[str, str]:
-    """Build the metadata dict for a single profile row.
-
-    Args:
-        plate: Plate barcode.
-        well: Well position string.
-        info: Perturbation metadata for the well.
-
-    Returns:
-        Mapping of ``Metadata_*`` column names to values.
-    """
+    """Build the ``Metadata_*`` columns for a single profile row."""
     return {
         "Metadata_Plate": plate,
         "Metadata_Well": well,

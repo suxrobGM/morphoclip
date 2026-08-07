@@ -1,10 +1,9 @@
 """Export MorphoCLIP well embeddings into benchmark-layout profile CSVs.
 
-Encodes well-level image embeddings from a trained MorphoCLIP checkpoint and
-writes them in the per-plate CSV layout consumed by ``benchmark.data.ProfileLoader``
+Writes per-plate CSVs in the layout ``benchmark.data.ProfileLoader`` reads
 (``<out_root>/<batch>/<plate>/<plate>_normalized_feature_select_negcon_batch.csv.gz``),
-so the standard CPJUMP1 perturbation-level benchmark can run against MorphoCLIP
-embeddings the same way it runs against CellCLIP or CellProfiler profiles.
+so the CPJUMP1 benchmark runs against MorphoCLIP embeddings the same way it runs
+against CellCLIP or CellProfiler profiles.
 """
 
 import logging
@@ -33,13 +32,13 @@ class PlateNotInReferenceError(ValueError):
     """Raised when a plate has no rows in the CPJUMP1 reference metadata.
 
     Expected for plates outside the benchmark-eligible subset (non-standard
-    seeding density, antibiotics present, or compound plates on the Cas9 line),
-    which callers normally skip rather than treat as a failure.
+    seeding density, antibiotics present, compound plates on the Cas9 line), so
+    callers usually skip rather than fail.
     """
 
 
 def load_export_models(checkpoint: Path, device: str = "auto") -> ExportModels:
-    """Load the image encoder and config from a checkpoint once, for reuse across plates.
+    """Load the image encoder and config from a checkpoint, for reuse across plates.
 
     Args:
         checkpoint: Path to a trained MorphoCLIP checkpoint.
@@ -99,10 +98,8 @@ def build_plate_profile(
 ) -> pd.DataFrame:
     """Assemble a benchmark-layout profile DataFrame for one plate.
 
-    Aligns encoded well embeddings with reference metadata rows by
-    ``Metadata_Well``. Embedding wells absent from ``metadata_df`` are dropped
-    with a warning; metadata wells with no matching embedding are reported
-    with a warning and simply absent from the output.
+    Aligns embeddings with metadata rows by ``Metadata_Well``. Wells present on
+    only one side are warned about and left out of the output.
 
     Args:
         embeddings: ``(N, D)`` well embeddings, in the same order as ``wells``.
@@ -221,10 +218,9 @@ def export_plate_profiles(
 ) -> Path:
     """Export a benchmark-layout profile CSV for one plate.
 
-    Encodes every well with cached features (including negcon/poscon wells,
-    since ``exclude_controls=False``), aligns them with reference metadata,
-    optionally centers against plate negative controls, and writes the result
-    at the path :func:`benchmark.export_utils.output_profile_path` expects.
+    Encodes every cached well including controls, aligns them with reference
+    metadata, optionally centers against plate negative controls, and writes to
+    the path :func:`benchmark.export_utils.output_profile_path` expects.
 
     Args:
         checkpoint: Path to a trained MorphoCLIP checkpoint.
@@ -236,8 +232,8 @@ def export_plate_profiles(
         device: Device string (``"auto"``, ``"cuda"``, ``"cpu"``, ...).
         batch_size: Override the checkpoint's eval batch size.
         models: Preloaded ``(image_encoder, config, device)`` from
-            :func:`load_export_models`; avoids reloading the checkpoint when
-            exporting many plates. Loaded from ``checkpoint`` when ``None``.
+            :func:`load_export_models`, to avoid reloading the checkpoint per
+            plate. Loaded from ``checkpoint`` when ``None``.
 
     Returns:
         Path to the written profile CSV.

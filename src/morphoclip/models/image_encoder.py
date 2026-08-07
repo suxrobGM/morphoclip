@@ -13,8 +13,8 @@ from morphoclip.models.projection_head import ProjectionHead
 from morphoclip.models.site_pooling import AttentionSitePooling
 from morphoclip.models.well_former import WellFormer
 
-# Channel-then-site aggregators, named "<channel step>-<site step>", plus the
-# joint "wellformer" which does both steps in one attention pass.
+# Named "<channel step>-<site step>", plus "wellformer" which does both steps
+# in one attention pass.
 AGGREGATORS = ("ccf-mean", "meanpool-mean", "ccf-attn", "wellformer")
 
 
@@ -32,12 +32,12 @@ class MorphoCLIPImageEncoder(nn.Module):
     Args:
         embed_dim: DINOv3 feature dimension.
         output_dim: Contrastive space dimension.
-        aggregator: Well aggregation strategy. ``"ccf-mean"`` (default)
-            runs the CrossChannelFormer over channels then masked mean over
-            sites; ``"meanpool-mean"`` replaces the CCF with L2-normalized
-            channel averaging; ``"ccf-attn"`` replaces the site mean with
-            gated-attention MIL pooling; ``"wellformer"`` attends over all
-            site-channel tokens jointly.
+        aggregator: Well aggregation strategy. ``"ccf-mean"`` runs the
+            CrossChannelFormer over channels then a masked mean over sites;
+            ``"meanpool-mean"`` swaps the CCF for L2-normalized channel
+            averaging; ``"ccf-attn"`` swaps the site mean for gated-attention
+            MIL pooling; ``"wellformer"`` attends over all site-channel tokens
+            jointly.
         ccf_layers: Transformer layers (CrossChannelFormer or WellFormer).
         ccf_heads: Attention heads (CrossChannelFormer or WellFormer).
         input_channels: Number of fluorescence channels.
@@ -103,7 +103,6 @@ class MorphoCLIPImageEncoder(nn.Module):
         """
         if self.aggregator in ("ccf-mean", "ccf-attn"):
             return self.cross_channel_former(x)
-        # meanpool: L2-normalize each channel, then average
         x = F.normalize(x, dim=-1)
         return x.mean(dim=1)
 

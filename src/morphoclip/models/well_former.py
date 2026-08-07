@@ -1,12 +1,12 @@
 """WellFormer: joint transformer over all site-channel tokens of a well.
 
-Where the ``ccf-*`` aggregators compress channels per site and only then pool
-sites, WellFormer attends over every ``(site, channel)`` token at once, so a
-single well-CLS token can weight channels and sites jointly.  Token count is
-``1 + S * C`` (81 at S=16, C=5), so full attention stays cheap.
+The ``ccf-*`` aggregators compress channels per site and only then pool sites.
+WellFormer attends over every ``(site, channel)`` token at once, so one
+well-CLS token weights channels and sites together. Token count is ``1 + S * C``
+(81 at S=16, C=5), so full attention stays cheap.
 
-No site/positional embedding is used: sites within a well are unordered, and
-permutation invariance over sites is a required property.
+There is no site or positional embedding: sites are unordered, and the
+aggregator must be permutation invariant over them.
 """
 
 import torch
@@ -18,8 +18,8 @@ class WellFormer(nn.Module):
     """Transformer aggregating all site-channel tokens of a well into one vector.
 
     A learnable well-CLS token is prepended to the flattened ``S * C``
-    site-channel tokens, and its output is the well representation.  Learnable
-    channel-type embeddings (shared across sites) let the transformer tell the
+    site-channel tokens; its output is the well representation. Learnable
+    channel-type embeddings, shared across sites, let the transformer tell the
     5 fluorescence channels apart.
 
     Args:
@@ -45,12 +45,9 @@ class WellFormer(nn.Module):
         self.embed_dim = embed_dim
         self.input_channels = input_channels
 
-        # Learnable channel-type embeddings (Mito, Actin, Golgi, ER, DNA),
-        # broadcast across sites.  Deliberately no site embedding.
         self.channel_embed = nn.Parameter(torch.zeros(input_channels, embed_dim))
         nn.init.trunc_normal_(self.channel_embed, std=0.02)
 
-        # Learnable well-level CLS token for aggregation
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         nn.init.trunc_normal_(self.cls_token, std=0.02)
 
@@ -98,18 +95,16 @@ class WellFormer(nn.Module):
                 f"got {tuple(site_mask.shape)}"
             )
 
-        # L2-normalize raw DINOv3 features so channel embeddings are meaningful
+        # Normalize raw DINOv3 features so the added channel embeddings are
+        # on a comparable scale.
         x = F.normalize(x, dim=-1)
-
-        # Add channel-type embeddings (broadcast over sites)
         x = x + self.channel_embed.view(1, 1, channels, dim)
 
-        # Flatten site-channel tokens and prepend the well-CLS token
         tokens = x.reshape(batch_size, num_sites * channels, dim)
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # (B, 1, D)
         tokens = torch.cat([cls_tokens, tokens], dim=1)  # (B, 1 + S*C, D)
 
-        # Padded sites mask all of their channel tokens; CLS is never masked
+        # A padded site masks all of its channel tokens; CLS is never masked.
         token_padding = ~site_mask.unsqueeze(-1).expand(batch_size, num_sites, channels)
         token_padding = token_padding.reshape(batch_size, num_sites * channels)
         cls_padding = torch.zeros(

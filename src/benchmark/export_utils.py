@@ -1,9 +1,7 @@
 """Shared helpers for exporting benchmark-layout profile CSVs.
 
-Reused by both the CellCLIP local export pipeline
-(``cellclip.benchmark.export``) and the MorphoCLIP profile exporter
-(``morphoclip.benchmark.export``) so the on-disk layout the benchmark
-harness expects (``benchmark.data.ProfileLoader``) stays in one place.
+Used by ``cellclip.benchmark.export`` and ``morphoclip.benchmark.export`` so the
+on-disk layout ``benchmark.data.ProfileLoader`` reads stays in one place.
 """
 
 from pathlib import Path
@@ -31,9 +29,8 @@ def negcon_center_profiles(
 ) -> pd.DataFrame:
     """Center exported features against plate-level negative controls.
 
-    The benchmark consumes files named ``normalized_feature_select_negcon_batch``.
-    Raw well embeddings typically carry a strong shared offset across wells, so we
-    remove the negative-control reference mean before saving.
+    Raw well embeddings carry a strong shared offset, so the negative-control
+    mean is removed before saving.
 
     Args:
         profiles: DataFrame with ``Metadata_*`` columns and feature columns.

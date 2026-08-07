@@ -435,8 +435,8 @@ def repack_feature_file(path: Path) -> tuple[int, int]:
     """Rewrite one cached feature file so it stores only its own tensor.
 
     Files written before the extractor cloned its slices serialize the whole
-    batch's backing storage (~48x the tensor). Loading and re-saving a
-    contiguous copy keeps the values identical while dropping the excess.
+    batch's backing storage, roughly 48x the tensor. Re-saving a contiguous
+    copy keeps the values identical.
 
     Args:
         path: Path to a cached ``.pt`` feature file.
@@ -470,9 +470,9 @@ def repack(
 ) -> None:
     """Shrink cached feature files that serialize an oversized backing storage.
 
-    Feature files saved from an unsliced batch tensor carry the whole batch's
-    storage on disk. This rewrites each one as a standalone tensor, typically
-    shrinking the cache by ~45x and making preloading practical.
+    Files saved from an unsliced batch tensor carry the whole batch's storage on
+    disk. Rewriting each as a standalone tensor shrinks the cache by roughly
+    45x, which makes preloading practical.
     """
     if not feature_root.exists():
         console.print(f"[red]Feature root not found: {feature_root}[/red]")

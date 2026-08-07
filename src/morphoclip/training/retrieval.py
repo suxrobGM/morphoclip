@@ -1,25 +1,16 @@
 """Retrieval metrics for MorphoCLIP evaluation.
 
-**Why this module exists.** Replicate wells of the same perturbation share an
-*identical* text embedding (the prompt is built from the perturbation, not the
-well).  The validation split has ~2,220 wells drawn from only ~98 unique
-perturbations, so scoring each image query against all N well-texts means
-ranking a candidate pool that contains ~24 exact copies of every vector.
-Identical scores clump those copies at consecutive ranks, which caps R@5/R@10
-near R@1 and makes any random baseline meaningless.
+Replicate wells of the same perturbation share an identical text embedding, so
+ranking N images against N well-texts puts ~24 exact copies of every vector in
+the pool and caps R@5/R@10 near R@1. The metrics here rank against unique texts
+instead:
 
-**Fixed semantics.**
+* Well-level image->text: each of N wells ranks the P unique texts, one correct.
+* Well-level text->image: P queries rank all N wells; scored on the first
+  correct replicate (any-of-m).
+* Perturbation-level: mean image profiles vs unique texts, a (P, P) problem.
 
-* *Well-level image->text*: each of the N wells ranks the **P unique** texts.
-  Exactly one is correct (its own perturbation).  Pool size P, single positive.
-* *Well-level text->image*: one query per unique perturbation (P queries) ranks
-  all N well embeddings; the score is the rank of the *first* correct replicate
-  (any-of-m retrieval with m = replicate count).
-* *Perturbation-level*: per-perturbation mean image profiles (re-normalized)
-  vs the P unique texts, a clean (P, P) problem with diagonal positives.
-
-Analytic random baselines are emitted alongside every direction so a metric can
-be read against chance without shuffling.
+Analytic random baselines accompany every direction.
 """
 
 import math
@@ -36,8 +27,7 @@ def dedupe_texts(
 ) -> tuple[torch.Tensor, list[str], torch.Tensor]:
     """Collapse per-well text embeddings to one row per unique perturbation.
 
-    The first occurrence of each ``broad_sample`` wins; replicate rows are
-    dropped (they are bit-identical copies in practice).
+    The first occurrence of each ``broad_sample`` wins.
 
     Args:
         text_features: ``(N, D)`` per-well text embeddings.
@@ -121,9 +111,7 @@ def _rank_metrics(prefix: str, scores: torch.Tensor, positives: torch.Tensor) ->
 def _single_positive_random(prefix: str, n_candidates: int) -> dict[str, float]:
     """Chance performance for one positive in a pool of ``n_candidates``.
 
-    ``R@k = min(k, P) / P``; the mean and median rank both use the continuous
-    approximation ``(P + 1) / 2`` (the exact discrete median is
-    ``ceil(P / 2)``, which differs by at most half a rank).
+    ``R@k = min(k, P) / P``; mean and median rank both use ``(P + 1) / 2``.
     """
     pool = float(n_candidates)
     results: dict[str, float] = {
@@ -138,10 +126,9 @@ def _single_positive_random(prefix: str, n_candidates: int) -> dict[str, float]:
 def _any_of_m_random(prefix: str, n_candidates: int, replicates: list[int]) -> dict[str, float]:
     """Chance performance for any-of-m retrieval, averaged over queries.
 
-    For a query with ``m`` positives among ``N`` candidates the probability that
-    a random top-k contains at least one positive is
-    ``1 - C(N - m, k) / C(N, k)`` (1.0 once ``k > N - m``), and the expected
-    rank of the first positive is ``(N + 1) / (m + 1)``.
+    With ``m`` positives among ``N`` candidates, a random top-k contains one
+    with probability ``1 - C(N - m, k) / C(N, k)`` (1.0 once ``k > N - m``), and
+    the first positive lands at expected rank ``(N + 1) / (m + 1)``.
     """
     n_queries = max(1, len(replicates))
     recalls = dict.fromkeys(_KS, 0.0)
@@ -181,12 +168,12 @@ def compute_retrieval_metrics(
 ) -> dict[str, float]:
     """Compute well-level and perturbation-level retrieval metrics.
 
-    Both inputs are L2-normalized defensively (CWA batch correction in the eval
-    loop can leave embeddings off the unit sphere).
+    Both inputs are re-normalized because CWA batch correction in the eval loop
+    can leave embeddings off the unit sphere.
 
-    When ``broad_samples`` is ``None`` the legacy diagonal-only behavior is
-    used: N images vs N texts, positive = diagonal, no perturbation-level or
-    random-baseline keys.  That path exists for synthetic callers and tests.
+    With ``broad_samples=None`` this falls back to diagonal-only scoring (N
+    images vs N texts, no perturbation-level or random-baseline keys), which
+    only synthetic callers and tests use.
 
     Args:
         image_features: ``(N, D)`` image embeddings.

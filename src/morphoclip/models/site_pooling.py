@@ -1,16 +1,14 @@
 """Gated-attention MIL pooling over the sites of a well.
 
-Sites within a well are an unordered bag of instances: some are out of
-focus, empty, or off-target.  Masked mean pooling weights them all equally;
-gated attention (Ilse et al., 2018, "Attention-based Deep Multiple Instance
-Learning") learns a per-site weight instead.
+Sites in a well are an unordered bag, and some are out of focus, empty, or
+off-target. Masked mean pooling weights them all equally; gated attention
+(Ilse et al., 2018, "Attention-based Deep Multiple Instance Learning") learns
+a per-site weight instead.
 """
 
 import torch
 import torch.nn as nn
 
-# Attention bottleneck width.  Fixed rather than configurable: it is an
-# internal capacity knob that has never needed tuning at these token counts.
 ATTENTION_HIDDEN_DIM = 256
 
 
@@ -62,8 +60,8 @@ class AttentionSitePooling(nn.Module):
         scores = self.attention_score(self.dropout(gated)).squeeze(-1)  # (B, S)
 
         scores = scores.masked_fill(~site_mask, float("-inf"))
-        # A fully padded row would softmax to NaN; give it flat scores here and
-        # zero its weights afterwards.  Wells always have >=1 site in practice.
+        # A fully padded row would softmax to NaN, so flatten it and zero its
+        # weights below. Wells always have >=1 site in practice.
         empty = ~site_mask.any(dim=1, keepdim=True)  # (B, 1)
         scores = torch.where(empty.expand_as(scores), torch.zeros_like(scores), scores)
 

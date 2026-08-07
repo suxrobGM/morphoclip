@@ -4,10 +4,10 @@ Provides InfoNCE (standard symmetric CLIP loss), CWCL (Continuously
 Weighted Contrastive Loss with perturbation-identity soft labels), and an
 optional replicate-alignment image-image term.
 
-Note on naming: CellCLIP uses "CWCL" for *Channel-Wise* Contrastive Loss
-(soft labels from per-channel image similarity).  MorphoCLIP's CWCL is
-*Continuously Weighted* — soft labels come from perturbation identity
-(``broad_sample``) and, optionally, shared target genes.
+Naming: CellCLIP's "CWCL" is Channel-Wise Contrastive Loss (soft labels from
+per-channel image similarity). MorphoCLIP's is Continuously Weighted, with soft
+labels from perturbation identity (``broad_sample``) and optionally shared
+target genes.
 """
 
 import torch
@@ -101,13 +101,10 @@ def build_soft_labels(
 ) -> torch.Tensor:
     """Build the row-normalized soft label matrix from perturbation identity.
 
-    Samples sharing the same ``broad_sample`` get equal positive weight.
-    When *target_weight* is positive, samples whose target gene sets
-    intersect additionally get a partial weight (a compound and a CRISPR
-    knockout hitting the same gene are soft positives).
-
-    With ``target_weight=0.0`` this reduces exactly to the original binary
-    same-``broad_sample`` behavior.
+    Samples sharing a ``broad_sample`` get equal positive weight. A positive
+    *target_weight* additionally makes samples with intersecting target gene
+    sets soft positives, so a compound and a CRISPR knockout hitting the same
+    gene pull together. ``target_weight=0.0`` gives plain binary labels.
 
     Args:
         broad_samples: Perturbation ID per sample (length B).
@@ -138,16 +135,12 @@ def cwcl_loss(
 ) -> torch.Tensor:
     """Continuously Weighted Contrastive Loss with perturbation soft labels.
 
-    Instead of hard diagonal targets, uses a soft label matrix where all
-    wells sharing the same perturbation (``broad_sample``) — and optionally
-    wells sharing a target gene — are positive pairs.
+    Instead of hard diagonal targets, uses a soft label matrix where wells
+    sharing a perturbation (and optionally a target gene) are positive pairs.
 
-    Each direction normalizes its own target rows: the i2t targets are the
-    rows of the affinity matrix ``A``, the t2i targets are the rows of
-    ``A.t()``.  With purely binary labels these coincide with normalizing
-    ``A`` once and transposing (group members share a row sum), so this is
-    behavior-preserving; with continuous weights, transposing a
-    row-normalized matrix would leave rows that do not sum to 1.
+    Each direction normalizes its own target rows: i2t from ``A``, t2i from
+    ``A.t()``. Transposing a single row-normalized matrix would leave t2i rows
+    that do not sum to 1 once weights are continuous.
 
     Args:
         image_features: ``(B, D)`` L2-normalized image embeddings.
@@ -170,7 +163,6 @@ def cwcl_loss(
     labels_i2t = _row_normalize(affinity)
     labels_t2i = _row_normalize(affinity.t())
 
-    # Soft cross-entropy: -sum(W * log_softmax(S)) per row, averaged
     log_probs_i2t = F.log_softmax(logits, dim=1)
     log_probs_t2i = F.log_softmax(logits.t(), dim=1)
 
@@ -188,23 +180,20 @@ def replicate_image_loss(
 ) -> torch.Tensor:
     """Image-image contrastive loss pulling replicate wells together.
 
-    Wells sharing a ``broad_sample`` are positives for each other; the
-    self-similarity diagonal is excluded from both numerator and
-    denominator.  Rows with no replicate in the batch contribute nothing
-    and are dropped from the mean.
-
-    The similarity matrix is symmetric, so a single direction suffices.
+    Wells sharing a ``broad_sample`` are positives for each other. The
+    self-similarity diagonal is excluded from numerator and denominator, and
+    rows with no replicate in the batch are dropped from the mean. The
+    similarity matrix is symmetric, so one direction suffices.
 
     Args:
         image_features: ``(B, D)`` L2-normalized image embeddings.
-        scale: *Linear* logit scale — i.e. ``logit_scale.exp()`` for the
-            shared learnable temperature, or ``1 / temperature`` for a
-            fixed one.
+        scale: Linear logit scale: ``logit_scale.exp()`` for the shared
+            learnable temperature, or ``1 / temperature`` for a fixed one.
         broad_samples: Perturbation ID per sample (length B).
 
     Returns:
-        Scalar loss.  When no row has a replicate, returns a zero that is
-        still attached to the autograd graph (keeps DDP gradients in sync).
+        Scalar loss. When no row has a replicate, returns a zero still attached
+        to the autograd graph so DDP gradients stay in sync.
     """
     device = image_features.device
     n = image_features.shape[0]

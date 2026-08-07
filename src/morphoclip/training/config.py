@@ -36,10 +36,8 @@ class MorphoCLIPDatasetConfig:
     exclude_controls: bool = True
     max_sites_per_well: int | None = None
     batch_size: int = 32
-    # NOTE: kept as an explicit field (not derived from batch_size) because
-    # morphoclip.benchmark.export._encode_plate_wells assigns
-    # ``config.dataset.eval_batch_size`` directly to override the per-plate
-    # export batch size; that module is out of scope for this refactor.
+    # Explicit rather than derived from batch_size: the profile exporter
+    # overwrites it to set a per-plate batch size.
     eval_batch_size: int = 32
     preload: bool = True
     val_fraction: float = 0.1
@@ -72,8 +70,8 @@ class MorphoCLIPOptimizationConfig:
     epochs: int = 20
     warmup_steps: int = 200
     use_cwa: bool = False
-    # Gene-aware CWCL: affinity given to pairs whose target gene sets
-    # intersect but whose broad_sample differs.  0.0 disables (binary labels).
+    # Gene-aware CWCL: affinity for pairs whose target genes intersect but
+    # whose broad_sample differs. 0.0 gives binary labels.
     target_weight: float = 0.0
     # Weight of the replicate image-image alignment term (0.0 disables).
     lambda_img: float = 0.0
@@ -93,22 +91,14 @@ class MorphoCLIPRuntimeConfig:
     run_name: str | None = None
     log_every_steps: int = 10
     max_train_steps: int | None = None
-    # Stop after this many epochs without a new best eval loss.  None
-    # disables.  Only applied when not running distributed — eval runs on
-    # rank 0 only, so the stop decision is not available on other ranks.
+    # Epochs without a new best eval loss before stopping (None disables).
+    # Single-GPU only: eval runs on rank 0, so other ranks never see it.
     early_stop_patience: int | None = None
 
 
 @dataclass(slots=True)
 class MorphoCLIPDistributedConfig:
-    """Distributed training settings (multi-GPU via torchrun).
-
-    Kept as its own dataclass rather than folded into runtime: ``trainer.py``,
-    ``loop.py``, and ``setup.py`` all thread ``config.distributed`` through as
-    a distinct namespace (mirroring the ``--distributed`` CLI flag), and
-    folding it into runtime would rename call sites across those modules for
-    no schema benefit.
-    """
+    """Distributed training settings (multi-GPU via torchrun)."""
 
     enabled: bool = False
     gradient_accumulation_steps: int = 1
@@ -192,10 +182,8 @@ def _merge_dataclass(instance: Any, raw: dict[str, Any], *, strict: bool = True)
     Args:
         instance: Dataclass instance to update in place.
         raw: Mapping of field names to override values.
-        strict: If ``True``, raise on keys the dataclass no longer has. If
-            ``False``, log a warning and skip them instead — used when
-            reconstructing a config from an older checkpoint's embedded dict,
-            which may reference fields dropped from the current schema.
+        strict: If ``True``, raise on keys the dataclass no longer has;
+            if ``False``, warn and skip them.
 
     Returns:
         The mutated *instance*.
@@ -217,17 +205,16 @@ def _merge_dataclass(instance: Any, raw: dict[str, Any], *, strict: bool = True)
     return instance
 
 
-# Checkpoints saved before the aggregator refactor embed the old
-# ``model.channel_aggregation`` field.  Mapping it explicitly keeps those
-# checkpoints correct rather than accidentally correct via the default.
+# Checkpoints from before the aggregator refactor embed the old
+# ``model.channel_aggregation`` field.
 LEGACY_CHANNEL_AGGREGATION = {"ccf": "ccf-mean", "mean_pool": "meanpool-mean"}
 
 
 def _translate_legacy_model_section(raw: dict[str, Any]) -> dict[str, Any]:
     """Rewrite a legacy ``model`` section onto the current schema.
 
-    Translates ``channel_aggregation`` into ``aggregator``. An explicit
-    ``aggregator`` already present always wins.
+    Translates ``channel_aggregation`` into ``aggregator``; an explicit
+    ``aggregator`` always wins.
 
     Args:
         raw: The checkpoint's ``model`` section.
@@ -263,18 +250,15 @@ def training_config_from_dict(
 ) -> MorphoCLIPTrainingConfig:
     """Reconstruct a training config from a plain nested dict.
 
-    Used both for YAML-loaded configs and for configs embedded in a saved
-    checkpoint's ``config`` key.
+    Used for YAML-loaded configs and for configs embedded in a checkpoint.
 
     Args:
         config_dict: Nested dict with ``dataset``/``model``/``optimization``/
             ``runtime``/``distributed`` sections.
-        strict: If ``True``, raise on keys not present in the current schema.
-            Pass ``False`` for configs loaded from older checkpoints, whose
-            embedded dict may still carry fields the schema has since dropped.
-            Non-strict mode also applies legacy key translation (e.g.
-            ``model.channel_aggregation`` -> ``model.aggregator``); strict mode
-            does not, so stale YAML configs still fail loudly.
+        strict: If ``True``, raise on keys the current schema lacks. Pass
+            ``False`` for older checkpoints: unknown keys are skipped and
+            legacy names are translated. Strict mode does neither, so a stale
+            YAML config still fails loudly.
 
     Returns:
         Populated training config.
@@ -294,8 +278,8 @@ def training_config_from_dict(
 def _parse_dotted_override(item: str) -> dict[str, Any]:
     """Parse a single ``section.key=value`` CLI override into a nested dict.
 
-    Values are parsed with :func:`yaml.safe_load` so ints/floats/bools/null
-    round-trip without extra quoting (e.g. ``runtime.max_train_steps=3``).
+    Values go through :func:`yaml.safe_load` so ints, floats, bools, and null
+    round-trip without extra quoting.
 
     Args:
         item: A ``section.key=value`` string.
@@ -329,14 +313,12 @@ def load_training_config(
 ) -> MorphoCLIPTrainingConfig:
     """Load a MorphoCLIP training config from a YAML file.
 
-    Supports ``extends`` field for config inheritance, followed by optional
-    dotted CLI overrides (``section.key=value``) applied on top.
+    Resolves ``extends`` inheritance first, then applies dotted overrides.
 
     Args:
         path: Path to the YAML config file.
-        overrides: Optional ``section.key=value`` strings (e.g. from
-            repeatable ``--set`` CLI options), applied in order after the
-            YAML's own ``extends`` inheritance is resolved.
+        overrides: ``section.key=value`` strings from repeatable ``--set``
+            options, applied in order.
 
     Returns:
         Populated training config.
