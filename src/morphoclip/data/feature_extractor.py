@@ -229,7 +229,9 @@ def extract_plate_features_with_model(
 
             for i, key in enumerate(batch_keys):
                 feat_path = output_dir / feature_filename(key)
-                torch.save(all_cls_reshaped[i], feat_path)  # (5, D)
+                # clone(): a bare slice shares the whole batch's storage, and
+                # torch.save serializes that storage, not just the view.
+                torch.save(all_cls_reshaped[i].clone(), feat_path)  # (5, D)
                 saved[key] = feat_path
 
             progress.advance(task, len(batch_keys))

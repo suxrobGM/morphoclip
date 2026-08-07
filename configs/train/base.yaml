@@ -8,7 +8,7 @@ dataset:
   text_cache_path: "data/text/cached_text_features.pt" # Cached 768-d raw BERT embeddings
   text_level: "full"                              # Prompt granularity: "full", "name_target", "name_only"
   exclude_controls: true                          # Drop NEGCON/POSCON wells from training
-  split_strategy: "pert_type"                     # CRISPR/ORF->train, compound->val/test (local metadata only)
+  split_strategy: "pert_type"                     # Hash each broad_sample into 80/10/10; all modalities in every split
   val_fraction: 0.1                               # 10% validation (also used for test split)
   batch_size: 512                                 # Training batch size (wells per batch)
   eval_batch_size: 512                            # Evaluation batch size

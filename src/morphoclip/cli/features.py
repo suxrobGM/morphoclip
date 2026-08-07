@@ -424,3 +424,111 @@ def download(
 
     console.print("\n[bold green]Download complete.[/bold green]")
     console.print(f"Features extracted to: {output_dir}")
+
+
+# --------------------------------------------------------------------------- #
+# repack
+# --------------------------------------------------------------------------- #
+
+
+def repack_feature_file(path: Path) -> tuple[int, int]:
+    """Rewrite one cached feature file so it stores only its own tensor.
+
+    Files written before the extractor cloned its slices serialize the whole
+    batch's backing storage (~48x the tensor). Loading and re-saving a
+    contiguous copy keeps the values identical while dropping the excess.
+
+    Args:
+        path: Path to a cached ``.pt`` feature file.
+
+    Returns:
+        Tuple of ``(bytes_before, bytes_after)``.
+    """
+    before = path.stat().st_size
+    tensor = torch.load(path, map_location="cpu")
+    if tensor.untyped_storage().nbytes() <= tensor.nbytes:
+        return before, before
+
+    tmp_path = path.with_suffix(".pt.tmp")
+    torch.save(tensor.clone(), tmp_path)
+    tmp_path.replace(path)
+    return before, path.stat().st_size
+
+
+@app.command()
+def repack(
+    feature_root: Annotated[
+        Path, typer.Option(help="Root directory holding per-plate feature subdirectories.")
+    ] = Path("data/features"),
+    plates: Annotated[
+        list[str] | None, typer.Option(help="Plate barcodes to repack (default: all).")
+    ] = None,
+    workers: Annotated[int, typer.Option(help="Number of concurrent repack threads.")] = 8,
+    dry_run: Annotated[
+        bool, typer.Option(help="Report the projected saving without rewriting files.")
+    ] = False,
+) -> None:
+    """Shrink cached feature files that serialize an oversized backing storage.
+
+    Feature files saved from an unsliced batch tensor carry the whole batch's
+    storage on disk. This rewrites each one as a standalone tensor, typically
+    shrinking the cache by ~45x and making preloading practical.
+    """
+    if not feature_root.exists():
+        console.print(f"[red]Feature root not found: {feature_root}[/red]")
+        raise typer.Exit(1)
+
+    plate_dirs = sorted(d for d in feature_root.iterdir() if d.is_dir())
+    if plates:
+        wanted = set(plates)
+        plate_dirs = [d for d in plate_dirs if d.name in wanted]
+    if not plate_dirs:
+        console.print("[red]No plate directories to repack.[/red]")
+        raise typer.Exit(1)
+
+    files = [f for d in plate_dirs for f in sorted(d.glob("*.pt"))]
+    console.print(f"[cyan]Repacking {len(files):,} files across {len(plate_dirs)} plates[/cyan]")
+
+    if dry_run:
+        sample = files[: min(50, len(files))]
+        before = sum(f.stat().st_size for f in sample)
+        after = 0
+        for path in sample:
+            tensor = torch.load(path, map_location="cpu")
+            after += tensor.nbytes
+        ratio = before / max(after, 1)
+        total = sum(f.stat().st_size for f in files)
+        console.print(
+            f"[yellow]Dry run:[/yellow] sampled {len(sample)} files, ~{ratio:.1f}x oversized. "
+            f"Cache {total / 1024**3:.1f} GiB -> ~{total / ratio / 1024**3:.1f} GiB"
+        )
+        return
+
+    total_before, total_after = 0, 0
+    with Progress(
+        TextColumn("{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress_bar:
+        task = progress_bar.add_task("[green]Repacking", total=len(files))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(repack_feature_file, path): path for path in files}
+            for future in as_completed(futures):
+                path = futures[future]
+                try:
+                    before, after = future.result()
+                    total_before += before
+                    total_after += after
+                except Exception as exc:
+                    progress_bar.console.print(f"  [red]{path.name}: {exc}[/red]")
+                progress_bar.advance(task)
+
+    saved = total_before - total_after
+    console.print(
+        f"\n[bold green]Repack complete.[/bold green] "
+        f"{total_before / 1024**3:.1f} GiB -> {total_after / 1024**3:.1f} GiB "
+        f"(freed {saved / 1024**3:.1f} GiB)"
+    )
