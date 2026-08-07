@@ -6,8 +6,7 @@ from torch.utils.data import Subset, TensorDataset
 
 from morphoclip.training.samplers import (
     PerturbationBatchSampler,
-    resolve_base_indices,
-    unwrap_dataset,
+    resolve_base_dataset,
 )
 
 
@@ -27,36 +26,44 @@ def _synthetic_keys(
     return group_keys, plate_keys
 
 
-class TestResolveBaseIndices:
-    """Tests for nested-Subset index resolution."""
+class TestResolveBaseDataset:
+    """Tests for nested-Subset unwrapping and index resolution."""
 
     def test_plain_dataset(self) -> None:
         dataset = TensorDataset(torch.arange(5))
-        assert resolve_base_indices(dataset) == [0, 1, 2, 3, 4]
+        base, indices = resolve_base_dataset(dataset)
+        assert base is dataset
+        assert indices == [0, 1, 2, 3, 4]
 
     def test_single_subset(self) -> None:
         dataset = TensorDataset(torch.arange(10))
-        subset = Subset(dataset, [3, 1, 7])
-        assert resolve_base_indices(subset) == [3, 1, 7]
+        base, indices = resolve_base_dataset(Subset(dataset, [3, 1, 7]))
+        assert base is dataset
+        assert indices == [3, 1, 7]
 
     def test_nested_subset(self) -> None:
         dataset = TensorDataset(torch.arange(10))
         outer = Subset(dataset, [2, 4, 6, 8])
-        inner = Subset(outer, [3, 0])
+        base, indices = resolve_base_dataset(Subset(outer, [3, 0]))
+        assert base is dataset
         # Positions 3 and 0 of `outer` are base indices 8 and 2.
-        assert resolve_base_indices(inner) == [8, 2]
+        assert indices == [8, 2]
 
     def test_triple_nesting(self) -> None:
         dataset = TensorDataset(torch.arange(20))
         a = Subset(dataset, list(range(10, 20)))
         b = Subset(a, [0, 5, 9])
-        c = Subset(b, [2, 1])
-        assert resolve_base_indices(c) == [19, 15]
+        base, indices = resolve_base_dataset(Subset(b, [2, 1]))
+        assert base is dataset
+        assert indices == [19, 15]
 
-    def test_unwrap_dataset(self) -> None:
-        dataset = TensorDataset(torch.arange(6))
-        nested = Subset(Subset(dataset, [0, 1, 2]), [1])
-        assert unwrap_dataset(nested) is dataset
+    def test_indices_address_the_returned_base(self) -> None:
+        """The two halves must stay consistent: indices address `base`."""
+        dataset = TensorDataset(torch.arange(20))
+        nested = Subset(Subset(dataset, list(range(10, 20))), [0, 5, 9])
+        base, indices = resolve_base_dataset(nested)
+        for position, base_idx in enumerate(indices):
+            assert base[base_idx][0].item() == nested[position][0].item()
 
 
 class TestPerturbationBatchSampler:

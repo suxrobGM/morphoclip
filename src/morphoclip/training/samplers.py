@@ -17,28 +17,25 @@ logger = logging.getLogger(__name__)
 MIN_PLATES_PER_BATCH = 2
 
 
-def resolve_base_indices(dataset: Dataset) -> list[int]:
-    """Resolve each sampler position to its index in the base dataset.
+def resolve_base_dataset(dataset: Dataset) -> tuple[Dataset, list[int]]:
+    """Unwrap nested ``Subset``s to the base dataset and each position's index.
 
-    Walks arbitrarily nested :class:`~torch.utils.data.Subset` wrappers.
+    Returned together because the indices only mean anything against the
+    dataset they were resolved through, and because both halves have to agree
+    on what counts as a wrapper.
 
     Args:
-        dataset: A dataset, possibly wrapped in one or more ``Subset``s.
+        dataset: A dataset, possibly wrapped in one or more
+            :class:`~torch.utils.data.Subset`s.
 
     Returns:
-        Base-dataset index per position, in position order.
+        ``(base_dataset, base_indices)``, where ``base_indices[i]`` is the
+        base-dataset index of sampler position ``i``.
     """
     if isinstance(dataset, Subset):
-        inner = resolve_base_indices(dataset.dataset)
-        return [inner[i] for i in dataset.indices]
-    return list(range(len(dataset)))  # type: ignore[arg-type]
-
-
-def unwrap_dataset(dataset: Dataset) -> Dataset:
-    """Return the innermost dataset behind any nested ``Subset`` wrappers."""
-    while isinstance(dataset, Subset):
-        dataset = dataset.dataset
-    return dataset
+        base, inner = resolve_base_dataset(dataset.dataset)
+        return base, [inner[i] for i in dataset.indices]
+    return dataset, list(range(len(dataset)))  # type: ignore[arg-type]
 
 
 class PerturbationBatchSampler(Sampler[list[int]]):

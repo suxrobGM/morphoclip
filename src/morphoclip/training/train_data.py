@@ -12,11 +12,7 @@ from morphoclip.data.perturbation import extract_plate_barcode
 from morphoclip.data.splits import create_splits
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.distributed import DistributedState
-from morphoclip.training.samplers import (
-    PerturbationBatchSampler,
-    resolve_base_indices,
-    unwrap_dataset,
-)
+from morphoclip.training.samplers import PerturbationBatchSampler, resolve_base_dataset
 from morphoclip.utils.device import loader_workers, supports_pin_memory
 
 EpochSampler = DistributedSampler | PerturbationBatchSampler
@@ -40,7 +36,7 @@ def build_sampler_keys(
     Raises:
         TypeError: If the underlying dataset is not a ``MorphoCLIPDataset``.
     """
-    base = unwrap_dataset(subset)
+    base, base_indices = resolve_base_dataset(subset)
     if not isinstance(base, MorphoCLIPDataset):
         raise TypeError(
             f"Expected a MorphoCLIPDataset behind the subset, got {type(base).__name__}"
@@ -49,7 +45,7 @@ def build_sampler_keys(
     entries = base.index_entries
     group_keys: list[str] = []
     plate_keys: list[str] = []
-    for base_idx in resolve_base_indices(subset):
+    for base_idx in base_indices:
         plate, well, _ = entries[base_idx]
         barcode = extract_plate_barcode(plate)
         group_keys.append(metadata.lookup(barcode, well).broad_sample)
