@@ -8,6 +8,7 @@ from morphoclip.training.losses import (
     _row_normalize,
     build_affinity_matrix,
     compute_loss,
+    compute_training_loss,
     cwcl_loss,
     infonce_loss,
     replicate_image_loss,
@@ -306,3 +307,62 @@ class TestComputeLoss:
         scale = torch.tensor(2.6593)
         with pytest.raises(ValueError, match="Unknown loss_type"):
             compute_loss("unknown", image, text, scale)
+
+
+class TestComputeTrainingLoss:
+    """Tests for total-loss composition and its reported components."""
+
+    def _inputs(self):
+        generator = torch.Generator().manual_seed(11)
+        image = F.normalize(torch.randn(6, 16, generator=generator), dim=-1)
+        text = F.normalize(torch.randn(6, 16, generator=generator), dim=-1)
+        return image, text, torch.tensor(2.6593), ["A", "A", "B", "B", "C", "C"]
+
+    def test_no_components_when_replicate_disabled(self) -> None:
+        image, text, scale, broad = self._inputs()
+        total, components = compute_training_loss(
+            "cwcl", image, text, scale, broad_samples=broad
+        )
+        expected = compute_loss("cwcl", image, text, scale, broad_samples=broad)
+        torch.testing.assert_close(total, expected)
+        assert components == {}
+
+    def test_total_is_text_plus_weighted_replicate(self) -> None:
+        image, text, scale, broad = self._inputs()
+        total, components = compute_training_loss(
+            "cwcl", image, text, scale, broad_samples=broad, replicate_weight=0.3
+        )
+        text_loss = compute_loss("cwcl", image, text, scale, broad_samples=broad)
+        replicate = replicate_image_loss(image, scale.exp(), broad_samples=broad)
+        torch.testing.assert_close(total, text_loss + 0.3 * replicate)
+        assert set(components) == {"text", "replicate"}
+        torch.testing.assert_close(components["text"], text_loss.detach())
+        torch.testing.assert_close(components["replicate"], replicate.detach())
+
+    def test_components_are_detached(self) -> None:
+        image, text, scale, broad = self._inputs()
+        image = image.requires_grad_(True)
+        total, components = compute_training_loss(
+            "cwcl", image, text, scale, broad_samples=broad, replicate_weight=0.3
+        )
+        assert total.requires_grad
+        assert not any(value.requires_grad for value in components.values())
+
+    def test_fixed_temperature_overrides_learnable_scale(self) -> None:
+        image, text, scale, broad = self._inputs()
+        _, components = compute_training_loss(
+            "cwcl",
+            image,
+            text,
+            scale,
+            broad_samples=broad,
+            replicate_weight=1.0,
+            replicate_temperature=0.1,
+        )
+        expected = replicate_image_loss(image, 1.0 / 0.1, broad_samples=broad)
+        torch.testing.assert_close(components["replicate"], expected.detach())
+
+    def test_replicate_without_broad_samples_raises(self) -> None:
+        image, text, scale, _ = self._inputs()
+        with pytest.raises(ValueError, match="broad_samples"):
+            compute_training_loss("infonce", image, text, scale, replicate_weight=0.3)

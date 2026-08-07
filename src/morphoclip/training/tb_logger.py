@@ -5,6 +5,7 @@ weight histograms, and similarity heatmaps.  Silent no-op when
 ``rank != 0`` or TensorBoard is disabled in config.
 """
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -105,21 +106,21 @@ class TrainingLogger:
         logit_stats: dict[str, float],
         image_emb: torch.Tensor | None = None,
         text_emb: torch.Tensor | None = None,
-        replicate_loss: float | None = None,
+        components: Mapping[str, float] | None = None,
     ) -> None:
         """Log per-step training scalars and embedding diagnostics.
 
         Args:
-            replicate_loss: Replicate-alignment component, logged separately
-                from the total loss. ``None`` when the term is disabled.
+            components: Per-term breakdown of *loss*, logged as
+                ``train/<name>_loss``. Empty when the loss is a single term.
         """
         w = self._writer
         if w is None:
             return
 
         w.add_scalar("train/loss", loss, step)
-        if replicate_loss is not None:
-            w.add_scalar("train/replicate_loss", replicate_loss, step)
+        for name, value in (components or {}).items():
+            w.add_scalar(f"train/{name}_loss", value, step)
         w.add_scalar("train/lr", lr, step)
         w.add_scalar("train/tau", tau, step)
         w.add_scalar("train/grad_norm_before_clip", grad_norm_before, step)

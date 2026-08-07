@@ -90,7 +90,6 @@ class MorphoCLIPRuntimeConfig:
     log_every_steps: int = 10
     max_train_steps: int | None = None
     # Epochs without a new best eval loss before stopping (None disables).
-    # Single-GPU only: eval runs on rank 0, so other ranks never see it.
     early_stop_patience: int | None = None
 
 

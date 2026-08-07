@@ -11,6 +11,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from benchmark.export_utils import feature_columns
 from morphoclip.cli.logging import setup_logging
 from morphoclip.data.perturbation import PerturbationInfo
 from morphoclip.training.config import load_training_config
@@ -153,7 +154,6 @@ def _profile_row(plate: str, well: str, info: PerturbationInfo) -> dict[str, str
 def _run_profile(image_embs, plates, wells, pert_infos, *, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     dim = image_embs.shape[1]
-    feature_cols = [f"feat_{i}" for i in range(dim)]
 
     metadata_df = pd.DataFrame(
         [
@@ -161,7 +161,7 @@ def _run_profile(image_embs, plates, wells, pert_infos, *, output_dir):
             for plate, well, info in zip(plates, wells, pert_infos, strict=True)
         ]
     )
-    features_df = pd.DataFrame(image_embs.numpy(), columns=feature_cols)
+    features_df = pd.DataFrame(image_embs.numpy(), columns=feature_columns(dim))
     df = pd.concat([metadata_df, features_df], axis=1)
 
     output_path = output_dir / "morphoclip_profiles.csv.gz"

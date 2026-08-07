@@ -28,7 +28,7 @@ from morphoclip.training.engine import (
     optimizer_step,
     scale_param,
 )
-from morphoclip.training.losses import compute_loss, replicate_image_loss
+from morphoclip.training.losses import compute_training_loss
 from morphoclip.training.metrics import compute_logit_stats
 from morphoclip.training.tb_logger import TrainingLogger
 
@@ -70,19 +70,16 @@ def enter_no_sync(stack: ExitStack, *modules: nn.Module) -> None:
         stack.enter_context(cast(DDP, module).no_sync())
 
 
-def replicate_loss_scale(
-    logit_scale: nn.Module,
-    *,
-    replicate_temperature: float | None,
-) -> torch.Tensor | float:
-    """Resolve the linear scale for the replicate image-image term.
+def accumulate_components(
+    totals: dict[str, torch.Tensor | float],
+    components: dict[str, torch.Tensor],
+) -> None:
+    """Add this micro-step's loss components into *totals*, in place.
 
-    Defaults to the shared learnable temperature; ``replicate_temperature``
-    pins it to ``1 / temperature`` instead.
+    Values stay tensors so no device sync happens mid-step.
     """
-    if replicate_temperature is None:
-        return scale_param(logit_scale).exp()
-    return 1.0 / replicate_temperature
+    for name, value in components.items():
+        totals[name] = totals.get(name, 0.0) + value
 
 
 def run_epoch(
@@ -109,7 +106,7 @@ def run_epoch(
 
     epoch_losses: list[float] = []
     step_loss_accum = 0.0
-    step_replicate_accum: torch.Tensor | float = 0.0
+    step_components: dict[str, torch.Tensor | float] = {}
     last_image_emb: torch.Tensor | None = None
     last_text_emb: torch.Tensor | None = None
 
@@ -123,7 +120,6 @@ def run_epoch(
             train_loader
         )
 
-        replicate_value: torch.Tensor | float = 0.0
         sync_ctx = ExitStack()
         if is_accumulating and use_ddp:
             enter_no_sync(sync_ctx, image_encoder, text_projection, logit_scale)
@@ -142,7 +138,7 @@ def run_epoch(
                 target_weight=opt_cfg.target_weight,
             )
             with autocast_context(device, config.runtime.amp):
-                loss = compute_loss(
+                loss, components = compute_training_loss(
                     opt_cfg.loss_type,
                     all_image,
                     all_text,
@@ -150,29 +146,16 @@ def run_epoch(
                     broad_samples=all_broad,
                     target_keys=all_targets,
                     target_weight=opt_cfg.target_weight,
+                    replicate_weight=opt_cfg.replicate_weight,
+                    replicate_temperature=opt_cfg.replicate_temperature,
                 )
-                # Added here rather than inside compute_loss so eval_loss stays
-                # text alignment only.
-                if opt_cfg.replicate_weight > 0.0:
-                    replicate_loss = replicate_image_loss(
-                        all_image,
-                        replicate_loss_scale(
-                            logit_scale,
-                            replicate_temperature=opt_cfg.replicate_temperature,
-                        ),
-                        broad_samples=all_broad,
-                    )
-                    # Kept as a tensor: calling .item() here would sync the
-                    # device before backward is even queued.
-                    replicate_value = replicate_loss.detach()
-                    loss = loss + opt_cfg.replicate_weight * replicate_loss
                 loss = loss / accum_steps
             grad_scaler.scale(loss).backward()
 
         last_image_emb = image_emb.detach()
         last_text_emb = text_emb.detach()
         step_loss_accum += float(loss.detach().cpu().item()) * accum_steps
-        step_replicate_accum = step_replicate_accum + replicate_value
+        accumulate_components(step_components, components)
 
         if not is_accumulating:
             grad_norm_before, grad_norm_after = optimizer_step(
@@ -187,9 +170,9 @@ def run_epoch(
 
             global_step += 1
             loss_val = step_loss_accum / accum_steps
-            replicate_total = step_replicate_accum
+            component_totals = step_components
             step_loss_accum = 0.0
-            step_replicate_accum = 0.0
+            step_components = {}
             if use_ddp:
                 loss_val = all_reduce_scalar(loss_val)
             epoch_losses.append(loss_val)
@@ -198,15 +181,17 @@ def run_epoch(
                 sp = scale_param(logit_scale)
                 current_lr = float(ctx.scheduler.get_last_lr()[0])
                 current_tau = sp.exp().item()
-                replicate_val = float(replicate_total) / accum_steps
-                replicate_note = (
-                    f" replicate=[magenta]{replicate_val:.5f}[/magenta]"
-                    if opt_cfg.replicate_weight > 0.0
-                    else ""
+                component_vals = {
+                    name: float(total) / accum_steps
+                    for name, total in component_totals.items()
+                }
+                note = "".join(
+                    f" {name}=[magenta]{value:.5f}[/magenta]"
+                    for name, value in component_vals.items()
                 )
                 progress.console.print(
                     f"  [dim]step={global_step}/{total_steps} "
-                    f"loss=[green]{loss_val:.5f}[/green]{replicate_note} "
+                    f"loss=[green]{loss_val:.5f}[/green]{note} "
                     f"lr={current_lr:.6f} tau={current_tau:.4f}[/dim]"
                 )
                 with torch.no_grad():
@@ -223,7 +208,7 @@ def run_epoch(
                     logit_stats=logit_stats,
                     image_emb=image_emb.detach(),
                     text_emb=text_emb.detach(),
-                    replicate_loss=replicate_val if opt_cfg.replicate_weight > 0.0 else None,
+                    components=component_vals,
                 )
                 logger.log_model_health(
                     global_step,

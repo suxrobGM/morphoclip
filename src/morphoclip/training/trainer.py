@@ -19,6 +19,7 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, T
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.distributed import (
     DistributedState,
+    broadcast_flag,
     cleanup_distributed,
     setup_distributed,
 )
@@ -308,14 +309,18 @@ def _train_loop(
             history.append(train_metrics)
             progress.update(epoch_task, advance=1)
 
-            # Single-GPU only: eval runs on rank 0, so other ranks would never
-            # see the stop condition and would hang.
+            # Only rank 0 evaluates, so it decides and the others follow.
+            # Every rank must agree or the stragglers hang at the next collective.
             patience = config.runtime.early_stop_patience
-            if patience is not None and not use_ddp and epochs_since_best >= patience:
-                progress.console.print(
-                    f"  [bold yellow]Early stopping: no eval-loss improvement for "
-                    f"{epochs_since_best} epoch(s) (patience={patience}).[/bold yellow]"
-                )
+            should_stop = patience is not None and epochs_since_best >= patience
+            if use_ddp:
+                should_stop = broadcast_flag(should_stop)
+            if should_stop:
+                if is_main:
+                    progress.console.print(
+                        f"  [bold yellow]Early stopping: no eval-loss improvement for "
+                        f"{epochs_since_best} epoch(s) (patience={patience}).[/bold yellow]"
+                    )
                 break
 
     # --- Save history ---

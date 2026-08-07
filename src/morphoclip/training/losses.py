@@ -247,3 +247,81 @@ def compute_loss(
             target_weight=target_weight,
         )
     raise ValueError(f"Unknown loss_type: {loss_type!r}")
+
+
+def replicate_loss_scale(
+    logit_scale: torch.Tensor,
+    replicate_temperature: float | None,
+) -> torch.Tensor | float:
+    """Resolve the linear scale for the replicate image-image term.
+
+    Defaults to the shared learnable temperature; *replicate_temperature* pins
+    it to ``1 / temperature`` instead.
+
+    Args:
+        logit_scale: Scalar log-temperature parameter.
+        replicate_temperature: Fixed temperature, or ``None`` to share.
+    """
+    if replicate_temperature is None:
+        return logit_scale.exp()
+    return 1.0 / replicate_temperature
+
+
+def compute_training_loss(
+    loss_type: str,
+    image_features: torch.Tensor,
+    text_features: torch.Tensor,
+    logit_scale: torch.Tensor,
+    *,
+    broad_samples: list[str] | None = None,
+    target_keys: list[str] | None = None,
+    target_weight: float = 0.0,
+    replicate_weight: float = 0.0,
+    replicate_temperature: float | None = None,
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Total training loss and its named components.
+
+    Composes the text-alignment loss with any auxiliary terms. Evaluation
+    calls :func:`compute_loss` directly so ``eval_loss`` stays text-only and
+    comparable across ablations.
+
+    Args:
+        loss_type: ``"infonce"`` or ``"cwcl"``.
+        image_features: ``(B, D)`` L2-normalized image embeddings.
+        text_features: ``(B, D)`` L2-normalized text embeddings.
+        logit_scale: Scalar log-temperature parameter.
+        broad_samples: Perturbation ID per sample; required for CWCL and for
+            the replicate term.
+        target_keys: Optional canonical gene keys per sample.
+        target_weight: Affinity for gene-overlapping pairs.
+        replicate_weight: Weight of the replicate image-image term (0 disables).
+        replicate_temperature: Fixed temperature for the replicate term.
+
+    Returns:
+        ``(total, components)``. *components* holds the detached per-term
+        values for logging, and is empty when the total is a single term.
+
+    Raises:
+        ValueError: If the replicate term is enabled without *broad_samples*.
+    """
+    text = compute_loss(
+        loss_type,
+        image_features,
+        text_features,
+        logit_scale,
+        broad_samples=broad_samples,
+        target_keys=target_keys,
+        target_weight=target_weight,
+    )
+    if replicate_weight <= 0.0:
+        return text, {}
+
+    if broad_samples is None:
+        raise ValueError("The replicate image-image term requires broad_samples")
+    replicate = replicate_image_loss(
+        image_features,
+        replicate_loss_scale(logit_scale, replicate_temperature),
+        broad_samples=broad_samples,
+    )
+    total = text + replicate_weight * replicate
+    return total, {"text": text.detach(), "replicate": replicate.detach()}

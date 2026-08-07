@@ -22,6 +22,7 @@ from morphoclip.training.engine import (
 from morphoclip.training.evaluate import evaluate_epoch
 from morphoclip.training.losses import (
     compute_loss,
+    compute_training_loss,
     cwcl_loss,
     infonce_loss,
     replicate_image_loss,
@@ -45,6 +46,7 @@ __all__ = [
     "compute_alignment",
     "compute_loss",
     "compute_retrieval_metrics",
+    "compute_training_loss",
     "compute_uniformity",
     "cross_well_alignment",
     "cwcl_loss",
