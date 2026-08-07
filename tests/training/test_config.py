@@ -170,9 +170,8 @@ class TestTrainingConfigFromDict:
             )
 
     def test_non_strict_skips_unknown_keys(self) -> None:
-        # Mirrors an older checkpoint's embedded config dict, which may carry
-        # fields dropped from the current schema (betas, eval_every_epochs,
-        # embed_dim, tensorboard, distributed.backend, ...).
+        # Mirrors an older checkpoint's config dict, carrying fields the schema
+        # has since dropped.
         old_dict = {
             "dataset": {"batch_size": 16, "max_train_wells": 100},
             "model": {"embed_dim": 1024, "output_dim": 512},

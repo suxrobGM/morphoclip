@@ -19,9 +19,8 @@ def cross_well_alignment(
     of all wells from that plate, subtracts it, and L2-normalizes the
     corrected embeddings.
 
-    Plates contributing a single well to the batch are left untouched:
-    subtracting a one-sample mean would collapse the embedding to the zero
-    vector and destroy its signal.
+    Plates contributing a single well are left untouched, since subtracting a
+    one-sample mean would collapse that embedding to the zero vector.
 
     Args:
         embeddings: ``(B, D)`` embeddings (typically L2-normalized).
@@ -37,7 +36,6 @@ def cross_well_alignment(
     for i, plate in enumerate(plate_ids):
         plate_to_indices.setdefault(plate, []).append(i)
 
-    # Subtract per-plate mean (skipping singleton plates)
     for indices in plate_to_indices.values():
         if len(indices) < 2:
             continue

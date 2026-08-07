@@ -50,10 +50,8 @@ def evaluate_epoch(
 ) -> dict[str, float]:
     """Run one evaluation epoch.
 
-    The eval loss is deliberately text-alignment only — the replicate
-    image-image term is *not* included, so model selection stays comparable
-    across ablations.  *target_weight* is threaded through so the CWCL soft
-    labels match training semantics.
+    The eval loss covers text alignment only. The replicate image-image term is
+    left out so model selection stays comparable across ablations.
 
     Returns:
         Dict with ``eval_loss`` and retrieval metrics.

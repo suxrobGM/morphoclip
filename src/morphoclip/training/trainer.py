@@ -311,8 +311,8 @@ def _train_loop(
             history.append(train_metrics)
             progress.update(epoch_task, advance=1)
 
-            # Early stopping is single-GPU only: eval runs on rank 0, so the
-            # other ranks never see the stop condition and would hang.
+            # Single-GPU only: eval runs on rank 0, so other ranks would never
+            # see the stop condition and would hang.
             patience = config.runtime.early_stop_patience
             if patience is not None and not use_ddp and epochs_since_best >= patience:
                 progress.console.print(

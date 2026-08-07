@@ -47,7 +47,7 @@ class TestClumpingRegression:
 
         assert metrics["n_wells"] == 12.0
         assert metrics["n_perturbations"] == 3.0
-        # Every well's true text ranks 2nd of 3 -> never top-1, always top-5.
+        # Every well's true text ranks 2nd of 3: never top-1, always top-5.
         assert metrics["image_to_text_R@1"] == 0.0
         assert metrics["image_to_text_R@5"] == 1.0
         assert metrics["image_to_text_mean_rank"] == 2.0

@@ -5,8 +5,7 @@ extends: base.yaml
 
 dataset:
   batch_size: 128                   # Per-GPU batch size (effective = 128 * num_gpus * accum_steps)
-  # num_workers is derived (0 since preload=true is inherited from base.yaml,
-  # else 4) — no longer independently configurable per config.py 3.1.
+  # num_workers is derived: 0 because base.yaml sets preload=true, else 4.
 
 distributed:
   enabled: true

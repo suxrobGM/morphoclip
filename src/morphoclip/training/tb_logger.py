@@ -110,8 +110,8 @@ class TrainingLogger:
         """Log per-step training scalars and embedding diagnostics.
 
         Args:
-            img_img_loss: Replicate-alignment image-image component, logged
-                separately from the total loss.  ``None`` when disabled.
+            img_img_loss: Replicate-alignment component, logged separately from
+                the total loss. ``None`` when the term is disabled.
         """
         w = self._writer
         if w is None:

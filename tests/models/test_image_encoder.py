@@ -90,12 +90,8 @@ class TestMorphoCLIPImageEncoder:
         assert encoder.aggregator == "ccf-mean"
 
     def test_ccf_mean_matches_reference_implementation(self) -> None:
-        """Regression: ``ccf-mean`` must reproduce the pre-refactor default path.
-
-        The old default was CrossChannelFormer over channels, masked mean over
-        sites, then ProjectionHead. Computed here explicitly from the encoder's
-        own submodules and compared against ``forward``.
-        """
+        """``ccf-mean`` must reproduce the pre-refactor default path: CCF over
+        channels, masked mean over sites, then ProjectionHead."""
         encoder = _make_encoder("ccf-mean")
         encoder.eval()
 

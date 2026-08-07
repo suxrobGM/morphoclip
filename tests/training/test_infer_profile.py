@@ -60,8 +60,7 @@ class TestProfileRow:
         assert row["Metadata_broad_sample"] == ""
 
     def test_no_attribute_error_for_default_fields(self) -> None:
-        # Regression test: PerturbationInfo has `target_list`/`gene`, not
-        # `target`/`gene_symbol`. Accessing the wrong names raises AttributeError.
+        # PerturbationInfo has `target_list`/`gene`, not `target`/`gene_symbol`.
         info = PerturbationInfo()
 
         row = _profile_row("PLATE1", "A01", info)

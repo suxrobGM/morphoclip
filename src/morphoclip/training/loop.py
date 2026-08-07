@@ -75,10 +75,10 @@ def image_image_scale(
     *,
     img_img_temperature: float | None,
 ) -> torch.Tensor:
-    """Resolve the *linear* scale for the replicate image-image term.
+    """Resolve the linear scale for the replicate image-image term.
 
-    Defaults to the shared learnable temperature; a configured
-    ``img_img_temperature`` pins it to ``1 / temperature`` instead.
+    Defaults to the shared learnable temperature; ``img_img_temperature`` pins
+    it to ``1 / temperature`` instead.
     """
     if img_img_temperature is None:
         return scale_param(logit_scale).exp()
@@ -151,8 +151,8 @@ def run_epoch(
                     target_keys=all_targets,
                     target_weight=opt_cfg.target_weight,
                 )
-                # Replicate-alignment term is combined here rather than folded
-                # into compute_loss so eval_loss stays pure text alignment.
+                # Added here rather than inside compute_loss so eval_loss stays
+                # text alignment only.
                 if opt_cfg.lambda_img > 0.0:
                     img_img_loss = replicate_image_loss(
                         all_image,

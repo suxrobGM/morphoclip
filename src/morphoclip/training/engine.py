@@ -201,9 +201,7 @@ def forward_step(
     """Forward pass + optional CWA + gather across GPUs.
 
     Returns ``(all_image, all_text, image_emb, text_emb, all_broad_samples,
-    all_target_keys)``.  The gathered target keys feed the gene-aware CWCL
-    soft labels; they are plain strings so the existing
-    :func:`~morphoclip.training.distributed.gather_string_lists` handles them.
+    all_target_keys)``. The target keys feed the gene-aware CWCL soft labels.
     """
     # Lazy imports to avoid circular dependency (engine <-> evaluate)
     from morphoclip.data.perturbation import target_gene_key
@@ -226,8 +224,8 @@ def forward_step(
         broad_samples = [info.broad_sample for info in pert_infos]
         target_keys = [target_gene_key(info) for info in pert_infos]
         if use_ddp:
-            # gather_with_grad=True: preserve gradient flow through all_gather
-            # so negatives on remote GPUs still contribute to the contrastive loss.
+            # with_grad keeps gradients flowing through all_gather, so negatives
+            # on remote GPUs still contribute to the contrastive loss.
             all_image = all_gather_tensors(image_emb, with_grad=True)
             all_text = all_gather_tensors(text_emb, with_grad=True)
             all_broad = gather_string_lists(broad_samples, dist_state.world_size)

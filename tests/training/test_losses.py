@@ -97,7 +97,7 @@ class TestGeneAwareSoftLabels:
         torch.testing.assert_close(gene_aware, binary)
 
     def test_shared_gene_gets_target_weight(self) -> None:
-        """A compound target_list and a CRISPR gene overlapping → target_weight."""
+        """A compound and a CRISPR knockout sharing a gene get target_weight."""
         affinity = build_affinity_matrix(
             ["CMPD", "KO"],
             target_keys=["GENE1|GENE2", "GENE1"],
@@ -229,7 +229,7 @@ class TestReplicateImageLoss:
         assert raw.grad is not None
 
     def test_pulls_replicates_together(self) -> None:
-        """Replicate embeddings closer together → lower loss."""
+        """Closer replicate embeddings give a lower loss."""
         broad = ["A", "A", "B", "B"]
         base_a = F.normalize(torch.randn(1, 16), dim=-1)
         base_b = F.normalize(torch.randn(1, 16), dim=-1)
@@ -245,7 +245,7 @@ class TestReplicateImageLoss:
         """Identical replicates give a near-zero loss only if self is excluded."""
         emb = F.normalize(torch.randn(1, 16), dim=-1).repeat(2, 1)
         loss = replicate_image_loss(emb, 10.0, broad_samples=["A", "A"])
-        # Only one candidate remains after excluding self → log(1) = 0.
+        # Excluding self leaves one candidate, so log(1) = 0.
         torch.testing.assert_close(loss, torch.tensor(0.0), atol=1e-6, rtol=0)
 
     def test_rows_without_positives_are_dropped(self) -> None:

@@ -31,9 +31,8 @@ def load_checkpoint(
 ) -> tuple[dict, MorphoCLIPTrainingConfig]:
     """Load checkpoint and reconstruct config.
 
-    Uses a non-strict merge: older checkpoints may embed a config dict with
-    fields the schema has since dropped (e.g. ``betas``, ``eval_every_epochs``).
-    Unknown keys are logged and skipped rather than raising.
+    Merges non-strictly: older checkpoints embed fields the schema has dropped
+    (``betas``, ``eval_every_epochs``), so unknown keys are logged and skipped.
     """
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
     if "config" not in ckpt:

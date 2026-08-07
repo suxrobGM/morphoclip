@@ -9,9 +9,8 @@ import yaml
 
 from benchmark.data import get_timepoint_label
 
-# Re-exported for backward compatibility: these helpers now live in
-# ``benchmark.export_utils`` so ``morphoclip.benchmark.export`` can reuse them
-# without importing ``cellclip`` (see .claude/rules/architecture.md).
+# Re-exported for callers that still import them from here; they moved to
+# benchmark.export_utils so morphoclip can reuse them without importing cellclip.
 from benchmark.export_utils import (  # noqa: F401
     feature_columns,
     negcon_center_profiles,

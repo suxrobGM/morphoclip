@@ -23,8 +23,8 @@ model:
   ccf_heads: 4                      # Transformer attention heads (CCF/WellFormer)
   proj_dropout: 0.3                 # ProjectionHead dropout rate (stronger regularization)
   # embed_dim (1024), text_input_dim (768), input_channels (5), and
-  # proj_hidden_dim (512) are fixed properties of the cached features, not
-  # config knobs — see morphoclip.training.config module constants.
+  # proj_hidden_dim (512) are fixed by the cached features. See the constants
+  # in morphoclip.training.config.
 
 optimization:
   loss_type: "cwcl"                 # Loss function: "cwcl" (soft labels) or "infonce"
@@ -33,8 +33,8 @@ optimization:
   epochs: 100                       # Maximum training epochs
   warmup_steps: 100                 # Linear LR warmup steps before cosine decay
   use_cwa: false                    # Enable Cross-Well Alignment batch correction
-  # betas, eps, grad_clip_norm, and logit_scale_max are never-tuned optimizer
-  # constants — see morphoclip.training.config module constants.
+  # betas, eps, grad_clip_norm, and logit_scale_max are fixed constants in
+  # morphoclip.training.config.
 
 runtime:
   seed: 42                          # Random seed for reproducibility
@@ -49,4 +49,4 @@ distributed:
   enabled: false                    # Set true + use torchrun for multi-GPU DDP
   gradient_accumulation_steps: 1    # Effective batch = batch_size * num_gpus * accum_steps
   # backend ("nccl"/"gloo"), gather_with_grad, and find_unused_parameters are
-  # derived/hardcoded at the call site — see morphoclip.training.trainer / setup.
+  # set at the call site in morphoclip.training.trainer and setup.

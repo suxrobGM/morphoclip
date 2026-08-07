@@ -31,8 +31,7 @@ def build_sampler_keys(
 ) -> tuple[list[str], list[str]]:
     """Build per-position perturbation and plate keys for a (possibly nested) subset.
 
-    Uses metadata lookups only — no feature tensors are touched, so this
-    stays cheap and independent of the feature cache format.
+    Uses metadata lookups only, so no feature tensors are loaded.
 
     Args:
         subset: Training subset, possibly wrapped in nested ``Subset``s.
@@ -70,12 +69,10 @@ def build_train_data(
     """Build datasets, splits, and data loaders.
 
     Returns:
-        (train_loader, val_loader, train_count, val_count, train_sampler)
-
-        The last element is whichever per-epoch sampler needs ``set_epoch``
-        called on it: a ``DistributedSampler`` under DDP, a
-        ``PerturbationBatchSampler`` when ``dataset.batch_sampler`` is
-        ``"perturbation"``, otherwise ``None``.
+        ``(train_loader, val_loader, train_count, val_count, train_sampler)``,
+        where ``train_sampler`` is whichever sampler needs ``set_epoch``:
+        ``DistributedSampler`` under DDP, ``PerturbationBatchSampler`` when
+        ``dataset.batch_sampler`` is ``"perturbation"``, else ``None``.
     """
     ds_cfg = config.dataset
     metadata = MetadataIndex.from_config(Path(ds_cfg.dataset_config_path))
@@ -139,7 +136,7 @@ def build_train_data(
     num_workers = resolve_num_workers(0 if ds_cfg.preload else 4)
     pin = supports_pin_memory(device)
     if batch_sampler is not None:
-        # batch_sampler is mutually exclusive with batch_size/shuffle/sampler.
+        # DataLoader rejects batch_size/shuffle/sampler alongside batch_sampler.
         train_loader = DataLoader(
             train_set,
             batch_sampler=batch_sampler,
