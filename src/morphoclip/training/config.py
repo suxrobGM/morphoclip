@@ -54,7 +54,9 @@ class MorphoCLIPModelConfig:
     """Image encoder and projection head architecture."""
 
     output_dim: int = 512
-    channel_aggregation: str = "ccf"  # "ccf" (CrossChannelFormer) or "mean_pool"
+    # Well aggregation: "ccf-mean", "meanpool-mean", "ccf-attn", "wellformer".
+    aggregator: str = "ccf-mean"
+    # Transformer depth/width, shared by CrossChannelFormer and WellFormer.
     ccf_layers: int = 2
     ccf_heads: int = 8
     proj_dropout: float = 0.1
@@ -215,6 +217,45 @@ def _merge_dataclass(instance: Any, raw: dict[str, Any], *, strict: bool = True)
     return instance
 
 
+# Checkpoints saved before the aggregator refactor embed the old
+# ``model.channel_aggregation`` field.  Mapping it explicitly keeps those
+# checkpoints correct rather than accidentally correct via the default.
+LEGACY_CHANNEL_AGGREGATION = {"ccf": "ccf-mean", "mean_pool": "meanpool-mean"}
+
+
+def _translate_legacy_model_section(raw: dict[str, Any]) -> dict[str, Any]:
+    """Rewrite a legacy ``model`` section onto the current schema.
+
+    Translates ``channel_aggregation`` into ``aggregator``. An explicit
+    ``aggregator`` already present always wins.
+
+    Args:
+        raw: The checkpoint's ``model`` section.
+
+    Returns:
+        A copy of *raw* with legacy keys translated and removed.
+    """
+    if "channel_aggregation" not in raw:
+        return raw
+
+    translated = dict(raw)
+    legacy = translated.pop("channel_aggregation")
+    if "aggregator" in translated:
+        return translated
+
+    mapped = LEGACY_CHANNEL_AGGREGATION.get(legacy)
+    if mapped is None:
+        logger.warning(
+            "Unrecognized legacy model.channel_aggregation=%r; using default aggregator",
+            legacy,
+        )
+        return translated
+
+    logger.info("Translating legacy model.channel_aggregation=%r to aggregator=%r", legacy, mapped)
+    translated["aggregator"] = mapped
+    return translated
+
+
 def training_config_from_dict(
     config_dict: dict[str, Any],
     *,
@@ -231,13 +272,19 @@ def training_config_from_dict(
         strict: If ``True``, raise on keys not present in the current schema.
             Pass ``False`` for configs loaded from older checkpoints, whose
             embedded dict may still carry fields the schema has since dropped.
+            Non-strict mode also applies legacy key translation (e.g.
+            ``model.channel_aggregation`` -> ``model.aggregator``); strict mode
+            does not, so stale YAML configs still fail loudly.
 
     Returns:
         Populated training config.
     """
     config = MorphoCLIPTrainingConfig()
+    model_section = config_dict.get("model", {})
+    if not strict:
+        model_section = _translate_legacy_model_section(model_section)
     _merge_dataclass(config.dataset, config_dict.get("dataset", {}), strict=strict)
-    _merge_dataclass(config.model, config_dict.get("model", {}), strict=strict)
+    _merge_dataclass(config.model, model_section, strict=strict)
     _merge_dataclass(config.optimization, config_dict.get("optimization", {}), strict=strict)
     _merge_dataclass(config.runtime, config_dict.get("runtime", {}), strict=strict)
     _merge_dataclass(config.distributed, config_dict.get("distributed", {}), strict=strict)

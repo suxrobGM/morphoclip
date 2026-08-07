@@ -18,6 +18,7 @@ class TestMorphoCLIPTrainingConfig:
     def test_default_creation(self) -> None:
         config = MorphoCLIPTrainingConfig()
         assert config.model.output_dim == 512
+        assert config.model.aggregator == "ccf-mean"
         assert config.optimization.loss_type == "infonce"
         assert config.optimization.lr == 3.0e-4
         assert config.runtime.device == "auto"
@@ -59,11 +60,26 @@ class TestMorphoCLIPTrainingConfig:
         config = load_training_config(base_yaml)
         assert config.optimization.loss_type == "cwcl"
         # base.yaml must stay behavior-identical: every new knob stays off.
+        assert config.model.aggregator == "ccf-mean"
         assert config.dataset.batch_sampler == "random"
         assert config.optimization.target_weight == 0.0
         assert config.optimization.lambda_img == 0.0
         assert config.optimization.img_img_temperature is None
         assert config.runtime.early_stop_patience is None
+
+    def test_mean_pool_yaml_uses_new_aggregator_field(self) -> None:
+        mean_pool_yaml = Path("configs/train/mean_pool.yaml")
+        if not mean_pool_yaml.exists():
+            pytest.skip("configs/train/mean_pool.yaml not available")
+        config = load_training_config(mean_pool_yaml)
+        assert config.model.aggregator == "meanpool-mean"
+
+    def test_legacy_channel_aggregation_rejected_in_strict_yaml(self, tmp_path: Path) -> None:
+        config_path = tmp_path / "legacy.yaml"
+        config_path.write_text(yaml.dump({"model": {"channel_aggregation": "ccf"}}))
+
+        with pytest.raises(ValueError, match="Unknown config key"):
+            load_training_config(config_path)
 
     def test_to_dict_roundtrip(self) -> None:
         config = MorphoCLIPTrainingConfig()
@@ -177,3 +193,30 @@ class TestTrainingConfigFromDict:
         assert config.optimization.lr == 1e-4
         assert config.runtime.seed == 7
         assert config.distributed.enabled is False
+
+    @pytest.mark.parametrize(
+        ("legacy", "expected"),
+        [("ccf", "ccf-mean"), ("mean_pool", "meanpool-mean")],
+    )
+    def test_legacy_channel_aggregation_translated(self, legacy: str, expected: str) -> None:
+        """Old checkpoints embed model.channel_aggregation; map it explicitly."""
+        config = training_config_from_dict(
+            {"model": {"channel_aggregation": legacy, "ccf_layers": 1}},
+            strict=False,
+        )
+        assert config.model.aggregator == expected
+        assert config.model.ccf_layers == 1
+
+    def test_explicit_aggregator_wins_over_legacy_key(self) -> None:
+        config = training_config_from_dict(
+            {"model": {"channel_aggregation": "ccf", "aggregator": "wellformer"}},
+            strict=False,
+        )
+        assert config.model.aggregator == "wellformer"
+
+    def test_unrecognized_legacy_channel_aggregation_falls_back_to_default(self) -> None:
+        config = training_config_from_dict(
+            {"model": {"channel_aggregation": "mystery"}},
+            strict=False,
+        )
+        assert config.model.aggregator == "ccf-mean"

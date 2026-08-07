@@ -116,6 +116,19 @@ Each well has multiple imaging sites (up to 9). Sites must be aggregated into a 
 
 **Recommendation:** Start with masked mean pooling. It's simple, proven, and the site-level variation within a well is small.
 
+**Implemented aggregators** (`model.aggregator` in the training config, channel step + site step):
+
+| Value             | Channels                  | Sites                       |
+| ----------------- | ------------------------- | --------------------------- |
+| `ccf-mean` (default) | CrossChannelFormer     | masked mean                 |
+| `meanpool-mean`   | L2-normalized mean        | masked mean                 |
+| `ccf-attn`        | CrossChannelFormer        | gated-attention MIL pooling |
+| `wellformer`      | joint transformer over all site-channel tokens (one step) |    |
+
+`ccf_layers` / `ccf_heads` set the transformer depth and head count for both the
+CrossChannelFormer and the WellFormer. WellFormer adds no site/positional
+embedding, so its output is invariant to site order.
+
 ### 4. CWCL Loss (`src/morphoclip/training/losses.py`)
 
 **Continuously Weighted Contrastive Loss** — handles soft positives (multiple wells with the same perturbation).
@@ -284,8 +297,8 @@ for batch in train_loader:
 
 **Config variants:**
 
-- `configs/train/base.yaml` — default config (CCF aggregation, batch_size=512)
-- `configs/train/mean_pool.yaml` — replaces CCF with simple mean pooling (ablation)
+- `configs/train/base.yaml` — default config (`aggregator: ccf-mean`, batch_size=512)
+- `configs/train/mean_pool.yaml` — `aggregator: meanpool-mean`, replaces CCF with simple mean pooling (ablation)
 - `configs/train/ddp.yaml` — multi-GPU DDP (batch_size=128/GPU, num_workers=4)
 
 ### Hardware Budget (RTX 5080, 16 GB VRAM)

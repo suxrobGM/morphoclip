@@ -59,9 +59,9 @@ def log_config_summary(
     table.add_row("Weight decay", f"{config.optimization.weight_decay}")
     table.add_row("Epochs", str(config.optimization.epochs))
     table.add_row("Batch size", str(config.dataset.batch_size))
-    agg = config.model.channel_aggregation
-    agg_label = f"ccf ({config.model.ccf_layers}L)" if agg == "ccf" else agg
-    table.add_row("Channel agg", agg_label)
+    agg = config.model.aggregator
+    agg_label = agg if agg == "meanpool-mean" else f"{agg} ({config.model.ccf_layers}L)"
+    table.add_row("Aggregator", agg_label)
     table.add_row("Output dim", str(config.model.output_dim))
     table.add_row("AMP", str(config.runtime.amp))
     table.add_row("Device", config.runtime.device)

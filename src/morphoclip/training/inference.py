@@ -55,7 +55,7 @@ def build_models(
     image_encoder = MorphoCLIPImageEncoder(
         embed_dim=EMBED_DIM,
         output_dim=m.output_dim,
-        channel_aggregation=m.channel_aggregation,
+        aggregator=m.aggregator,
         ccf_layers=m.ccf_layers,
         ccf_heads=m.ccf_heads,
         input_channels=INPUT_CHANNELS,

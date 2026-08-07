@@ -18,9 +18,9 @@ dataset:
 
 model:
   output_dim: 512                   # Shared contrastive space dimension
-  channel_aggregation: "ccf"        # Channel aggregation: "ccf" (CrossChannelFormer) or "mean_pool"
-  ccf_layers: 1                     # CrossChannelFormer transformer layers (ignored if mean_pool)
-  ccf_heads: 4                      # CrossChannelFormer attention heads
+  aggregator: "ccf-mean"            # Well aggregation: "ccf-mean", "meanpool-mean", "ccf-attn", "wellformer"
+  ccf_layers: 1                     # Transformer layers (CCF/WellFormer; ignored by meanpool-mean)
+  ccf_heads: 4                      # Transformer attention heads (CCF/WellFormer)
   proj_dropout: 0.3                 # ProjectionHead dropout rate (stronger regularization)
   # embed_dim (1024), text_input_dim (768), input_channels (5), and
   # proj_hidden_dim (512) are fixed properties of the cached features, not

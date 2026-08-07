@@ -9,4 +9,4 @@ dataset:
   eval_batch_size: 512
 
 model:
-  channel_aggregation: "mean_pool"
+  aggregator: "meanpool-mean"
