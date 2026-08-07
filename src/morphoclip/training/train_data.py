@@ -51,11 +51,6 @@ def build_train_data(
         used_indices = set(train_set.indices + val_set.indices)
         dataset.preload(indices=used_indices)
 
-    if ds_cfg.max_train_wells and len(train_set) > ds_cfg.max_train_wells:
-        train_set = torch.utils.data.Subset(train_set, list(range(ds_cfg.max_train_wells)))
-    if ds_cfg.max_eval_wells and len(val_set) > ds_cfg.max_eval_wells:
-        val_set = torch.utils.data.Subset(val_set, list(range(ds_cfg.max_eval_wells)))
-
     train_sampler: DistributedSampler | None = None
     use_ddp = dist_state is not None and dist_state.world_size > 1
     if use_ddp:
@@ -66,8 +61,8 @@ def build_train_data(
             shuffle=True,
         )
 
-    num_workers = resolve_num_workers(ds_cfg.num_workers)
-    pin = ds_cfg.pin_memory and supports_pin_memory(device)
+    num_workers = resolve_num_workers(0 if ds_cfg.preload else 4)
+    pin = supports_pin_memory(device)
     train_loader = DataLoader(
         train_set,
         batch_size=ds_cfg.batch_size,

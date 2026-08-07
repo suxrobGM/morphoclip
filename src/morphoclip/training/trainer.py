@@ -36,7 +36,7 @@ from morphoclip.training.setup import (
     log_config_summary,
     log_device_banner,
 )
-from morphoclip.training.tb_logger import TrainingLogger
+from morphoclip.training.tb_logger import HISTOGRAM_EVERY_EPOCHS, TrainingLogger
 from morphoclip.training.train_data import build_train_data
 from morphoclip.utils.caching import load_cached_text_features
 
@@ -54,7 +54,8 @@ def train_morphoclip(
 
     dist_state: DistributedState | None = None
     if dist_cfg.enabled:
-        dist_state = setup_distributed(dist_cfg.backend)
+        backend = "nccl" if torch.cuda.is_available() else "gloo"
+        dist_state = setup_distributed(backend)
         device = dist_state.device
         is_main = dist_state.is_main
     else:
@@ -90,7 +91,6 @@ def _train_loop(
 ) -> dict[str, Any]:
     dist_cfg = config.distributed
     opt_cfg = config.optimization
-    tb_cfg = config.tensorboard
     use_ddp = dist_state is not None and dist_state.world_size > 1
     accum_steps = dist_cfg.gradient_accumulation_steps
     world_size = dist_state.world_size if dist_state else 1
@@ -136,7 +136,7 @@ def _train_loop(
     # --- Training state ---
     run_dir.mkdir(parents=True, exist_ok=True)
     rank = dist_state.rank if dist_state else 0
-    logger = TrainingLogger(run_dir, config.tensorboard, rank=rank)
+    logger = TrainingLogger(run_dir, rank=rank)
     logger.log_config(config)
 
     history: list[dict[str, float | int]] = []
@@ -252,9 +252,9 @@ def _train_loop(
                 "epoch_seconds": float(time.time() - epoch_start),
             }
 
-            # --- Evaluation ---
+            # --- Evaluation (every epoch, main process only) ---
             eval_metrics: dict[str, float] | None = None
-            if epoch % config.runtime.eval_every_epochs == 0 and is_main:
+            if is_main:
                 eval_metrics = evaluate_epoch(
                     image_encoder,
                     text_projection,
@@ -281,10 +281,8 @@ def _train_loop(
                         "(saved)[/bold green]"
                     )
 
-            # --- Periodic save ---
-            if is_main and (
-                epoch % config.runtime.save_every_epochs == 0 or global_step >= total_steps
-            ):
+            # --- Periodic save (every epoch, main process only) ---
+            if is_main:
                 _save(last_ckpt, epoch=epoch, best=best_eval_loss)
 
             if use_ddp:
@@ -292,8 +290,8 @@ def _train_loop(
 
             logger.log_epoch(epoch, train_metrics, eval_metrics)
             if (
-                tb_cfg.histogram_every_epochs > 0
-                and epoch % tb_cfg.histogram_every_epochs == 0
+                HISTOGRAM_EVERY_EPOCHS > 0
+                and epoch % HISTOGRAM_EVERY_EPOCHS == 0
                 and result.last_image_emb is not None
                 and result.last_text_emb is not None
             ):

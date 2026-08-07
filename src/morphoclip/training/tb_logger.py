@@ -13,13 +13,15 @@ import yaml
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
-from morphoclip.training.config import TensorBoardConfig
 from morphoclip.training.metrics import (
     compute_alignment,
     compute_intra_batch_similarity,
     compute_param_norm,
     compute_uniformity,
 )
+
+HISTOGRAM_EVERY_EPOCHS = 5  # Weight/embedding histograms every N epochs (0 to disable)
+FLUSH_EVERY_STEPS = 50  # Flush TensorBoard writer every N steps
 
 _CUSTOM_SCALARS_LAYOUT = {
     "Overfitting": {
@@ -62,13 +64,12 @@ class TrainingLogger:
     def __init__(
         self,
         run_dir: Path,
-        tb_config: TensorBoardConfig,
         *,
         rank: int = 0,
     ) -> None:
         self._enabled = rank == 0
-        self._flush_every = tb_config.flush_every_steps
-        self._histogram_every = tb_config.histogram_every_epochs
+        self._flush_every = FLUSH_EVERY_STEPS
+        self._histogram_every = HISTOGRAM_EVERY_EPOCHS
         self._writer: SummaryWriter | None = None
 
         if self._enabled:

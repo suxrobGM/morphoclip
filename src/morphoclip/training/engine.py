@@ -10,7 +10,7 @@ from torch import nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
-from morphoclip.training.config import MorphoCLIPTrainingConfig
+from morphoclip.training.config import ADAMW_BETAS, ADAMW_EPS, MorphoCLIPTrainingConfig
 from morphoclip.training.distributed import LogitScaleModule
 from morphoclip.training.metrics import compute_grad_norm
 from morphoclip.utils.device import autocast_context, resolve_device  # noqa: F401
@@ -47,7 +47,7 @@ def build_optimizer(
 ) -> AdamW:
     """Build AdamW optimizer from config."""
     opt = config.optimization
-    return AdamW(params, lr=opt.lr, betas=opt.betas, eps=opt.eps)
+    return AdamW(params, lr=opt.lr, betas=ADAMW_BETAS, eps=ADAMW_EPS)
 
 
 def build_scheduler(
@@ -196,7 +196,6 @@ def forward_step(
     amp: bool,
     use_cwa: bool,
     use_ddp: bool,
-    dist_cfg: Any,
     dist_state: Any,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[str]]:
     """Forward pass + optional CWA + gather across GPUs.
@@ -222,8 +221,10 @@ def forward_step(
 
         broad_samples = [info.broad_sample for info in pert_infos]
         if use_ddp:
-            all_image = all_gather_tensors(image_emb, with_grad=dist_cfg.gather_with_grad)
-            all_text = all_gather_tensors(text_emb, with_grad=dist_cfg.gather_with_grad)
+            # gather_with_grad=True: preserve gradient flow through all_gather
+            # so negatives on remote GPUs still contribute to the contrastive loss.
+            all_image = all_gather_tensors(image_emb, with_grad=True)
+            all_text = all_gather_tensors(text_emb, with_grad=True)
             all_broad = gather_string_lists(broad_samples, dist_state.world_size)
         else:
             all_image, all_text, all_broad = image_emb, text_emb, broad_samples

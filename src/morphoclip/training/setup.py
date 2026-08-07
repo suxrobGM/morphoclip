@@ -95,14 +95,11 @@ def build_and_wrap_models(
     if use_ddp:
         assert dist_state is not None  # implied by use_ddp
         device_ids = [dist_state.local_rank]
-        find_unused = config.distributed.find_unused_parameters
-        image_encoder = DDP(
-            image_encoder, device_ids=device_ids, find_unused_parameters=find_unused
-        )
-        text_projection = DDP(
-            text_projection, device_ids=device_ids, find_unused_parameters=find_unused
-        )
-        logit_scale = DDP(logit_scale, device_ids=device_ids, find_unused_parameters=find_unused)
+        # find_unused_parameters=False: every trainable param participates in
+        # the forward pass each step, so this is never needed.
+        image_encoder = DDP(image_encoder, device_ids=device_ids, find_unused_parameters=False)
+        text_projection = DDP(text_projection, device_ids=device_ids, find_unused_parameters=False)
+        logit_scale = DDP(logit_scale, device_ids=device_ids, find_unused_parameters=False)
 
     return image_encoder, text_projection, logit_scale
 

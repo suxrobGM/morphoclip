@@ -2,11 +2,13 @@
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from morphoclip.training.config import (
     MorphoCLIPTrainingConfig,
     load_training_config,
+    training_config_from_dict,
 )
 
 
@@ -15,7 +17,6 @@ class TestMorphoCLIPTrainingConfig:
 
     def test_default_creation(self) -> None:
         config = MorphoCLIPTrainingConfig()
-        assert config.model.embed_dim == 1024
         assert config.model.output_dim == 512
         assert config.optimization.loss_type == "infonce"
         assert config.optimization.lr == 3.0e-4
@@ -25,7 +26,7 @@ class TestMorphoCLIPTrainingConfig:
     def test_to_dict_roundtrip(self) -> None:
         config = MorphoCLIPTrainingConfig()
         d = config.to_dict()
-        assert d["model"]["embed_dim"] == 1024
+        assert d["model"]["output_dim"] == 512
         assert d["optimization"]["loss_type"] == "infonce"
         assert d["runtime"]["amp"] is True
 
@@ -47,11 +48,11 @@ class TestMorphoCLIPTrainingConfig:
         assert config.optimization.epochs == 10
         assert config.runtime.seed == 123
         # Defaults should still be in place for unset fields
-        assert config.model.embed_dim == 1024
+        assert config.model.output_dim == 512
         assert config.optimization.loss_type == "infonce"
 
     def test_yaml_extends(self, tmp_path: Path) -> None:
-        base = {"model": {"embed_dim": 512, "ccf_layers": 2}}
+        base = {"model": {"output_dim": 256, "ccf_layers": 2}}
         child = {
             "extends": "base.yaml",
             "model": {"ccf_layers": 4},
@@ -60,5 +61,77 @@ class TestMorphoCLIPTrainingConfig:
         (tmp_path / "child.yaml").write_text(yaml.dump(child))
 
         config = load_training_config(tmp_path / "child.yaml")
-        assert config.model.embed_dim == 512  # from base
+        assert config.model.output_dim == 256  # from base
         assert config.model.ccf_layers == 4  # overridden by child
+
+    def test_yaml_load_unknown_key_raises(self, tmp_path: Path) -> None:
+        config_data = {"dataset": {"not_a_real_field": 1}}
+        config_path = tmp_path / "bad_config.yaml"
+        config_path.write_text(yaml.dump(config_data))
+
+        with pytest.raises(ValueError, match="Unknown config key"):
+            load_training_config(config_path)
+
+    def test_dotted_overrides_apply_after_extends(self, tmp_path: Path) -> None:
+        base = {"dataset": {"batch_size": 32}}
+        (tmp_path / "base.yaml").write_text(yaml.dump(base))
+        child = {"extends": "base.yaml"}
+        config_path = tmp_path / "child.yaml"
+        config_path.write_text(yaml.dump(child))
+
+        config = load_training_config(
+            config_path,
+            overrides=["dataset.batch_size=8", "runtime.max_train_steps=3"],
+        )
+        assert config.dataset.batch_size == 8
+        assert config.runtime.max_train_steps == 3
+
+    def test_dotted_override_malformed_no_equals(self, tmp_path: Path) -> None:
+        config_path = tmp_path / "base.yaml"
+        config_path.write_text(yaml.dump({}))
+
+        with pytest.raises(ValueError, match="Malformed --set"):
+            load_training_config(config_path, overrides=["dataset.batch_size"])
+
+    def test_dotted_override_malformed_no_section(self, tmp_path: Path) -> None:
+        config_path = tmp_path / "base.yaml"
+        config_path.write_text(yaml.dump({}))
+
+        with pytest.raises(ValueError, match="Malformed --set"):
+            load_training_config(config_path, overrides=["batch_size=8"])
+
+
+class TestTrainingConfigFromDict:
+    """Tests for reconstructing configs from a plain dict (e.g. checkpoints)."""
+
+    def test_strict_rejects_unknown_keys(self) -> None:
+        with pytest.raises(ValueError, match="Unknown config key"):
+            training_config_from_dict(
+                {"optimization": {"betas": [0.9, 0.999]}},
+                strict=True,
+            )
+
+    def test_non_strict_skips_unknown_keys(self) -> None:
+        # Mirrors an older checkpoint's embedded config dict, which may carry
+        # fields dropped from the current schema (betas, eval_every_epochs,
+        # embed_dim, tensorboard, distributed.backend, ...).
+        old_dict = {
+            "dataset": {"batch_size": 16, "max_train_wells": 100},
+            "model": {"embed_dim": 1024, "output_dim": 512},
+            "optimization": {
+                "lr": 1e-4,
+                "betas": [0.9, 0.999],
+                "eps": 1e-8,
+                "grad_clip_norm": 1.0,
+                "logit_scale_max": 4.6052,
+            },
+            "runtime": {"seed": 7, "eval_every_epochs": 1, "save_every_epochs": 1},
+            "tensorboard": {"histogram_every_epochs": 5},
+            "distributed": {"enabled": False, "backend": "nccl"},
+        }
+        config = training_config_from_dict(old_dict, strict=False)
+        assert config.dataset.batch_size == 16
+        assert config.model.output_dim == 512
+        assert config.optimization.lr == 1e-4
+        assert config.runtime.seed == 7
+        assert config.distributed.enabled is False

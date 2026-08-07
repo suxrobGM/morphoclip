@@ -4,7 +4,6 @@ from morphoclip.training.batch_correction import cross_well_alignment
 from morphoclip.training.config import (
     MorphoCLIPDistributedConfig,
     MorphoCLIPTrainingConfig,
-    TensorBoardConfig,
     load_training_config,
 )
 from morphoclip.training.distributed import (
@@ -31,7 +30,6 @@ __all__ = [
     "LogitScaleModule",
     "MorphoCLIPDistributedConfig",
     "MorphoCLIPTrainingConfig",
-    "TensorBoardConfig",
     "TrainingLogger",
     "build_optimizer",
     "build_scheduler",

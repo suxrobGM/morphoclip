@@ -33,6 +33,15 @@ def train(
         bool,
         typer.Option(help="Enable DDP multi-GPU training (requires torchrun launcher)."),
     ] = False,
+    set_: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--set",
+            help="Override a config value: 'section.key=value' (repeatable). "
+            "Applied after the YAML's own 'extends' inheritance, e.g. "
+            "--set runtime.max_train_steps=3 --set dataset.batch_size=8.",
+        ),
+    ] = None,
 ) -> None:
     """Train MorphoCLIP.
 
@@ -43,7 +52,7 @@ def train(
     """
     setup_logging()
 
-    training_config = load_training_config(str(config))
+    training_config = load_training_config(str(config), overrides=set_)
     if distributed:
         training_config.distributed.enabled = True
     if run_name:

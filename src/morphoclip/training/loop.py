@@ -16,7 +16,11 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
-from morphoclip.training.config import MorphoCLIPTrainingConfig
+from morphoclip.training.config import (
+    GRAD_CLIP_NORM,
+    LOGIT_SCALE_MAX,
+    MorphoCLIPTrainingConfig,
+)
 from morphoclip.training.distributed import DistributedState, all_reduce_scalar
 from morphoclip.training.engine import (
     autocast_context,
@@ -117,7 +121,6 @@ def run_epoch(
                 amp=config.runtime.amp,
                 use_cwa=opt_cfg.use_cwa,
                 use_ddp=use_ddp,
-                dist_cfg=config.distributed,
                 dist_state=ctx.dist_state,
             )
             with autocast_context(device, config.runtime.amp):
@@ -142,8 +145,8 @@ def run_epoch(
                 grad_scaler,
                 ctx.all_params,
                 logit_scale,
-                grad_clip_norm=opt_cfg.grad_clip_norm,
-                logit_scale_max=opt_cfg.logit_scale_max,
+                grad_clip_norm=GRAD_CLIP_NORM,
+                logit_scale_max=LOGIT_SCALE_MAX,
             )
 
             global_step += 1
