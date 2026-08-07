@@ -179,6 +179,45 @@ Compound replicability is competitive with CellProfiler's 5–25% range. ORF and
 matching are the real weaknesses and should be reported as such — cross-modality is the task
 the method is ultimately pitched at.
 
+### Staged ablation campaign (seed 42, 30-epoch schedule, early stop patience 8)
+
+Four runs off one shared config (`configs/train/ablation.yaml`), variants supplied as CLI
+overrides. All use the perturbation-aware batch sampler. Validation split, corrected metrics:
+
+| Run | Change | pert i2t R@10 | pert t2i R@10 | Epochs (best) |
+|---|---|---|---|---|
+| `abl_repro` | control | 0.378 | 0.378 | 19 (11) |
+| `abl_soft` | `target_weight=0.6` | 0.378 | **0.429** | 21 (13) |
+| `abl_imgimg` | `lambda_img=0.3` | **0.449** | 0.418 | 15 (7) |
+| `abl_cwa` | `use_cwa=true` | 0.153 | 0.102 | 12 (4) |
+| *random* | — | 0.102 | 0.102 | — |
+
+Three findings, in order of importance:
+
+1. **The replicate-alignment image–image loss is the win: +18.9% over control** (0.378 → 0.449),
+   and it converges faster (best epoch 7 vs 11). This supports the diagnosis that the binding
+   constraint was a *missing training signal* — nothing previously pulled replicate wells of the
+   same perturbation together across plates — rather than insufficient aggregator capacity.
+2. **Gene-aware soft labels help one direction only**: text→image improves 0.378 → 0.429
+   (+13.5%), image→text is unchanged. Consistent with soft positives sharpening the text-anchor
+   geometry without adding information to the image side.
+3. **CWA is catastrophic, and this is a claim-level problem.** Enabling cross-well alignment
+   drops perturbation-level retrieval to 0.153 against a 0.102 random floor — the model barely
+   beats chance, and it early-stops at epoch 12 with its best at epoch 4. I checked whether this
+   was an eval-time artifact by re-evaluating the same checkpoint with CWA disabled at inference:
+   it scored **0.122**, no better. So the training itself fails.
+
+   A plausible mechanism: in CPJUMP1 a plate is nearly synonymous with a *condition* (one
+   modality, one cell line, one timepoint). Subtracting the per-plate mean therefore removes
+   modality and cell-line signal — exactly what the text prompts encode ("Perturbation modality:
+   CRISPR knockout", the cell line name). CWA is designed for a unimodal setting like CWA-MSN's;
+   in a text-aligned model it deletes the very axes the text describes.
+
+   **Manuscript consequence:** CWA cannot remain in the contribution list on the strength of the
+   design alone. Either report this negative result explicitly, or drop the component. The
+   current framing ("optional / evaluated in ablation") is no longer sufficient now that the
+   ablation exists and is strongly negative.
+
 ### Two infrastructure findings worth a methods sentence
 
 - **Feature cache was 44x oversized.** `torch.save` on a bare slice serializes the slice's
