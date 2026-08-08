@@ -5,6 +5,7 @@ weight histograms, and similarity heatmaps.  Silent no-op when
 ``rank != 0`` or TensorBoard is disabled in config.
 """
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -13,13 +14,15 @@ import yaml
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
-from morphoclip.training.config import TensorBoardConfig
 from morphoclip.training.metrics import (
     compute_alignment,
     compute_intra_batch_similarity,
     compute_param_norm,
     compute_uniformity,
 )
+
+HISTOGRAM_EVERY_EPOCHS = 5  # Weight/embedding histograms every N epochs
+FLUSH_EVERY_STEPS = 50  # Flush TensorBoard writer every N steps
 
 _CUSTOM_SCALARS_LAYOUT = {
     "Overfitting": {
@@ -62,13 +65,12 @@ class TrainingLogger:
     def __init__(
         self,
         run_dir: Path,
-        tb_config: TensorBoardConfig,
         *,
         rank: int = 0,
     ) -> None:
         self._enabled = rank == 0
-        self._flush_every = tb_config.flush_every_steps
-        self._histogram_every = tb_config.histogram_every_epochs
+        self._flush_every = FLUSH_EVERY_STEPS
+        self._histogram_every = HISTOGRAM_EVERY_EPOCHS
         self._writer: SummaryWriter | None = None
 
         if self._enabled:
@@ -104,13 +106,21 @@ class TrainingLogger:
         logit_stats: dict[str, float],
         image_emb: torch.Tensor | None = None,
         text_emb: torch.Tensor | None = None,
+        components: Mapping[str, float] | None = None,
     ) -> None:
-        """Log per-step training scalars and embedding diagnostics."""
+        """Log per-step training scalars and embedding diagnostics.
+
+        Args:
+            components: Per-term breakdown of *loss*, logged as
+                ``train/<name>_loss``. Empty when the loss is a single term.
+        """
         w = self._writer
         if w is None:
             return
 
         w.add_scalar("train/loss", loss, step)
+        for name, value in (components or {}).items():
+            w.add_scalar(f"train/{name}_loss", value, step)
         w.add_scalar("train/lr", lr, step)
         w.add_scalar("train/tau", tau, step)
         w.add_scalar("train/grad_norm_before_clip", grad_norm_before, step)

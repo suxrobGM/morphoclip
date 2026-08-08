@@ -14,15 +14,27 @@ from morphoclip.data.dataset import MorphoCLIPDataset, collate_fn
 from morphoclip.data.metadata import MetadataIndex
 from morphoclip.models.image_encoder import MorphoCLIPImageEncoder
 from morphoclip.models.projection_head import ProjectionHead
-from morphoclip.training.config import MorphoCLIPTrainingConfig
-from morphoclip.utils.device import resolve_num_workers, supports_pin_memory
+from morphoclip.training.config import (
+    EMBED_DIM,
+    INPUT_CHANNELS,
+    PROJ_HIDDEN_DIM,
+    TEXT_INPUT_DIM,
+    MorphoCLIPTrainingConfig,
+    training_config_from_dict,
+)
+from morphoclip.utils.device import loader_workers, supports_pin_memory
 
 
 def load_checkpoint(
     checkpoint_path: Path,
     device: torch.device,
 ) -> tuple[dict, MorphoCLIPTrainingConfig]:
-    """Load checkpoint and reconstruct config."""
+    """Load checkpoint and reconstruct config.
+
+    Raises:
+        ValueError: If the checkpoint has no embedded config, or its config
+            carries a key the current schema does not define.
+    """
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
     if "config" not in ckpt:
         raise ValueError(
@@ -30,24 +42,7 @@ def load_checkpoint(
             "Was it saved by the MorphoCLIP trainer?"
         )
 
-    config = MorphoCLIPTrainingConfig()
-    config_dict = ckpt["config"]
-    for section_name in (
-        "dataset",
-        "model",
-        "optimization",
-        "runtime",
-        "tensorboard",
-        "distributed",
-    ):
-        section = getattr(config, section_name)
-        for key, value in config_dict.get(section_name, {}).items():
-            if hasattr(section, key):
-                setattr(section, key, value)
-
-    if not isinstance(config.optimization.betas, tuple):
-        config.optimization.betas = tuple(config.optimization.betas)
-
+    config = training_config_from_dict(ckpt["config"])
     return ckpt, config
 
 
@@ -58,19 +53,19 @@ def build_models(
     """Instantiate image encoder and text projection from config."""
     m = config.model
     image_encoder = MorphoCLIPImageEncoder(
-        embed_dim=m.embed_dim,
+        embed_dim=EMBED_DIM,
         output_dim=m.output_dim,
-        channel_aggregation=m.channel_aggregation,
+        aggregator=m.aggregator,
         ccf_layers=m.ccf_layers,
         ccf_heads=m.ccf_heads,
-        input_channels=m.input_channels,
-        proj_hidden_dim=m.proj_hidden_dim,
+        input_channels=INPUT_CHANNELS,
+        proj_hidden_dim=PROJ_HIDDEN_DIM,
         proj_dropout=m.proj_dropout,
     ).to(device)
 
     text_projection = ProjectionHead(
-        input_dim=m.text_input_dim,
-        hidden_dim=m.proj_hidden_dim,
+        input_dim=TEXT_INPUT_DIM,
+        hidden_dim=PROJ_HIDDEN_DIM,
         output_dim=m.output_dim,
         dropout=m.proj_dropout,
     ).to(device)
@@ -110,16 +105,25 @@ def build_eval_dataloader(
     dataset,
     config: MorphoCLIPTrainingConfig,
     device: torch.device,
+    *,
+    batch_size: int | None = None,
 ) -> DataLoader:
-    """Construct a non-shuffling DataLoader matching trainer conventions."""
-    ds_cfg = config.dataset
+    """Construct a non-shuffling DataLoader matching trainer conventions.
+
+    Args:
+        dataset: Dataset to iterate.
+        config: Training config supplying the default eval batch size.
+        device: Device the batches feed.
+        batch_size: Override for ``config.dataset.eval_batch_size``.
+    """
     return DataLoader(
         dataset,
-        batch_size=ds_cfg.eval_batch_size,
+        batch_size=batch_size or config.dataset.eval_batch_size,
         shuffle=False,
         collate_fn=collate_fn,
-        num_workers=resolve_num_workers(ds_cfg.num_workers),
-        pin_memory=ds_cfg.pin_memory and supports_pin_memory(device),
+        # build_eval_dataset never preloads, so the dataset reads from disk.
+        num_workers=loader_workers(preloaded=False),
+        pin_memory=supports_pin_memory(device),
     )
 
 

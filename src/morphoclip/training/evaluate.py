@@ -4,10 +4,11 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from morphoclip.data.perturbation import PerturbationInfo
+from morphoclip.data.perturbation import PerturbationInfo, target_gene_key
 from morphoclip.training.batch_correction import cross_well_alignment
 from morphoclip.training.engine import autocast_context
 from morphoclip.training.losses import compute_loss
+from morphoclip.training.retrieval import compute_retrieval_metrics
 
 
 def lookup_text_embeddings(
@@ -32,57 +33,6 @@ def lookup_text_embeddings(
     return embeddings[indices].to(device, non_blocking=True)
 
 
-def compute_retrieval_metrics(
-    image_features: torch.Tensor,
-    text_features: torch.Tensor,
-    broad_samples: list[str] | None = None,
-) -> dict[str, float]:
-    """Compute retrieval metrics for both directions.
-
-    When ``broad_samples`` is provided, a retrieval is correct if any
-    sample sharing the same perturbation ID is in the top-k (handles
-    duplicate text embeddings from replicate wells).  Falls back to
-    diagonal-only targets when ``broad_samples`` is ``None``.
-
-    Args:
-        image_features: ``(N, D)`` image embeddings.
-        text_features: ``(N, D)`` text embeddings.
-        broad_samples: Perturbation ID per sample (length N).
-
-    Returns:
-        Dict with R@1/5/10, mean/median rank for both directions.
-    """
-    logits = image_features @ text_features.t()
-    N = logits.shape[0]
-    device = logits.device
-
-    # Build positive mask: (N, N) where mask[i,j] = True if i and j
-    # share the same perturbation (or just diagonal if no broad_samples)
-    if broad_samples is not None:
-        unique = {s: idx for idx, s in enumerate(dict.fromkeys(broad_samples))}
-        ids = torch.tensor([unique[s] for s in broad_samples], device=device)
-        positive_mask = ids.unsqueeze(0) == ids.unsqueeze(1)
-    else:
-        positive_mask = torch.eye(N, dtype=torch.bool, device=device)
-
-    results: dict[str, float] = {}
-    for prefix, score_matrix, mask in (
-        ("image_to_text", logits, positive_mask),
-        ("text_to_image", logits.t(), positive_mask.t()),
-    ):
-        order = torch.argsort(score_matrix, dim=1, descending=True)
-        # For each query, find the rank of the first correct match
-        ordered_mask = mask.gather(1, order)  # (N, N) reordered by score
-        # argmax on bool finds first True
-        best_rank = torch.argmax(ordered_mask.to(torch.int64), dim=1) + 1
-
-        results[f"{prefix}_mean_rank"] = float(best_rank.float().mean().item())
-        results[f"{prefix}_median_rank"] = float(best_rank.float().median().item())
-        for k in (1, 5, 10):
-            results[f"{prefix}_R@{k}"] = float((best_rank <= k).float().mean().item())
-    return results
-
-
 def evaluate_epoch(
     image_encoder: nn.Module,
     text_projection: nn.Module,
@@ -94,8 +44,12 @@ def evaluate_epoch(
     loss_type: str,
     use_cwa: bool,
     amp: bool,
+    target_weight: float = 0.0,
 ) -> dict[str, float]:
     """Run one evaluation epoch.
+
+    The eval loss covers text alignment only. The replicate image-image term is
+    left out so model selection stays comparable across ablations.
 
     Returns:
         Dict with ``eval_loss`` and retrieval metrics.
@@ -129,6 +83,12 @@ def evaluate_epoch(
                     text_emb,
                     logit_scale,
                     broad_samples=broad_samples,
+                    target_keys=(
+                        [target_gene_key(info) for info in pert_infos]
+                        if target_weight > 0.0
+                        else None
+                    ),
+                    target_weight=target_weight,
                 )
 
             losses.append(float(loss.detach().cpu().item()))

@@ -1,0 +1,77 @@
+"""Tests for AttentionSitePooling (gated-attention MIL over sites)."""
+
+import pytest
+import torch
+
+from morphoclip.models.site_pooling import AttentionSitePooling
+
+
+def _make_pooling() -> AttentionSitePooling:
+    return AttentionSitePooling(embed_dim=64, hidden_dim=16, dropout=0.0)
+
+
+class TestAttentionSitePooling:
+    """Test suite for gated-attention site pooling."""
+
+    def test_output_shape(self) -> None:
+        pooling = _make_pooling()
+        x = torch.randn(3, 5, 64)
+        mask = torch.ones(3, 5, dtype=torch.bool)
+        assert pooling(x, mask).shape == (3, 64)
+
+    def test_weights_sum_to_one_over_real_sites(self) -> None:
+        pooling = _make_pooling()
+        x = torch.randn(2, 4, 64)
+        mask = torch.tensor([[True, True, False, False], [True, True, True, True]])
+        weights = pooling.compute_weights(x, mask)
+        torch.testing.assert_close(weights.sum(dim=1), torch.ones(2), atol=1e-6, rtol=0)
+        assert torch.all(weights[0, 2:] == 0.0)
+
+    def test_masking_ignores_padding(self) -> None:
+        """Appending padded sites must not change the pooled output."""
+        pooling = _make_pooling()
+        pooling.eval()
+
+        x_2 = torch.randn(1, 2, 64)
+        mask_2 = torch.tensor([[True, True]])
+
+        x_4 = torch.zeros(1, 4, 64)
+        x_4[:, :2] = x_2
+        x_4[:, 2:] = torch.randn(1, 2, 64)  # garbage in the padded slots
+        mask_4 = torch.tensor([[True, True, False, False]])
+
+        torch.testing.assert_close(pooling(x_2, mask_2), pooling(x_4, mask_4), atol=1e-6, rtol=1e-6)
+
+    def test_single_site_returns_that_site(self) -> None:
+        pooling = _make_pooling()
+        pooling.eval()
+        x = torch.randn(1, 1, 64)
+        mask = torch.tensor([[True]])
+        torch.testing.assert_close(pooling(x, mask), x[:, 0], atol=1e-6, rtol=1e-6)
+
+    def test_all_padded_row_is_finite(self) -> None:
+        pooling = _make_pooling()
+        x = torch.randn(2, 3, 64)
+        mask = torch.tensor([[True, True, False], [False, False, False]])
+        out = pooling(x, mask)
+        assert torch.isfinite(out).all()
+        torch.testing.assert_close(out[1], torch.zeros(64))
+
+    def test_gradients_flow(self) -> None:
+        pooling = _make_pooling()
+        x = torch.randn(2, 4, 64, requires_grad=True)
+        mask = torch.tensor([[True, True, False, False], [True, True, True, True]])
+        pooling(x, mask).sum().backward()
+
+        assert x.grad is not None
+        assert torch.isfinite(x.grad).all()
+        for name, param in pooling.named_parameters():
+            assert param.grad is not None, name
+            assert torch.isfinite(param.grad).all(), name
+
+    def test_dim_mismatch_raises(self) -> None:
+        pooling = _make_pooling()
+        x = torch.randn(1, 2, 32)
+        mask = torch.ones(1, 2, dtype=torch.bool)
+        with pytest.raises(ValueError, match="Expected embedding dim 64"):
+            pooling(x, mask)

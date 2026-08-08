@@ -53,6 +53,21 @@ def supports_pin_memory(device: torch.device) -> bool:
     return device.type == "cuda"
 
 
+LAZY_LOADER_WORKERS = 4
+
+
+def loader_workers(*, preloaded: bool) -> int:
+    """Resolve DataLoader workers for a dataset that is or isn't in RAM.
+
+    A preloaded dataset needs no worker processes; a lazy one reads a ``.pt``
+    file per site, so workers keep the device fed.
+
+    Args:
+        preloaded: Whether the dataset's features are already cached in RAM.
+    """
+    return resolve_num_workers(0 if preloaded else LAZY_LOADER_WORKERS)
+
+
 def resolve_num_workers(requested: int) -> int:
     """Clamp DataLoader workers to available CPU cores.
 

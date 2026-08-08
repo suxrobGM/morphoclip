@@ -49,9 +49,6 @@ def _build_eval_loader(config, device, *, split):
     )
     target = val_set if split == "val" else test_set
 
-    if ds_cfg.max_eval_wells and len(target) > ds_cfg.max_eval_wells:
-        target = torch.utils.data.Subset(target, list(range(ds_cfg.max_eval_wells)))
-
     return build_eval_dataloader(target, config, device), len(target)
 
 
@@ -143,6 +140,7 @@ def evaluate(
             loss_type=cfg.optimization.loss_type,
             use_cwa=cfg.optimization.use_cwa,
             amp=cfg.runtime.amp,
+            target_weight=cfg.optimization.target_weight,
         )
     )
 

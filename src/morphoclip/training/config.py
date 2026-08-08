@@ -1,10 +1,27 @@
 """Config loading for MorphoCLIP training."""
 
+import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
+
+# --- Model constants ---
+# Properties of the pre-extracted feature cache, not tunable choices.
+EMBED_DIM = 1024  # DINOv3 ViT-L/16 CLS token dimension
+TEXT_INPUT_DIM = 768  # BioClinical ModernBERT hidden dimension
+INPUT_CHANNELS = 5  # Fluorescence channels (Mito, Actin, Golgi, ER, DNA)
+PROJ_HIDDEN_DIM = 512  # ProjectionHead hidden dimension
+
+# --- Optimizer constants ---
+# Never tuned in practice; fixed to sane defaults.
+ADAMW_BETAS = (0.9, 0.999)
+ADAMW_EPS = 1.0e-8
+GRAD_CLIP_NORM = 1.0
+LOGIT_SCALE_MAX = 4.6052  # ln(100), CLIP default ceiling for learnable temperature
 
 
 @dataclass(slots=True)
@@ -20,27 +37,25 @@ class MorphoCLIPDatasetConfig:
     max_sites_per_well: int | None = None
     batch_size: int = 32
     eval_batch_size: int = 32
-    num_workers: int = 4
-    pin_memory: bool = True
     preload: bool = True
     val_fraction: float = 0.1
-    max_train_wells: int | None = None
-    max_eval_wells: int | None = None
+    # "random" (plain shuffled DataLoader) or "perturbation"
+    # (PerturbationBatchSampler: replicate-aware, plate-mixed batches).
+    batch_sampler: str = "random"
+    replicates_per_group: int = 2  # Target replicates per perturbation chunk
 
 
 @dataclass(slots=True)
 class MorphoCLIPModelConfig:
     """Image encoder and projection head architecture."""
 
-    embed_dim: int = 1024
     output_dim: int = 512
-    channel_aggregation: str = "ccf"  # "ccf" (CrossChannelFormer) or "mean_pool"
+    # Well aggregation: "ccf-mean", "meanpool-mean", "ccf-attn", "wellformer".
+    aggregator: str = "ccf-mean"
+    # Transformer depth/width, shared by CrossChannelFormer and WellFormer.
     ccf_layers: int = 2
     ccf_heads: int = 8
-    input_channels: int = 5
-    proj_hidden_dim: int = 512
     proj_dropout: float = 0.1
-    text_input_dim: int = 768
 
 
 @dataclass(slots=True)
@@ -50,13 +65,17 @@ class MorphoCLIPOptimizationConfig:
     loss_type: str = "infonce"
     lr: float = 3.0e-4
     weight_decay: float = 0.1
-    betas: tuple[float, float] = (0.9, 0.999)
-    eps: float = 1.0e-8
     epochs: int = 20
     warmup_steps: int = 200
-    grad_clip_norm: float = 1.0
-    logit_scale_max: float = 4.6052
     use_cwa: bool = False
+    # Gene-aware CWCL: affinity for pairs whose target genes intersect but
+    # whose broad_sample differs. 0.0 gives binary labels.
+    target_weight: float = 0.0
+    # Weight of the replicate image-image alignment term (0.0 disables).
+    replicate_weight: float = 0.0
+    # Fixed temperature for the replicate term; None reuses the shared
+    # learnable logit scale.
+    replicate_temperature: float | None = None
 
 
 @dataclass(slots=True)
@@ -69,9 +88,9 @@ class MorphoCLIPRuntimeConfig:
     output_root: str = "output/morphoclip_runs"
     run_name: str | None = None
     log_every_steps: int = 10
-    eval_every_epochs: int = 1
-    save_every_epochs: int = 1
     max_train_steps: int | None = None
+    # Epochs without a new best eval loss before stopping (None disables).
+    early_stop_patience: int | None = None
 
 
 @dataclass(slots=True)
@@ -79,18 +98,7 @@ class MorphoCLIPDistributedConfig:
     """Distributed training settings (multi-GPU via torchrun)."""
 
     enabled: bool = False
-    backend: str = "nccl"
     gradient_accumulation_steps: int = 1
-    gather_with_grad: bool = True
-    find_unused_parameters: bool = False
-
-
-@dataclass(slots=True)
-class TensorBoardConfig:
-    """TensorBoard logging settings."""
-
-    histogram_every_epochs: int = 5
-    flush_every_steps: int = 50
 
 
 @dataclass(slots=True)
@@ -108,9 +116,6 @@ class MorphoCLIPTrainingConfig:
     )
     runtime: MorphoCLIPRuntimeConfig = field(
         default_factory=MorphoCLIPRuntimeConfig,
-    )
-    tensorboard: TensorBoardConfig = field(
-        default_factory=TensorBoardConfig,
     )
     distributed: MorphoCLIPDistributedConfig = field(
         default_factory=MorphoCLIPDistributedConfig,
@@ -169,7 +174,18 @@ def _load_raw_config(path: Path, seen: set[Path] | None = None) -> dict[str, Any
 
 
 def _merge_dataclass(instance: Any, raw: dict[str, Any]) -> Any:
-    """Merge raw dict values into a dataclass instance."""
+    """Merge raw dict values into a dataclass instance.
+
+    Args:
+        instance: Dataclass instance to update in place.
+        raw: Mapping of field names to override values.
+
+    Returns:
+        The mutated *instance*.
+
+    Raises:
+        ValueError: If *raw* contains a key the dataclass does not define.
+    """
     for key, value in raw.items():
         if not hasattr(instance, key):
             raise ValueError(f"Unknown config key: {type(instance).__name__}.{key}")
@@ -177,31 +193,81 @@ def _merge_dataclass(instance: Any, raw: dict[str, Any]) -> Any:
     return instance
 
 
-def load_training_config(path: str | Path) -> MorphoCLIPTrainingConfig:
+def training_config_from_dict(config_dict: dict[str, Any]) -> MorphoCLIPTrainingConfig:
+    """Reconstruct a training config from a plain nested dict.
+
+    Used for YAML-loaded configs and for configs embedded in a checkpoint.
+
+    Args:
+        config_dict: Nested dict with ``dataset``/``model``/``optimization``/
+            ``runtime``/``distributed`` sections.
+
+    Returns:
+        Populated training config.
+
+    Raises:
+        ValueError: If any section contains a key the schema does not define.
+    """
+    config = MorphoCLIPTrainingConfig()
+    _merge_dataclass(config.dataset, config_dict.get("dataset", {}))
+    _merge_dataclass(config.model, config_dict.get("model", {}))
+    _merge_dataclass(config.optimization, config_dict.get("optimization", {}))
+    _merge_dataclass(config.runtime, config_dict.get("runtime", {}))
+    _merge_dataclass(config.distributed, config_dict.get("distributed", {}))
+    return config
+
+
+def _parse_dotted_override(item: str) -> dict[str, Any]:
+    """Parse a single ``section.key=value`` CLI override into a nested dict.
+
+    Values go through :func:`yaml.safe_load` so ints, floats, bools, and null
+    round-trip without extra quoting.
+
+    Args:
+        item: A ``section.key=value`` string.
+
+    Returns:
+        A single-section nested dict, e.g. ``{"runtime": {"max_train_steps": 3}}``.
+
+    Raises:
+        ValueError: If *item* has no ``=``, or the key has no ``section.field`` dot.
+    """
+    if "=" not in item:
+        raise ValueError(f"Malformed --set override {item!r}: expected 'section.key=value'")
+    dotted_key, raw_value = item.split("=", 1)
+    parts = dotted_key.split(".")
+    if len(parts) < 2 or not all(parts):
+        raise ValueError(
+            f"Malformed --set override {item!r}: key must be 'section.key' "
+            "(e.g. 'runtime.max_train_steps=3')"
+        )
+
+    value = yaml.safe_load(raw_value)
+    nested: dict[str, Any] = value
+    for part in reversed(parts[1:]):
+        nested = {part: nested}
+    return {parts[0]: nested}
+
+
+def load_training_config(
+    path: str | Path,
+    overrides: list[str] | None = None,
+) -> MorphoCLIPTrainingConfig:
     """Load a MorphoCLIP training config from a YAML file.
 
-    Supports ``extends`` field for config inheritance.
+    Resolves ``extends`` inheritance first, then applies dotted overrides.
 
     Args:
         path: Path to the YAML config file.
+        overrides: ``section.key=value`` strings from repeatable ``--set``
+            options, applied in order.
 
     Returns:
         Populated training config.
     """
     path = Path(path)
     raw = _load_raw_config(path)
+    for item in overrides or []:
+        raw = _merge_dicts(raw, _parse_dotted_override(item))
 
-    config = MorphoCLIPTrainingConfig()
-    _merge_dataclass(config.dataset, raw.get("dataset", {}))
-    _merge_dataclass(config.model, raw.get("model", {}))
-    _merge_dataclass(config.optimization, raw.get("optimization", {}))
-    _merge_dataclass(config.runtime, raw.get("runtime", {}))
-    _merge_dataclass(config.tensorboard, raw.get("tensorboard", {}))
-    _merge_dataclass(config.distributed, raw.get("distributed", {}))
-
-    if not isinstance(config.optimization.betas, tuple):
-        config.optimization.betas = tuple(config.optimization.betas)
-    if len(config.optimization.betas) != 2:
-        raise ValueError("optimization.betas must contain exactly two floats")
-
-    return config
+    return training_config_from_dict(raw)

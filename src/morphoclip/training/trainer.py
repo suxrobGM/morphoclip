@@ -19,6 +19,7 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, T
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.distributed import (
     DistributedState,
+    broadcast_flag,
     cleanup_distributed,
     setup_distributed,
 )
@@ -36,7 +37,7 @@ from morphoclip.training.setup import (
     log_config_summary,
     log_device_banner,
 )
-from morphoclip.training.tb_logger import TrainingLogger
+from morphoclip.training.tb_logger import HISTOGRAM_EVERY_EPOCHS, TrainingLogger
 from morphoclip.training.train_data import build_train_data
 from morphoclip.utils.caching import load_cached_text_features
 
@@ -54,7 +55,8 @@ def train_morphoclip(
 
     dist_state: DistributedState | None = None
     if dist_cfg.enabled:
-        dist_state = setup_distributed(dist_cfg.backend)
+        backend = "nccl" if torch.cuda.is_available() else "gloo"
+        dist_state = setup_distributed(backend)
         device = dist_state.device
         is_main = dist_state.is_main
     else:
@@ -90,7 +92,6 @@ def _train_loop(
 ) -> dict[str, Any]:
     dist_cfg = config.distributed
     opt_cfg = config.optimization
-    tb_cfg = config.tensorboard
     use_ddp = dist_state is not None and dist_state.world_size > 1
     accum_steps = dist_cfg.gradient_accumulation_steps
     world_size = dist_state.world_size if dist_state else 1
@@ -136,11 +137,12 @@ def _train_loop(
     # --- Training state ---
     run_dir.mkdir(parents=True, exist_ok=True)
     rank = dist_state.rank if dist_state else 0
-    logger = TrainingLogger(run_dir, config.tensorboard, rank=rank)
+    logger = TrainingLogger(run_dir, rank=rank)
     logger.log_config(config)
 
     history: list[dict[str, float | int]] = []
     best_eval_loss = float("inf")
+    epochs_since_best = 0
     global_step = 0
     start_epoch = 1
     best_ckpt = run_dir / "checkpoints" / "best.pt"
@@ -252,9 +254,9 @@ def _train_loop(
                 "epoch_seconds": float(time.time() - epoch_start),
             }
 
-            # --- Evaluation ---
+            # --- Evaluation (every epoch, main process only) ---
             eval_metrics: dict[str, float] | None = None
-            if epoch % config.runtime.eval_every_epochs == 0 and is_main:
+            if is_main:
                 eval_metrics = evaluate_epoch(
                     image_encoder,
                     text_projection,
@@ -265,6 +267,7 @@ def _train_loop(
                     loss_type=opt_cfg.loss_type,
                     use_cwa=opt_cfg.use_cwa,
                     amp=config.runtime.amp,
+                    target_weight=opt_cfg.target_weight,
                 )
                 train_metrics.update(eval_metrics)
                 progress.console.print(
@@ -275,16 +278,15 @@ def _train_loop(
 
                 if eval_metrics["eval_loss"] < best_eval_loss:
                     best_eval_loss = eval_metrics["eval_loss"]
+                    epochs_since_best = 0
                     _save(best_ckpt, epoch=epoch, best=best_eval_loss)
                     progress.console.print(
                         f"  [bold green]New best eval loss: {best_eval_loss:.5f} "
                         "(saved)[/bold green]"
                     )
+                else:
+                    epochs_since_best += 1
 
-            # --- Periodic save ---
-            if is_main and (
-                epoch % config.runtime.save_every_epochs == 0 or global_step >= total_steps
-            ):
                 _save(last_ckpt, epoch=epoch, best=best_eval_loss)
 
             if use_ddp:
@@ -292,8 +294,7 @@ def _train_loop(
 
             logger.log_epoch(epoch, train_metrics, eval_metrics)
             if (
-                tb_cfg.histogram_every_epochs > 0
-                and epoch % tb_cfg.histogram_every_epochs == 0
+                epoch % HISTOGRAM_EVERY_EPOCHS == 0
                 and result.last_image_emb is not None
                 and result.last_text_emb is not None
             ):
@@ -307,6 +308,20 @@ def _train_loop(
 
             history.append(train_metrics)
             progress.update(epoch_task, advance=1)
+
+            # Only rank 0 evaluates, so it decides and the others follow.
+            # Every rank must agree or the stragglers hang at the next collective.
+            patience = config.runtime.early_stop_patience
+            should_stop = patience is not None and epochs_since_best >= patience
+            if use_ddp:
+                should_stop = broadcast_flag(should_stop)
+            if should_stop:
+                if is_main:
+                    progress.console.print(
+                        f"  [bold yellow]Early stopping: no eval-loss improvement for "
+                        f"{epochs_since_best} epoch(s) (patience={patience}).[/bold yellow]"
+                    )
+                break
 
     # --- Save history ---
     if is_main:

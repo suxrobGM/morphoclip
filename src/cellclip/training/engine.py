@@ -26,7 +26,6 @@ from cellclip.training.evaluate import _move_optional_tokens, _move_tokens, eval
 from cellclip.training.losses import compute_loss
 from cellclip.training.model import CellCLIP, build_cellclip_model
 from cellclip.training.optim import build_optimizer, build_scheduler, save_checkpoint
-from morphoclip.training.config import TensorBoardConfig
 from morphoclip.training.distributed import (
     DistributedState,
     all_reduce_scalar,
@@ -150,7 +149,7 @@ def _train_loop(
 
     # --- TensorBoard logger ---
     rank = dist_state.rank if dist_state else 0
-    logger = TrainingLogger(run_dir, cast(TensorBoardConfig, config.tensorboard), rank=rank)
+    logger = TrainingLogger(run_dir, rank=rank)
     logger.log_config(config)
 
     history: list[dict[str, float | int]] = []

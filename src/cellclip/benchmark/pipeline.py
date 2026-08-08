@@ -8,10 +8,10 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from benchmark.export_utils import output_profile_path
 from cellclip.benchmark.export import (
     export_plate,
     load_yaml_section,
-    output_profile_path,
     resolve_path,
 )
 from morphoclip.data.feature_extractor import (

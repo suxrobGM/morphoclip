@@ -10,7 +10,7 @@ from torch import nn
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
-from morphoclip.training.config import MorphoCLIPTrainingConfig
+from morphoclip.training.config import ADAMW_BETAS, ADAMW_EPS, MorphoCLIPTrainingConfig
 from morphoclip.training.distributed import LogitScaleModule
 from morphoclip.training.metrics import compute_grad_norm
 from morphoclip.utils.device import autocast_context, resolve_device  # noqa: F401
@@ -47,7 +47,7 @@ def build_optimizer(
 ) -> AdamW:
     """Build AdamW optimizer from config."""
     opt = config.optimization
-    return AdamW(params, lr=opt.lr, betas=opt.betas, eps=opt.eps)
+    return AdamW(params, lr=opt.lr, betas=ADAMW_BETAS, eps=ADAMW_EPS)
 
 
 def build_scheduler(
@@ -196,14 +196,18 @@ def forward_step(
     amp: bool,
     use_cwa: bool,
     use_ddp: bool,
-    dist_cfg: Any,
     dist_state: Any,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[str]]:
+    target_weight: float = 0.0,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[str], list[str] | None]:
     """Forward pass + optional CWA + gather across GPUs.
 
-    Returns (all_image, all_text, image_emb, text_emb, all_broad_samples).
+    Returns ``(all_image, all_text, image_emb, text_emb, all_broad_samples,
+    all_target_keys)``. The target keys feed the gene-aware CWCL soft labels and
+    are ``None`` unless *target_weight* is positive, which skips both the
+    per-well gene parsing and an extra all-gather.
     """
     # Lazy imports to avoid circular dependency (engine <-> evaluate)
+    from morphoclip.data.perturbation import target_gene_key
     from morphoclip.training.batch_correction import cross_well_alignment
     from morphoclip.training.distributed import all_gather_tensors, gather_string_lists
     from morphoclip.training.evaluate import lookup_text_embeddings
@@ -221,14 +225,25 @@ def forward_step(
             image_emb = cross_well_alignment(image_emb, batch["plates"])
 
         broad_samples = [info.broad_sample for info in pert_infos]
+        target_keys = (
+            [target_gene_key(info) for info in pert_infos] if target_weight > 0.0 else None
+        )
         if use_ddp:
-            all_image = all_gather_tensors(image_emb, with_grad=dist_cfg.gather_with_grad)
-            all_text = all_gather_tensors(text_emb, with_grad=dist_cfg.gather_with_grad)
+            # with_grad keeps gradients flowing through all_gather, so negatives
+            # on remote GPUs still contribute to the contrastive loss.
+            all_image = all_gather_tensors(image_emb, with_grad=True)
+            all_text = all_gather_tensors(text_emb, with_grad=True)
             all_broad = gather_string_lists(broad_samples, dist_state.world_size)
+            all_targets = (
+                gather_string_lists(target_keys, dist_state.world_size)
+                if target_keys is not None
+                else None
+            )
         else:
-            all_image, all_text, all_broad = image_emb, text_emb, broad_samples
+            all_image, all_text = image_emb, text_emb
+            all_broad, all_targets = broad_samples, target_keys
 
-    return all_image, all_text, image_emb, text_emb, all_broad
+    return all_image, all_text, image_emb, text_emb, all_broad, all_targets
 
 
 def optimizer_step(

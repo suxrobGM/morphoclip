@@ -4,7 +4,6 @@ from morphoclip.training.batch_correction import cross_well_alignment
 from morphoclip.training.config import (
     MorphoCLIPDistributedConfig,
     MorphoCLIPTrainingConfig,
-    TensorBoardConfig,
     load_training_config,
 )
 from morphoclip.training.distributed import (
@@ -20,9 +19,17 @@ from morphoclip.training.engine import (
     save_checkpoint,
     split_params,
 )
-from morphoclip.training.evaluate import compute_retrieval_metrics, evaluate_epoch
-from morphoclip.training.losses import compute_loss, cwcl_loss, infonce_loss
+from morphoclip.training.evaluate import evaluate_epoch
+from morphoclip.training.losses import (
+    compute_loss,
+    compute_training_loss,
+    cwcl_loss,
+    infonce_loss,
+    replicate_image_loss,
+)
 from morphoclip.training.metrics import compute_alignment, compute_uniformity
+from morphoclip.training.retrieval import compute_retrieval_metrics
+from morphoclip.training.samplers import PerturbationBatchSampler
 from morphoclip.training.tb_logger import TrainingLogger
 from morphoclip.training.trainer import train_morphoclip
 
@@ -31,7 +38,7 @@ __all__ = [
     "LogitScaleModule",
     "MorphoCLIPDistributedConfig",
     "MorphoCLIPTrainingConfig",
-    "TensorBoardConfig",
+    "PerturbationBatchSampler",
     "TrainingLogger",
     "build_optimizer",
     "build_scheduler",
@@ -39,12 +46,14 @@ __all__ = [
     "compute_alignment",
     "compute_loss",
     "compute_retrieval_metrics",
+    "compute_training_loss",
     "compute_uniformity",
     "cross_well_alignment",
     "cwcl_loss",
     "evaluate_epoch",
     "infonce_loss",
     "load_training_config",
+    "replicate_image_loss",
     "resolve_device",
     "save_checkpoint",
     "setup_distributed",

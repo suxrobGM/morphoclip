@@ -5,11 +5,9 @@ extends: base.yaml
 
 dataset:
   batch_size: 128                   # Per-GPU batch size (effective = 128 * num_gpus * accum_steps)
-  num_workers: 4                    # Per-GPU DataLoader workers
+  # num_workers is derived: 0 because base.yaml sets preload=true, else 4.
 
 distributed:
   enabled: true
-  backend: "nccl"
   gradient_accumulation_steps: 1
-  gather_with_grad: true            # Preserve gradient flow through all_gather (better for contrastive loss)
-  find_unused_parameters: false
+  # backend resolves to "nccl" automatically (cuda is required for DDP here).

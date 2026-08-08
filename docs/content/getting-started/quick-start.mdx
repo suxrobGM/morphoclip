@@ -34,10 +34,12 @@ uv run poe train
 # 4. Evaluate a trained checkpoint
 uv run morphoclip eval --checkpoint output/morphoclip_runs/default/checkpoints/best.pt
 
-# 5. Run inference (top-k matching, embedding export, or profile export)
+# 5. Run inference (top-k matching or embedding export)
 uv run morphoclip infer --checkpoint output/morphoclip_runs/default/checkpoints/best.pt
 uv run morphoclip infer --checkpoint output/morphoclip_runs/default/checkpoints/best.pt --mode embed
-uv run morphoclip infer --checkpoint output/morphoclip_runs/default/checkpoints/best.pt --mode profile
+
+# 6. Export benchmark-layout profile CSVs
+uv run morphoclip export-profiles --checkpoint output/morphoclip_runs/default/checkpoints/best.pt
 ```
 
 ## Training Configuration
@@ -45,12 +47,14 @@ uv run morphoclip infer --checkpoint output/morphoclip_runs/default/checkpoints/
 The default config is at `configs/train/base.yaml`. Key options:
 
 - `loss_type`: `"infonce"` (standard contrastive) or `"cwcl"` (soft-label contrastive)
+- `aggregator`: how channels and sites are pooled into a well embedding —
+  `"ccf-mean"` (default), `"meanpool-mean"`, `"ccf-attn"`, or `"wellformer"`
 - `use_cwa`: `true` to enable Cross-Well Alignment batch correction (disabled by default)
 - Outputs saved to `output/morphoclip_runs/<run_name>/`
 
 Alternative configs:
 
-- `configs/train/mean_pool.yaml` — uses mean pooling instead of CrossChannelFormer
+- `configs/train/mean_pool.yaml` — uses mean pooling instead of CrossChannelFormer (`aggregator: meanpool-mean`)
 - `configs/train/ddp.yaml` — multi-GPU distributed training
 
 ## Multi-GPU Training

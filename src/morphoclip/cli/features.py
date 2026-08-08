@@ -21,7 +21,11 @@ from rich.progress import (
 )
 
 from morphoclip.cli.data import Backend
-from morphoclip.data.feature_extractor import extract_plate_features, verify_plate_features
+from morphoclip.data.feature_extractor import (
+    extract_plate_features,
+    repack_feature_file,
+    verify_plate_features,
+)
 from morphoclip.data.image_loader import discover_sites, load_site_as_tensor
 from morphoclip.data.perturbation import extract_plate_barcode
 from morphoclip.data.pipeline import PlateExtractionPipeline
@@ -424,3 +428,87 @@ def download(
 
     console.print("\n[bold green]Download complete.[/bold green]")
     console.print(f"Features extracted to: {output_dir}")
+
+
+# --------------------------------------------------------------------------- #
+# repack
+# --------------------------------------------------------------------------- #
+
+
+@app.command()
+def repack(
+    feature_root: Annotated[
+        Path, typer.Option(help="Root directory holding per-plate feature subdirectories.")
+    ] = Path("data/features"),
+    plates: Annotated[
+        list[str] | None, typer.Option(help="Plate barcodes to repack (default: all).")
+    ] = None,
+    workers: Annotated[int, typer.Option(help="Number of concurrent repack threads.")] = 8,
+    dry_run: Annotated[
+        bool, typer.Option(help="Report the projected saving without rewriting files.")
+    ] = False,
+) -> None:
+    """Shrink cached feature files that serialize an oversized backing storage.
+
+    Files saved from an unsliced batch tensor carry the whole batch's storage on
+    disk. Rewriting each as a standalone tensor shrinks the cache by roughly
+    45x, which makes preloading practical.
+    """
+    if not feature_root.exists():
+        console.print(f"[red]Feature root not found: {feature_root}[/red]")
+        raise typer.Exit(1)
+
+    plate_dirs = sorted(d for d in feature_root.iterdir() if d.is_dir())
+    if plates:
+        wanted = set(plates)
+        plate_dirs = [d for d in plate_dirs if d.name in wanted]
+    if not plate_dirs:
+        console.print("[red]No plate directories to repack.[/red]")
+        raise typer.Exit(1)
+
+    files = [f for d in plate_dirs for f in sorted(d.glob("*.pt"))]
+    console.print(f"[cyan]Repacking {len(files):,} files across {len(plate_dirs)} plates[/cyan]")
+
+    if dry_run:
+        sample = files[: min(50, len(files))]
+        before = sum(f.stat().st_size for f in sample)
+        after = 0
+        for path in sample:
+            tensor = torch.load(path, map_location="cpu")
+            after += tensor.nbytes
+        ratio = before / max(after, 1)
+        total = sum(f.stat().st_size for f in files)
+        console.print(
+            f"[yellow]Dry run:[/yellow] sampled {len(sample)} files, ~{ratio:.1f}x oversized. "
+            f"Cache {total / 1024**3:.1f} GiB -> ~{total / ratio / 1024**3:.1f} GiB"
+        )
+        return
+
+    total_before, total_after = 0, 0
+    with Progress(
+        TextColumn("{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress_bar:
+        task = progress_bar.add_task("[green]Repacking", total=len(files))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(repack_feature_file, path): path for path in files}
+            for future in as_completed(futures):
+                path = futures[future]
+                try:
+                    before, after = future.result()
+                    total_before += before
+                    total_after += after
+                except Exception as exc:
+                    progress_bar.console.print(f"  [red]{path.name}: {exc}[/red]")
+                progress_bar.advance(task)
+
+    saved = total_before - total_after
+    console.print(
+        f"\n[bold green]Repack complete.[/bold green] "
+        f"{total_before / 1024**3:.1f} GiB -> {total_after / 1024**3:.1f} GiB "
+        f"(freed {saved / 1024**3:.1f} GiB)"
+    )

@@ -59,9 +59,9 @@ def log_config_summary(
     table.add_row("Weight decay", f"{config.optimization.weight_decay}")
     table.add_row("Epochs", str(config.optimization.epochs))
     table.add_row("Batch size", str(config.dataset.batch_size))
-    agg = config.model.channel_aggregation
-    agg_label = f"ccf ({config.model.ccf_layers}L)" if agg == "ccf" else agg
-    table.add_row("Channel agg", agg_label)
+    agg = config.model.aggregator
+    agg_label = agg if agg == "meanpool-mean" else f"{agg} ({config.model.ccf_layers}L)"
+    table.add_row("Aggregator", agg_label)
     table.add_row("Output dim", str(config.model.output_dim))
     table.add_row("AMP", str(config.runtime.amp))
     table.add_row("Device", config.runtime.device)
@@ -95,14 +95,11 @@ def build_and_wrap_models(
     if use_ddp:
         assert dist_state is not None  # implied by use_ddp
         device_ids = [dist_state.local_rank]
-        find_unused = config.distributed.find_unused_parameters
-        image_encoder = DDP(
-            image_encoder, device_ids=device_ids, find_unused_parameters=find_unused
-        )
-        text_projection = DDP(
-            text_projection, device_ids=device_ids, find_unused_parameters=find_unused
-        )
-        logit_scale = DDP(logit_scale, device_ids=device_ids, find_unused_parameters=find_unused)
+        # Every trainable param takes part in the forward pass each step, so
+        # find_unused_parameters is never needed.
+        image_encoder = DDP(image_encoder, device_ids=device_ids, find_unused_parameters=False)
+        text_projection = DDP(text_projection, device_ids=device_ids, find_unused_parameters=False)
+        logit_scale = DDP(logit_scale, device_ids=device_ids, find_unused_parameters=False)
 
     return image_encoder, text_projection, logit_scale
 

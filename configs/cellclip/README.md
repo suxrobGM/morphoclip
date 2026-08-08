@@ -3,6 +3,11 @@
 These config files are meant for controlled comparisons of the local CellCLIP
 training recipe without editing YAML in place.
 
+Some one-off experiment variants (e.g. `official_batch64.yaml`,
+`official_low_lr_long_warmup.yaml`) have been pruned from this directory since
+they weren't referenced by any code, docs, or `extends` chain. They remain
+available in git history if needed again.
+
 Supported split strategies in the repo are now:
 
 - `cpjump1_official_representation`
@@ -17,10 +22,6 @@ Supported split strategies in the repo are now:
   - Same local training recipe, but with a CellCLIP-style CP-JUMP1 split:
     deterministic `75/25` train/test inside each `(Cell_type, Time, Perturbation)`
     slice, grouped by `broad_sample`.
-- `official_batch64.yaml`
-  - Isolates batch-size effects relative to the baseline.
-- `official_low_lr_long_warmup.yaml`
-  - Isolates a slower optimization schedule closer to the upstream recipe.
 - `official_upstreamish.yaml`
   - Combines the larger batch, lower learning rate, longer warmup, and longer run.
 - `official_upstreamish_unique_cpjump_style.yaml`

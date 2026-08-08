@@ -9,8 +9,4 @@ dataset:
   eval_batch_size: 512
 
 model:
-  channel_aggregation: "mean_pool"
-
-runtime:
-  eval_every_epochs: 5              # Evaluate every 5 epochs (training is fast)
-  save_every_epochs: 5              # Save checkpoint every 5 epochs
+  aggregator: "meanpool-mean"

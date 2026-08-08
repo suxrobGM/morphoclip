@@ -40,10 +40,20 @@ class TestCrossWellAlignment:
         torch.testing.assert_close(emb, emb_copy)
 
     def test_single_sample_per_plate(self) -> None:
-        """Each sample in its own plate → subtract self-mean → all zero → renorm."""
+        """Singleton plates are skipped, not collapsed to the zero vector."""
         emb = F.normalize(torch.randn(3, 8), dim=-1)
         plates = ["A", "B", "C"]
-        # Subtracting self-mean gives zero; renorm would divide by zero.
-        # F.normalize handles zero vectors by returning zeros.
         out = cross_well_alignment(emb, plates)
         assert out.shape == (3, 8)
+        # Correction is skipped, so the (already normalized) input is preserved.
+        torch.testing.assert_close(out, emb, atol=1e-6, rtol=0)
+        norms = torch.norm(out, dim=-1)
+        torch.testing.assert_close(norms, torch.ones(3), atol=1e-5, rtol=0)
+
+    def test_singleton_plate_preserved_alongside_corrected_plate(self) -> None:
+        """A lone well keeps its embedding while multi-well plates are corrected."""
+        emb = F.normalize(torch.randn(5, 16), dim=-1)
+        plates = ["A", "A", "A", "A", "SOLO"]
+        out = cross_well_alignment(emb, plates)
+        torch.testing.assert_close(out[4], emb[4], atol=1e-6, rtol=0)
+        assert not torch.allclose(out[:4], emb[:4], atol=1e-4)

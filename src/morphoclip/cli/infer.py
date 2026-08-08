@@ -1,4 +1,7 @@
-"""`morphoclip infer` command: top-k matches, embedding export, or profile export."""
+"""`morphoclip infer` command: top-k text matches or embedding export.
+
+Benchmark-layout profile CSVs come from `morphoclip export-profiles`.
+"""
 
 import json
 from enum import StrEnum
@@ -32,7 +35,6 @@ console = Console()
 class InferMode(StrEnum):
     match = "match"
     embed = "embed"
-    profile = "profile"
 
 
 def _encode_all_wells(image_encoder, text_projection, text_cache, loader, *, device, amp):
@@ -137,29 +139,6 @@ def _run_embed(image_embs, text_embs, plates, wells, pert_infos, *, output_dir):
     )
 
 
-def _run_profile(image_embs, plates, wells, pert_infos, *, output_dir):
-    output_dir.mkdir(parents=True, exist_ok=True)
-    dim = image_embs.shape[1]
-    feature_cols = [f"feat_{i}" for i in range(dim)]
-
-    metadata_df = pd.DataFrame(
-        {
-            "Metadata_Plate": plates,
-            "Metadata_Well": wells,
-            "Metadata_broad_sample": [info.broad_sample for info in pert_infos],
-            "Metadata_pert_type": [info.pert_type.name for info in pert_infos],
-            "Metadata_target": [info.target or "" for info in pert_infos],
-            "Metadata_gene_symbol": [info.gene_symbol or "" for info in pert_infos],
-        }
-    )
-    features_df = pd.DataFrame(image_embs.numpy(), columns=feature_cols)
-    df = pd.concat([metadata_df, features_df], axis=1)
-
-    output_path = output_dir / "morphoclip_profiles.csv.gz"
-    df.to_csv(output_path, index=False, compression="gzip")
-    console.print(f"Saved profiles: [green]{output_path}[/green] ({len(df)} wells, {dim}-d)")
-
-
 def _print_match_summary(results, top_k):
     ranks = [r["rank_of_gt"] for r in results if r["rank_of_gt"] is not None]
     if not ranks:
@@ -199,7 +178,7 @@ def infer(
         bool, typer.Option(help="Include control wells in inference.")
     ] = False,
 ) -> None:
-    """Run inference: top-k matches, embedding export, or profile export."""
+    """Run inference: top-k text matches or embedding export."""
     setup_logging()
 
     if not checkpoint.exists():
@@ -213,8 +192,6 @@ def infer(
     image_encoder, text_projection, ckpt, cfg = load_models_from_checkpoint(checkpoint, device)
     if config:
         cfg = load_training_config(str(config))
-    if batch_size:
-        cfg.dataset.eval_batch_size = batch_size
 
     console.print(f"Epoch: {ckpt['epoch']}, step: {ckpt['steps']}")
 
@@ -227,7 +204,7 @@ def infer(
         plates=resolved_plates,
         exclude_controls=not include_controls,
     )
-    loader = build_eval_dataloader(dataset, cfg, device)
+    loader = build_eval_dataloader(dataset, cfg, device, batch_size=batch_size)
     console.print(f"Plates: {len(resolved_plates)} | Wells: {len(dataset):,}\n")
 
     console.print("[bold]Encoding wells...[/bold]")
@@ -270,9 +247,4 @@ def infer(
             all_wells,
             all_pert_infos,
             output_dir=resolved_output_dir,
-        )
-
-    elif mode is InferMode.profile:
-        _run_profile(
-            image_embs, all_plates, all_wells, all_pert_infos, output_dir=resolved_output_dir
         )

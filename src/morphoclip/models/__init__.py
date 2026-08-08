@@ -1,4 +1,4 @@
-from morphoclip.models.image_encoder import MorphoCLIPImageEncoder
+from morphoclip.models.image_encoder import AGGREGATORS, MorphoCLIPImageEncoder
 from morphoclip.models.projection_head import ProjectionHead
 from morphoclip.models.prompts import (
     TEMPLATES,
@@ -8,13 +8,18 @@ from morphoclip.models.prompts import (
     build_prompts_from_info,
     extract_template_fields,
 )
+from morphoclip.models.site_pooling import AttentionSitePooling
 from morphoclip.models.text_encoder import MorphoCLIPTextEncoder
+from morphoclip.models.well_former import WellFormer
 
 __all__ = [
+    "AGGREGATORS",
+    "AttentionSitePooling",
     "MorphoCLIPImageEncoder",
     "MorphoCLIPTextEncoder",
     "ProjectionHead",
     "TEMPLATES",
+    "WellFormer",
     "build_prompt",
     "build_prompt_from_info",
     "build_prompts",

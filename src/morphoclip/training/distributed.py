@@ -127,6 +127,26 @@ def all_reduce_scalar(value: float, *, op: str = "mean") -> float:
     return float(tensor.item())
 
 
+def broadcast_flag(value: bool, *, src: int = 0) -> bool:
+    """Broadcast a boolean decision from *src* to every rank.
+
+    Lets a decision that only one rank can make (eval runs on rank 0) drive
+    control flow on all of them, so no rank is left waiting at a collective.
+
+    Args:
+        value: Local value; only the one on *src* is used.
+        src: Rank whose value wins.
+
+    Returns:
+        The value held by *src*.
+    """
+    if not dist.is_initialized():
+        return value
+    tensor = torch.tensor(int(value), dtype=torch.int32, device="cuda")
+    dist.broadcast(tensor, src=src)
+    return bool(tensor.item())
+
+
 class _GatherWithGrad(torch.autograd.Function):
     """All-gather that preserves gradient flow for contrastive loss.
 

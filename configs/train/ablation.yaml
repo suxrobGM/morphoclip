@@ -1,0 +1,20 @@
+# Shared settings for the ablation campaign.
+#
+# Variants are expressed as CLI overrides rather than separate files, e.g.
+#   uv run morphoclip train --config configs/train/ablation.yaml \
+#     --set optimization.target_weight=0.6 --set runtime.run_name=abl_soft
+# The resolved config is embedded in each checkpoint, so runs stay reproducible.
+
+extends: base.yaml
+
+dataset:
+  batch_size: 256                   # Matches the reported ccf_preload run
+  eval_batch_size: 256
+  batch_sampler: "perturbation"     # P perturbations x K replicate wells per batch
+  replicates_per_group: 2           # Gives the image-image term in-batch positives
+
+optimization:
+  epochs: 30                        # Best epoch was 9/100; a 100-epoch cosine never decayed
+
+runtime:
+  early_stop_patience: 8            # Stop when validation loss stalls
