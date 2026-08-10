@@ -8,8 +8,6 @@ Usage via CLI::
     uv run morphoclip features pipeline
     uv run morphoclip features pipeline --retry-failed
     uv run morphoclip features pipeline --tensors-only
-
-CLI entry point: ``scripts/features/run_pipeline.py``.
 """
 
 import logging

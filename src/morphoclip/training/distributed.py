@@ -7,7 +7,7 @@ single-process mode.
 
 Usage with torchrun::
 
-    torchrun --nproc_per_node=4 scripts/training/train.py \\
+    torchrun --nproc_per_node=4 -m morphoclip.cli train \\
         --config configs/train/ddp.yaml --distributed
 """
 

@@ -212,3 +212,7 @@ omit = ["*/__main__.py"]
 [tool.coverage.report]
 skip_covered = true
 exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "@overload"]
+# Measured, not aspirational: 43% over all of src/ (60% over src/morphoclip alone).
+# `benchmark` and `cellclip` are frozen and deliberately untested, which is most of
+# the gap. Treat this as a ratchet: raise it when coverage rises, never lower it.
+fail_under = 40

@@ -1,62 +1,101 @@
-# Project Structure Rules
+# Project structure
 
-## Source Layout
+## Source
 
-- MorphoCLIP library code lives under `src/morphoclip/`. Subpackages: `cli`, `data`, `models`, `utils`.
-- CellCLIP baseline code lives under `src/cellclip/`. Subpackages: `benchmark`, `training`. This is a separate package, not part of `morphoclip`.
-- General benchmark code lives under `src/benchmark/`. Shared by both MorphoCLIP and CellCLIP.
-- Each subpackage has an `__init__.py` that re-exports its public API via `__all__`.
-- The project is an installable package (hatchling build backend, `[tool.uv] package = true`). Do not reintroduce `sys.path.insert` hacks in package or CLI code.
-- Do not add new top-level packages under `src/` without a clear domain boundary.
+```text
+src/
+  morphoclip/
+    config.py      pydantic StrictModel base, `extends` loader, --set overrides
+    cli/           the `morphoclip` Typer app
+    data/          metadata, dataset, image loading, extraction pipeline
+    models/        text and image encoders, prompts
+    splits/        dataset splitting
+    training/      trainer, losses, optim, inference, retrieval
+    utils/         caching, console, device, s3, hf transfer
+    benchmark/     profile export for MorphoCLIP checkpoints
+  benchmark/       CPJUMP1 evaluation. Standalone: no torch, no morphoclip.
+  cellclip/        frozen baseline (benchmark/ and training/ subpackages)
+```
 
-## CLI (`morphoclip.cli`)
+The project is an installable package (hatchling, `[tool.uv] package = true`).
+Never reintroduce `sys.path.insert` in package or CLI code.
 
-- Pipeline entry points are a single Typer app exposed as the `morphoclip` console command (`[project.scripts]`), also runnable via `python -m morphoclip.cli` (used by `torchrun`).
-- One module per command group under `src/morphoclip/cli/`: top-level commands (`train`, `eval`, `infer`, `split`, `benchmark`) plus sub-apps `data`, `features`, `text`, `cellclip`.
-- CLI command bodies are thin wrappers — business logic belongs in `src/` (`morphoclip.*`, `cellclip.*`, `benchmark.*`). Command-specific orchestration may live in the command module; large/reusable logic (e.g. the stable benchmark) lives in its package (`benchmark.stable`).
-- Imports that pull optional extras (e.g. `benchmark.stable` → copairs/sklearn) must be **lazy** (inside the command body) so `morphoclip --help` works without those extras installed.
-- Poe tasks in `[tool.poe.tasks]` wrap CLI commands (e.g. `train = "morphoclip train ..."`); run via `uv run poe <task>` or `uv run morphoclip <command>`.
+`__init__.py` files are empty. Re-exporting through them pulled TensorBoard,
+transformers and pandas into every import; `tests/test_import_graph.py` budgets
+the graph so that cannot come back.
+
+## CLI
+
+One Typer app, exposed as the `morphoclip` console script and runnable as
+`python -m morphoclip.cli` (which is how `torchrun` launches it).
+
+One module per command group under `src/morphoclip/cli/`: top-level `train`,
+`eval`, `infer`, `split`, `benchmark`, `export-profiles`, plus the `data`,
+`features`, `text` and `cellclip` sub-apps.
+
+- Command bodies are thin. Logic belongs in `morphoclip.*`, `cellclip.*` or
+  `benchmark.*`.
+- Imports that pull an optional extra (`benchmark.stable` needs copairs and
+  scikit-learn) must be **lazy**, inside the command body, so
+  `morphoclip --help` works without the extra installed.
+- Repeated Typer options are shared `Annotated` aliases in `cli/options.py`.
+  Use plain module-level assignment, not PEP 695 `type X = ...`: Typer cannot
+  see through a lazily-evaluated `TypeAliasType`.
 
 ## Scripts
 
-- `scripts/` holds only dev/exploration one-offs (inspection, diagnostics, analysis, sanity checks), organized by domain (`data/`, `features/`, `text/`, `benchmark/`, `cellclip/`, `analysis/`, `sanitycheck/`).
-- These scripts start with `sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))` to resolve imports (they are not part of the installed package).
-- Do not add new pipeline entry points here — add a `morphoclip.cli` command instead.
+`scripts/` holds dev and exploration one-offs only, organised by domain
+(`data/`, `features/`, `text/`, `benchmark/`, `sanitycheck/`). They are not part
+of the installed package and start with
+`sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))`.
+
+Do not add a pipeline entry point here. Add a `morphoclip.cli` command.
 
 ## Tests
 
-- Tests live under `tests/` mirroring `src/` structure: `tests/data/`, `tests/models/`, `tests/benchmark/`, `tests/cellclip/`.
-- Each test subdirectory has an empty `__init__.py`.
-- Shared fixtures go in `tests/conftest.py`.
-- Tests that need local data files use `pytest.skip()` when data is absent.
+`tests/` mirrors `src/morphoclip/`: `data/`, `models/`, `splits/`, `training/`,
+`config/`, `cli/`. Each subdirectory has an empty `__init__.py`.
+
+There is deliberately no test suite for `benchmark` or `cellclip`. Both are
+frozen, their results are captured in `report/`, and a suite for them was not
+worth maintaining.
+
+- Shared builders live in `tests/support/` and are imported as
+  `from tests.support.features import ...`. Never import from a conftest.
+- `tests/conftest.py` provides session-scoped `metadata_dir` and
+  `metadata_index` over the committed fixture in `tests/fixtures/cpjump1/`.
+  Tests must not read `data/`, which is gitignored and absent in CI.
+- An autouse fixture raises on `socket.connect`, so a test that forgets to
+  patch `from_pretrained` fails instead of downloading.
+- `filterwarnings = ["error"]`. A warning fails the test.
+- Tests needing the downloaded dataset are marked `realdata` and excluded from
+  the default run.
+
+The bar for a test: name a plausible one-line source change that makes it fail
+and that produces a wrong result. A test that can only fail on a rename is
+churn, and gets deleted.
 
 ## Configuration
 
-- `configs/dataset.yml` — MorphoCLIP settings (S3 paths, plates, extraction, splits) under the `cpjump` key.
-- `configs/train/` — MorphoCLIP training configs (`base.yaml`, `mean_pool.yaml`, `ddp.yaml`).
-- `configs/benchmark.yml` — benchmark and CellCLIP export settings.
-- `configs/cellclip/` — CellCLIP training configs with `extends` inheritance from `base.yaml`.
+- `configs/dataset.yml` under the `cpjump` key: S3 paths, plates, extraction,
+  splits. Parsed only by `morphoclip.data.config`.
+- `configs/train/` MorphoCLIP training configs.
+- `configs/benchmark.yml` benchmark and CellCLIP export settings.
+- `configs/cellclip/` five configs with `extends` inheritance. Historical
+  variants are `--set` commands in `configs/cellclip/README.md`.
+
+Every committed config has a resolution golden in `tests/config/goldens/`.
+
+## Tasks
+
+`[tool.poe.tasks]` holds the dev loop (`test`, `lint`, `format`, `typecheck`,
+`check`), the two commands that supply a default config (`train`, `benchmark`),
+`tensorboard`, and the script runners. Pipeline commands are **not** aliased
+there: a second name for each one only gave the docs something to drift from.
 
 ## Documentation
 
-- `docs/` is a Nextra 4 project (Next.js 16.2 + Bun). It serves as the public docs website.
-- Content lives in `docs/content/` as `.mdx` files organized by topic:
-  - `getting-started/` — installation and quick start guides
-  - `pipeline/` — training pipeline, feature extraction, text encoder, data fetching
-  - `dataset/` — CPJUMP1 overview, splits, compression
-  - `background/` — project proposal, literature review
-  - `baselines/` — CellCLIP, benchmark guides and results
-  - `glossary.mdx`, `team.mdx` — top-level pages
-- Navigation defined via `_meta.ts` files (typed with `MetaRecord` from `nextra`) co-located with content.
-- Internal-only docs (todo, plan, strategy) live in `docs/_internal/` and are not served.
-- Next.js boilerplate (`app/`, `next.config.ts`, `package.json`) lives alongside content in `docs/`.
-- Build: `cd docs && bun run build` produces static output in `docs/out/`.
-
-## Baselines
-
-- External comparison repos are **not** vendored. Reference them upstream by link:
-  [CellCLIP](https://github.com/suinleelab/CellCLIP) and
-  [Chandrasekaran 2024 CPJUMP1](https://github.com/jump-cellpainting/2024_Chandrasekaran_NatureMethods_CPJUMP1).
-- The small CPJUMP1 reference metadata required by the benchmark harness lives
-  first-party under `data/reference/cpjump1/` (`cpjump1_metadata.csv`,
-  `JUMP-Target-1_compound_metadata_additional_annotations.tsv`).
+`docs/` is a Nextra 4 site (Next.js, Bun). Content is `.mdx` under
+`docs/content/`, navigation is `_meta.ts` files co-located with it. Internal
+notes live in `docs/_internal/` and are not served. Build with
+`cd docs && bun run build`.
