@@ -18,6 +18,23 @@ from morphoclip.data.image_loader import (
     parse_filename,
     prepare_channels_for_dino,
 )
+from tests.support.images import make_plate_images
+
+PLATE_WELLS = ("A01", "A03")
+PLATE_SITES = 2
+INCOMPLETE_WELL = "B05"
+
+
+@pytest.fixture(scope="module")
+def sample_plate_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Synthetic plate directory: 2 wells x 2 sites, plus brightfield and an incomplete site."""
+    image_dir = tmp_path_factory.mktemp("plate") / "Images"
+    return make_plate_images(
+        image_dir,
+        wells=PLATE_WELLS,
+        sites=PLATE_SITES,
+        incomplete_well=INCOMPLETE_WELL,
+    )
 
 
 class TestParseFilename:
@@ -93,7 +110,6 @@ class TestDiscoverSites:
     def test_finds_complete_sites(self, sample_plate_dir: Path) -> None:
         sites = discover_sites(sample_plate_dir)
         assert len(sites) > 0
-        # Each site should have all 5 fluorescence channels
         for _key, ch_paths in sites.items():
             assert set(ch_paths.keys()) == set(FLUORESCENCE_CHANNELS)
 
@@ -103,6 +119,27 @@ class TestDiscoverSites:
             assert 1 <= key.row <= 16
             assert 1 <= key.col <= 24
             assert key.field >= 1
+
+    def test_skips_sites_missing_a_channel(self, sample_plate_dir: Path) -> None:
+        wells = {key.well for key in discover_sites(sample_plate_dir)}
+        fields = {
+            key.field for key in discover_sites(sample_plate_dir) if key.well == INCOMPLETE_WELL
+        }
+        assert wells == {*PLATE_WELLS, INCOMPLETE_WELL}
+        assert fields == {2}
+
+    def test_ignores_brightfield_and_non_image_files(self, sample_plate_dir: Path) -> None:
+        on_disk = {path.name for path in sample_plate_dir.iterdir()}
+        assert "Index.idx.xml" in on_disk
+        assert any("-ch6" in name for name in on_disk)
+
+        discovered = {
+            path.name
+            for paths in discover_sites(sample_plate_dir).values()
+            for path in paths.values()
+        }
+        assert not any("-ch6" in name or "-ch7" in name or "-ch8" in name for name in discovered)
+        assert "Index.idx.xml" not in discovered
 
 
 class TestLoadSingleChannel:
