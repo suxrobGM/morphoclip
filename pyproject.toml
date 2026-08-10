@@ -62,6 +62,7 @@ packages = ["src/morphoclip", "src/cellclip", "src/benchmark"]
 [dependency-groups]
 dev = [
   "pytest>=9.0.0",
+  "pytest-cov>=6.0.0",
   "ruff>=0.15.0",
   "mypy>=1.19.0",
   "types-PyYAML>=6.0.12",
@@ -101,9 +102,12 @@ torchvision = [
 
 # Task runner (poethepoet). Run with: uv run poe <task>
 [tool.poe.tasks]
-test = "pytest tests/ -v"
+test = "pytest"
+test-cov = "pytest --cov --cov-report=term-missing --cov-report=xml"
+test-realdata = "pytest -m realdata"
 lint = "ruff check ."
 format = "ruff format ."
+format-check = "ruff format --check ."
 typecheck = "mypy src"
 
 # Pipeline entry points now live in the `morphoclip` CLI (src/morphoclip/cli/).
@@ -153,3 +157,19 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config -m 'not realdata'"
+markers = [
+  "realdata: needs the downloaded data/ tree; excluded from the default run",
+  "slow: takes more than a couple of seconds",
+]
+# Warnings are errors so a torch or pandas deprecation cannot land silently.
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = ["*/__main__.py"]
+
+[tool.coverage.report]
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "@overload"]

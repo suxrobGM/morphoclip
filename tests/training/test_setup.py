@@ -78,7 +78,7 @@ class TestBuildOptimization:
         config.optimization.warmup_steps = 5
         config.distributed.gradient_accumulation_steps = 1
 
-        _optimizer, scheduler, _scaler, _total = build_optimization(
+        optimizer, scheduler, _scaler, _total = build_optimization(
             image_encoder,
             text_projection,
             logit_scale,
@@ -87,7 +87,8 @@ class TestBuildOptimization:
             num_batches=10,
         )
         lr_start = scheduler.get_last_lr()[0]
-        scheduler.step()
-        scheduler.step()
+        for _ in range(2):
+            optimizer.step()
+            scheduler.step()
         lr_after = scheduler.get_last_lr()[0]
         assert lr_after > lr_start
