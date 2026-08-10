@@ -2,10 +2,10 @@
 
 This document explains the two-step data flow:
 
-1. `scripts/label_generator.py` builds `labels.csv` from image filenames.
+1. `scripts/data/label_generator.py` builds `labels.csv` from image filenames.
 2. `morphoclip split` splits `labels.csv` into train/test label files.
 
-## Step 1: Label generation (`scripts/label_generator.py`)
+## Step 1: Label generation (`scripts/data/label_generator.py`)
 
 ## Inputs
 
@@ -101,7 +101,7 @@ written to `--output-dir` (default: `output/benchmark/input`).
 ## CLI example
 
 ```bash
-uv run python scripts/label_generator.py \
+uv run python scripts/data/label_generator.py \
   --batch-folder data/raw/2020_11_04_CPJUMP1 \
   --profiles-root data/profiles \
   --output-dir output
