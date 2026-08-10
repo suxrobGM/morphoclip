@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -170,10 +169,15 @@ def apply_batch_correction(
     return pd.concat([metadata_df, corrected_df], axis=1)
 
 
-def run_with_unpaired_guard(
-    func: Callable[..., pd.DataFrame], *args: Any, **kwargs: Any
+def run_with_unpaired_guard[**P](
+    func: Callable[P, pd.DataFrame], *args: P.args, **kwargs: P.kwargs
 ) -> pd.DataFrame:
-    """Run an evaluation function and suppress copairs UnpairedException."""
+    """Run an evaluation function and suppress copairs UnpairedException.
+
+    ``P`` is not decoration: it forwards *func*'s signature so a stale keyword
+    at a call site is a type error. An untyped ``**kwargs: Any`` hid exactly
+    that bug through a whole refactor.
+    """
     try:
         return func(*args, **kwargs)
     except Exception as exc:  # pragma: no cover - depends on runtime copairs behavior

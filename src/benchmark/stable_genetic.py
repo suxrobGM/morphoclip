@@ -94,7 +94,6 @@ def evaluate_genetic(
                     add_negcon_indicator(modality_2_df),
                     null_size=null_size,
                     batch_size=batch_size,
-                    copairs_mode="stable",
                 )
                 if result.empty:
                     print(f"Skipping {description_2} replicability - no valid pairs")
@@ -150,7 +149,6 @@ def evaluate_genetic(
                     multilabel=False,
                     null_size=null_size,
                     batch_size=batch_size,
-                    copairs_mode="stable",
                 )
                 if result.empty:
                     print(f"Skipping {description_2} matching - no valid pairs")
@@ -252,7 +250,6 @@ def _evaluate_cross_modality(
         target_col="Metadata_matching_target",
         null_size=null_size,
         batch_size=batch_size,
-        copairs_mode="stable",
     )
     if result.empty:
         print(f"Skipping {description_cross} matching - no valid pairs")

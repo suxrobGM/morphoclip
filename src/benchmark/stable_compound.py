@@ -94,7 +94,6 @@ def evaluate_compound(
         add_negcon_indicator(modality_1_df),
         null_size=null_size,
         batch_size=batch_size,
-        copairs_mode="stable",
     )
     if result.empty:
         print(f"Skipping {description} replicability - no valid pairs")
@@ -144,7 +143,6 @@ def evaluate_compound(
         multilabel=True,
         null_size=null_size,
         batch_size=batch_size,
-        copairs_mode="stable",
     )
     if result.empty:
         print(f"Skipping {description} matching - no valid pairs")
