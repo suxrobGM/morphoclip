@@ -81,12 +81,16 @@ class TestMorphoCLIPTrainingConfig:
         with pytest.raises(ValueError, match=r"model\.channel_aggregation"):
             load_training_config(config_path)
 
-    def test_to_dict_roundtrip(self) -> None:
-        config = MorphoCLIPTrainingConfig()
-        d = config.to_dict()
+    def test_to_dict_is_plain_nested_data(self) -> None:
+        d = MorphoCLIPTrainingConfig().to_dict()
         assert d["model"]["output_dim"] == 512
         assert d["optimization"]["loss_type"] == "infonce"
         assert d["runtime"]["amp"] is True
+
+    def test_to_dict_round_trips_through_the_schema(self) -> None:
+        """Checkpoints store `to_dict()`. Resume rebuilds from it, so it has to validate."""
+        config = load_training_config(Path("configs/train/base.yaml"))
+        assert training_config_from_dict(config.to_dict()) == config
 
     def test_yaml_load(self, tmp_path: Path) -> None:
         config_data = {
