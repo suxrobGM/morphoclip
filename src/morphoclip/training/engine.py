@@ -1,84 +1,17 @@
-"""Optimizer, scheduler, checkpointing, and training step utilities."""
+"""Checkpointing and the training step for MorphoCLIP."""
 
-import math
 from pathlib import Path
 from typing import Any, cast
 
 import torch
 from torch import nn
-from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
-from morphoclip.training.config import ADAMW_BETAS, ADAMW_EPS, MorphoCLIPTrainingConfig
+from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.distributed import LogitScaleModule
 from morphoclip.training.metrics import compute_grad_norm
-from morphoclip.utils.device import autocast_context, resolve_device  # noqa: F401
-
-
-def split_params(
-    *modules: nn.Module,
-    weight_decay: float,
-) -> list[dict[str, Any]]:
-    """Split parameters into decay / no-decay groups.
-
-    Biases, LayerNorm weights, and 1-d params get zero weight decay.
-    """
-    decay: list[nn.Parameter] = []
-    no_decay: list[nn.Parameter] = []
-    for module in modules:
-        for name, param in module.named_parameters():
-            if not param.requires_grad:
-                continue
-            lowered = name.lower()
-            if param.ndim < 2 or "bias" in lowered or "ln" in lowered or "norm" in lowered:
-                no_decay.append(param)
-            else:
-                decay.append(param)
-    return [
-        {"params": decay, "weight_decay": weight_decay},
-        {"params": no_decay, "weight_decay": 0.0},
-    ]
-
-
-def build_optimizer(
-    params: list[dict[str, Any]],
-    config: MorphoCLIPTrainingConfig,
-) -> AdamW:
-    """Build AdamW optimizer from config."""
-    opt = config.optimization
-    return AdamW(params, lr=opt.lr, betas=ADAMW_BETAS, eps=ADAMW_EPS)
-
-
-def build_scheduler(
-    optimizer: AdamW,
-    *,
-    total_steps: int,
-    warmup_steps: int,
-) -> LambdaLR:
-    """Warmup + cosine decay learning-rate schedule."""
-
-    def lr_lambda(step: int) -> float:
-        if total_steps <= 0:
-            return 1.0
-        if step < warmup_steps:
-            return float(step + 1) / float(max(1, warmup_steps))
-        progress = (step - warmup_steps) / float(max(1, total_steps - warmup_steps))
-        progress = min(max(progress, 0.0), 1.0)
-        return 0.5 * (1.0 + math.cos(math.pi * progress))
-
-    return LambdaLR(optimizer, lr_lambda=lr_lambda)
-
-
-def _unwrap(module: nn.Module) -> nn.Module:
-    """Return the inner module, stripping a DDP wrapper if present."""
-    if hasattr(module, "module"):
-        return cast(nn.Module, module.module)
-    return module
-
-
-def _unwrap_state_dict(module: nn.Module) -> dict[str, Any]:
-    """Get state_dict from a module, stripping DDP wrapper if present."""
-    return _unwrap(module).state_dict()
+from morphoclip.training.optim import unwrap, unwrap_state_dict
+from morphoclip.utils.device import autocast_context
 
 
 def _get_logit_scale_data(logit_scale: nn.Parameter | nn.Module) -> torch.Tensor:
@@ -97,7 +30,7 @@ def save_checkpoint(
     image_encoder: nn.Module,
     text_projection: nn.Module,
     logit_scale: nn.Parameter | nn.Module,
-    optimizer: AdamW,
+    optimizer: torch.optim.Optimizer,
     scheduler: LambdaLR,
     epoch: int,
     global_step: int,
@@ -112,8 +45,8 @@ def save_checkpoint(
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         {
-            "image_encoder": _unwrap_state_dict(image_encoder),
-            "text_projection": _unwrap_state_dict(text_projection),
+            "image_encoder": unwrap_state_dict(image_encoder),
+            "text_projection": unwrap_state_dict(text_projection),
             "logit_scale": _get_logit_scale_data(logit_scale),
             "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict(),
@@ -132,7 +65,7 @@ def load_checkpoint(
     image_encoder: nn.Module,
     text_projection: nn.Module,
     logit_scale: nn.Parameter | nn.Module,
-    optimizer: AdamW,
+    optimizer: torch.optim.Optimizer,
     scheduler: LambdaLR,
     device: torch.device,
 ) -> tuple[int, int, float]:
@@ -156,8 +89,8 @@ def load_checkpoint(
     ckpt = torch.load(path, map_location=device, weights_only=False)
 
     # Unwrap DDP if present on the target modules
-    img_target = _unwrap(image_encoder)
-    txt_target = _unwrap(text_projection)
+    img_target = unwrap(image_encoder)
+    txt_target = unwrap(text_projection)
 
     img_target.load_state_dict(ckpt["image_encoder"])
     txt_target.load_state_dict(ckpt["text_projection"])
@@ -178,7 +111,7 @@ def load_checkpoint(
 
 def scale_param(logit_scale: nn.Module) -> nn.Parameter:
     """Get the raw scale parameter, unwrapping DDP if needed."""
-    inner = cast(LogitScaleModule, _unwrap(logit_scale))
+    inner = cast(LogitScaleModule, unwrap(logit_scale))
     return inner.scale
 
 

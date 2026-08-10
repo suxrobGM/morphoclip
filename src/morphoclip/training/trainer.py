@@ -23,12 +23,7 @@ from morphoclip.training.distributed import (
     cleanup_distributed,
     setup_distributed,
 )
-from morphoclip.training.engine import (
-    load_checkpoint,
-    resolve_device,
-    save_checkpoint,
-    scale_param,
-)
+from morphoclip.training.engine import load_checkpoint, save_checkpoint, scale_param
 from morphoclip.training.evaluate import evaluate_epoch
 from morphoclip.training.loop import TrainContext, run_epoch
 from morphoclip.training.setup import (
@@ -40,6 +35,7 @@ from morphoclip.training.setup import (
 from morphoclip.training.tb_logger import HISTOGRAM_EVERY_EPOCHS, TrainingLogger
 from morphoclip.training.train_data import build_train_data
 from morphoclip.utils.caching import load_cached_text_features
+from morphoclip.utils.device import resolve_device
 
 console = Console()
 

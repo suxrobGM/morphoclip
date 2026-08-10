@@ -17,7 +17,6 @@ from rich.table import Table
 from morphoclip.cli.logging import setup_logging
 from morphoclip.data.perturbation import PerturbationInfo
 from morphoclip.training.config import load_training_config
-from morphoclip.training.engine import autocast_context
 from morphoclip.training.evaluate import lookup_text_embeddings
 from morphoclip.training.inference import (
     build_eval_dataloader,
@@ -27,7 +26,7 @@ from morphoclip.training.inference import (
     load_models_from_checkpoint,
 )
 from morphoclip.utils.caching import load_cached_text_features
-from morphoclip.utils.device import resolve_device
+from morphoclip.utils.device import autocast_context, resolve_device
 
 console = Console()
 

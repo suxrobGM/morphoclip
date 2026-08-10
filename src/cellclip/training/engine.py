@@ -25,7 +25,7 @@ from cellclip.training.dataset import prepare_datasets
 from cellclip.training.evaluate import _move_optional_tokens, _move_tokens, evaluate_epoch
 from cellclip.training.losses import compute_loss
 from cellclip.training.model import CellCLIP, build_cellclip_model
-from cellclip.training.optim import build_optimizer, build_scheduler, save_checkpoint
+from cellclip.training.optim import build_optimizer, save_checkpoint
 from morphoclip.training.distributed import (
     DistributedState,
     all_reduce_scalar,
@@ -33,6 +33,7 @@ from morphoclip.training.distributed import (
     setup_distributed,
 )
 from morphoclip.training.metrics import compute_grad_norm, compute_logit_stats
+from morphoclip.training.optim import build_warmup_cosine_scheduler
 from morphoclip.training.tb_logger import TrainingLogger
 from morphoclip.utils.device import autocast_context, resolve_device, resolve_num_workers
 
@@ -135,7 +136,7 @@ def _train_loop(
     total_steps = max(1, steps_per_epoch * config.optimization.epochs)
     if config.runtime.max_train_steps is not None:
         total_steps = min(total_steps, config.runtime.max_train_steps)
-    scheduler = build_scheduler(
+    scheduler = build_warmup_cosine_scheduler(
         optimizer,
         total_steps=total_steps,
         warmup_steps=config.optimization.warmup_steps,

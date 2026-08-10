@@ -22,15 +22,11 @@ from morphoclip.training.config import (
     MorphoCLIPTrainingConfig,
 )
 from morphoclip.training.distributed import DistributedState, all_reduce_scalar
-from morphoclip.training.engine import (
-    autocast_context,
-    forward_step,
-    optimizer_step,
-    scale_param,
-)
+from morphoclip.training.engine import forward_step, optimizer_step, scale_param
 from morphoclip.training.losses import compute_training_loss
 from morphoclip.training.metrics import compute_logit_stats
 from morphoclip.training.tb_logger import TrainingLogger
+from morphoclip.utils.device import autocast_context
 
 
 @dataclass
