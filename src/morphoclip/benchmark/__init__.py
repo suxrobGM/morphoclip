@@ -1,17 +1,5 @@
-"""MorphoCLIP benchmark-layout profile export."""
+"""Profile export for trained MorphoCLIP checkpoints.
 
-from morphoclip.benchmark.export import (
-    PlateNotInReferenceError,
-    build_plate_profile,
-    export_plate_profiles,
-    load_export_models,
-    load_reference_metadata,
-)
-
-__all__ = [
-    "PlateNotInReferenceError",
-    "build_plate_profile",
-    "export_plate_profiles",
-    "load_export_models",
-    "load_reference_metadata",
-]
+Import submodules directly; this package exports no names of its own so
+that importing one module does not pull in the whole subpackage.
+"""

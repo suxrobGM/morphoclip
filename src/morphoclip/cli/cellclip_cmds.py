@@ -15,13 +15,8 @@ import yaml
 from rich.console import Console
 from rich.panel import Panel
 
-from cellclip.benchmark import (
-    export_plate,
-    load_cellclip_visual_encoder,
-    load_yaml_section,
-    resolve_export_settings,
-    select_target_plates,
-)
+from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
+from cellclip.benchmark.export import export_plate, load_yaml_section, select_target_plates
 from cellclip.benchmark.pipeline import (
     PlateResult,
     load_dataset_config,
@@ -32,12 +27,10 @@ from cellclip.benchmark.pipeline import (
     run_plate_pipeline,
     summarize_results,
 )
-from cellclip.training import (
-    load_training_config,
-    render_train_config,
-    render_train_summary,
-    train_cellclip,
-)
+from cellclip.benchmark.settings import resolve_export_settings
+from cellclip.training.config import load_training_config
+from cellclip.training.engine import train_cellclip
+from cellclip.training.reporting import render_train_config, render_train_summary
 from morphoclip.data.feature_extractor import DEFAULT_MODEL, infer_feature_width, load_dinov3
 
 app = typer.Typer(no_args_is_help=True, help="CellCLIP baseline: train and export profiles.")
