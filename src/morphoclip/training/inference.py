@@ -1,17 +1,20 @@
-"""Shared checkpoint loading and model construction for inference/evaluation.
+"""Checkpoint loading, model construction, and well encoding for evaluation.
 
-Both ``scripts/training/infer.py`` and ``scripts/training/eval.py`` need
-to reconstruct models from a saved checkpoint.  This module provides the
-shared plumbing so the scripts stay thin CLI wrappers.
+The `morphoclip eval`, `morphoclip infer` and profile-export commands all
+rebuild a model from a checkpoint and then run it over a set of wells. This is
+the one place that does either.
 """
 
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import torch
+from torch import nn
 from torch.utils.data import DataLoader
 
 from morphoclip.data.dataset import MorphoCLIPDataset, collate_fn
 from morphoclip.data.metadata import MetadataIndex
+from morphoclip.data.perturbation import PerturbationInfo
 from morphoclip.models.image_encoder import MorphoCLIPImageEncoder
 from morphoclip.models.projection_head import ProjectionHead
 from morphoclip.training.config import (
@@ -22,7 +25,7 @@ from morphoclip.training.config import (
     MorphoCLIPTrainingConfig,
     training_config_from_dict,
 )
-from morphoclip.utils.device import loader_workers, supports_pin_memory
+from morphoclip.utils.device import autocast_context, loader_workers, supports_pin_memory
 
 
 def load_checkpoint(
@@ -153,6 +156,95 @@ def filter_batch_to_cached(batch: dict, text_cache: dict) -> tuple[dict, int]:
         "wells": [batch["wells"][i] for i in valid],
     }
     return filtered, len(pert_infos) - len(valid)
+
+
+@dataclass
+class EncodedWells:
+    """Everything :func:`encode_wells` collected, on CPU.
+
+    ``text`` is None when no text projection was supplied, which is the
+    profile-export case.
+    """
+
+    image: torch.Tensor
+    text: torch.Tensor | None = None
+    plates: list[str] = field(default_factory=list)
+    wells: list[str] = field(default_factory=list)
+    pert_infos: list[PerturbationInfo] = field(default_factory=list)
+    skipped: int = 0
+
+    def require_text(self) -> torch.Tensor:
+        """Text embeddings, or an error naming what was not asked for."""
+        if self.text is None:
+            raise ValueError("encode_wells was called without a text projection")
+        return self.text
+
+
+@torch.no_grad()
+def encode_wells(
+    image_encoder: nn.Module,
+    loader,
+    *,
+    device: torch.device,
+    text_projection: nn.Module | None = None,
+    text_cache: dict | None = None,
+    amp: bool = False,
+) -> EncodedWells:
+    """Encode every well in *loader*, optionally alongside its text embedding.
+
+    Args:
+        image_encoder: Encoder producing one embedding per well.
+        loader: DataLoader over wells.
+        device: Device to run on.
+        text_projection: Projection head for cached text features. Required to
+            populate ``EncodedWells.text``.
+        text_cache: Cached text features. When given, wells whose
+            ``broad_sample`` is missing from it are dropped and counted in
+            ``EncodedWells.skipped``.
+        amp: Run the forward pass under autocast. Defaults off, because
+            profile export writes its embeddings to disk and fp16 there would
+            move every downstream benchmark number.
+
+    Returns:
+        The concatenated embeddings and the per-well metadata that survived.
+
+    Raises:
+        ValueError: If *loader* yields no wells at all.
+    """
+    from morphoclip.training.evaluate import lookup_text_embeddings
+
+    image_embs: list[torch.Tensor] = []
+    text_embs: list[torch.Tensor] = []
+    result = EncodedWells(image=torch.empty(0))
+
+    for raw_batch in loader:
+        batch = raw_batch
+        if text_cache is not None:
+            batch, n_skipped = filter_batch_to_cached(raw_batch, text_cache)
+            result.skipped += n_skipped
+        pert_infos: list[PerturbationInfo] = batch["pert_info"]
+        if not pert_infos:
+            continue
+
+        features = batch["features"].to(device, non_blocking=True)
+        site_mask = batch["site_mask"].to(device, non_blocking=True)
+        with autocast_context(device, amp):
+            image_embs.append(image_encoder(features, site_mask).cpu())
+            if text_projection is not None:
+                raw_text = lookup_text_embeddings(pert_infos, text_cache or {}, device)
+                text_embs.append(text_projection(raw_text).cpu())
+
+        result.plates.extend(batch["plates"])
+        result.wells.extend(batch["wells"])
+        result.pert_infos.extend(pert_infos)
+
+    if not image_embs:
+        raise ValueError("No wells to encode: every batch was empty or uncached")
+
+    result.image = torch.cat(image_embs)
+    if text_embs:
+        result.text = torch.cat(text_embs)
+    return result
 
 
 def load_models_from_checkpoint(

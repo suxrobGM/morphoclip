@@ -9,6 +9,7 @@ accumulation/persistence logic — can be imported without the ``benchmark`` ext
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -46,8 +47,7 @@ class StableResults:
         *,
         result: pd.DataFrame,
         group_cols: list[str],
-        null_size: int,
-        metadata: dict[str, object],
+        metadata: dict[str, Any],
     ) -> None:
         """Compute mAP/FR for *result* and append a row to each accumulator.
 
@@ -56,7 +56,7 @@ class StableResults:
         """
         from benchmark.stable_helpers import compute_map_and_fr
 
-        map_df, fr = compute_map_and_fr(result, group_cols, null_size)
+        map_df, fr = compute_map_and_fr(result, group_cols)
         self._append_rows(map_attr, fr_attr, map_df=map_df, fr=fr, metadata=metadata)
 
     def _append_rows(
@@ -66,7 +66,7 @@ class StableResults:
         *,
         map_df: pd.DataFrame,
         fr: float,
-        metadata: dict[str, object],
+        metadata: dict[str, Any],
     ) -> None:
         """Attach *metadata* to the mAP/FR rows and concat (pure; no copairs)."""
         fr_row = {key: [value] for key, value in metadata.items()}
@@ -112,7 +112,7 @@ class StableResults:
 
     def generate_figures(self, figures_dir: Path) -> None:
         """Render the benchmark figures (requires matplotlib/seaborn)."""
-        from benchmark.stable_helpers import (
+        from benchmark.figures import (
             plot_cross_modality_barplot,
             plot_matching_barplot,
             plot_matching_fr_faceted,

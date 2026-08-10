@@ -15,12 +15,18 @@ import pandas as pd
 import torch
 from torch import nn
 
-from benchmark.data import get_metadata_columns
-from benchmark.export_utils import feature_columns, negcon_center_profiles, output_profile_path
+from benchmark.profiles import (
+    metadata_columns,
+    negcon_center_profiles,
+    numbered_feature_columns,
+    profile_path,
+    write_profile,
+)
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.inference import (
     build_eval_dataloader,
     build_eval_dataset,
+    encode_wells,
     load_models_from_checkpoint,
 )
 from morphoclip.utils.device import resolve_device
@@ -168,46 +174,40 @@ def build_plate_profile(
     if kept_rows.empty:
         raise ValueError("No wells align between embeddings and reference metadata")
 
-    metadata_cols = get_metadata_columns(metadata_df)
+    metadata_cols = metadata_columns(metadata_df)
     feature_matrix = np.vstack(
         [embedding_by_well[str(well)] for well in kept_rows["Metadata_Well"]]
     )
     features_df = pd.DataFrame(
         feature_matrix.astype(np.float32),
-        columns=feature_columns(feature_matrix.shape[1]),
+        columns=numbered_feature_columns(feature_matrix.shape[1]),
     )
     metadata_out = kept_rows[metadata_cols].reset_index(drop=True)
     return pd.concat([metadata_out, features_df], axis=1)
 
 
-@torch.no_grad()
 def _encode_plate_wells(
     models: ExportModels,
     plate: str,
     *,
     batch_size: int | None,
 ) -> tuple[np.ndarray, list[str]]:
-    """Encode every well cached for ``plate`` through the image encoder."""
+    """Encode every well cached for ``plate`` through the image encoder.
+
+    Runs in fp32: these embeddings are written to disk and every benchmark
+    number downstream is computed from them.
+    """
     image_encoder, config, device = models
 
     dataset = build_eval_dataset(config, plates=[plate], exclude_controls=False)
     if len(dataset) == 0:
         raise ValueError(
-            f"No cached features found for plate {plate!r} under "
-            f"{config.dataset.feature_root}"
+            f"No cached features found for plate {plate!r} under {config.dataset.feature_root}"
         )
     loader = build_eval_dataloader(dataset, config, device, batch_size=batch_size)
 
-    all_embeddings: list[torch.Tensor] = []
-    all_wells: list[str] = []
-    for batch in loader:
-        features = batch["features"].to(device, non_blocking=True)
-        site_mask = batch["site_mask"].to(device, non_blocking=True)
-        embeddings = image_encoder(features, site_mask)
-        all_embeddings.append(embeddings.cpu())
-        all_wells.extend(batch["wells"])
-
-    return torch.cat(all_embeddings, dim=0).numpy(), all_wells
+    encoded = encode_wells(image_encoder, loader, device=device)
+    return encoded.image.numpy(), encoded.wells
 
 
 def export_plate_profiles(
@@ -224,7 +224,7 @@ def export_plate_profiles(
 
     Encodes every cached well including controls, aligns them with reference
     metadata, optionally centers against plate negative controls, and writes to
-    the path :func:`benchmark.export_utils.output_profile_path` expects.
+    the path :func:`benchmark.profiles.profile_path` expects.
 
     Args:
         models: ``(image_encoder, config, device)`` from
@@ -258,13 +258,9 @@ def export_plate_profiles(
         )
         if not has_negcon:
             logger.warning(
-                "Plate %s has zero negcon rows with features; falling back to "
-                "all-well centering",
+                "Plate %s has zero negcon rows with features; falling back to all-well centering",
                 plate,
             )
         profile_df = negcon_center_profiles(profile_df)
 
-    output_path = output_profile_path(output_root, batch, plate)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    profile_df.to_csv(output_path, index=False, compression="gzip")
-    return output_path
+    return write_profile(profile_df, profile_path(output_root, batch, plate))

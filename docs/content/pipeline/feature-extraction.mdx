@@ -95,10 +95,10 @@ The extraction script loads this automatically via `python-dotenv`.
 **CLI:**
 
 ```bash
-uv run poe extract-features                      # all plates
-uv run poe extract-features --plate BR00116991   # single plate
-uv run poe extract-features --verify-only        # check completeness
-uv run poe extract-features --no-tensors         # skip tensor saving (saves disk space, slightly faster)
+uv run morphoclip features extract                      # all plates
+uv run morphoclip features extract --plate BR00116991   # single plate
+uv run morphoclip features extract --verify-only        # check completeness
+uv run morphoclip features extract --no-tensors         # skip tensor saving (saves disk space, slightly faster)
 ```
 
 ### 3. Metadata (`morphoclip.data.metadata`)
@@ -173,7 +173,7 @@ cpjump:
 
 ```text
 data/
-  metadata/                    # downloaded via uv run poe fetch-dataset --metadata
+  metadata/                    # downloaded via uv run morphoclip data fetch --metadata
   raw/{batch}/{plate}/Images/  # raw TIFF images (optional, can delete after extraction)
   features/{barcode}/          # extracted CLS tokens (5, 1024) per site
   tensors/{barcode}/           # resized image tensors (5, 384, 384) per site

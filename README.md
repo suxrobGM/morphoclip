@@ -60,10 +60,10 @@ uv sync --extra cu128    # CUDA 12.8 (RTX 50-series / Blackwell)
 uv sync --extra cu130    # CUDA 13.0
 uv sync --extra cpu      # CPU-only (or macOS, which gets MPS wheels)
 
-# Train (tasks run via poe: `uv run poe <task>`)
-uv run poe download-features   # download pre-extracted image features
-uv run poe precompute-text     # cache text embeddings
-uv run poe train               # train MorphoCLIP
+# Train (every pipeline step is a `morphoclip` subcommand)
+uv run morphoclip features download   # download pre-extracted image features
+uv run morphoclip text precompute     # cache text embeddings
+uv run morphoclip train --config configs/train/base.yaml
 ```
 
 See the [full documentation](https://morphoclip.suxrobgm.net) for detailed installation, evaluation, inference, and multi-GPU training guides.

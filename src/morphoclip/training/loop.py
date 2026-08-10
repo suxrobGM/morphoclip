@@ -22,15 +22,11 @@ from morphoclip.training.config import (
     MorphoCLIPTrainingConfig,
 )
 from morphoclip.training.distributed import DistributedState, all_reduce_scalar
-from morphoclip.training.engine import (
-    autocast_context,
-    forward_step,
-    optimizer_step,
-    scale_param,
-)
+from morphoclip.training.engine import forward_step, optimizer_step, scale_param
 from morphoclip.training.losses import compute_training_loss
 from morphoclip.training.metrics import compute_logit_stats
 from morphoclip.training.tb_logger import TrainingLogger
+from morphoclip.utils.device import autocast_context
 
 
 @dataclass
@@ -86,7 +82,6 @@ def run_epoch(
     ctx: TrainContext,
     train_loader,
     *,
-    epoch: int,
     global_step: int,
     total_steps: int,
     progress: Progress,
@@ -182,8 +177,7 @@ def run_epoch(
                 current_lr = float(ctx.scheduler.get_last_lr()[0])
                 current_tau = sp.exp().item()
                 component_vals = {
-                    name: float(total) / accum_steps
-                    for name, total in component_totals.items()
+                    name: float(total) / accum_steps for name, total in component_totals.items()
                 }
                 note = "".join(
                     f" {name}=[magenta]{value:.5f}[/magenta]"

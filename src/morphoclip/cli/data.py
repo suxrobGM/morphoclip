@@ -8,20 +8,15 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-import yaml
-from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
-from morphoclip.utils.s3 import (
-    DEFAULT_RCLONE_REMOTE,
-    build_s3_uri,
-    choose_backend,
-    sync_s3_path,
-)
+from morphoclip.data.config import load_dataset_config
+from morphoclip.data.tiffs import count_tiffs
+from morphoclip.utils.console import console
+from morphoclip.utils.s3 import choose_backend, sync_s3_path
 
 app = typer.Typer(no_args_is_help=True, help="Dataset fetching and inspection.")
-console = Console()
 
 CONFIG_PATH = Path("configs/dataset.yml")
 
@@ -36,16 +31,6 @@ class OnExisting(StrEnum):
     ask = "ask"
     skip = "skip"
     redownload = "redownload"
-
-
-# --------------------------------------------------------------------------- #
-# fetch
-# --------------------------------------------------------------------------- #
-
-
-def _count_tiffs(image_dir: Path) -> int:
-    """Count TIFF files in a directory."""
-    return len(list(image_dir.glob("*.tif"))) + len(list(image_dir.glob("*.tiff")))
 
 
 def _prompt_existing(label: str, dest: Path, action_yes: str, mode: str) -> str:
@@ -87,7 +72,7 @@ def _process_plate(
     """Handle download for one plate. Returns True if downloaded."""
     should_download = True
     if image_dest.exists():
-        existing_tiffs = _count_tiffs(image_dest)
+        existing_tiffs = count_tiffs(image_dest)
         if existing_tiffs > 0:
             action = _prompt_existing(
                 f"Plate {plate} ({existing_tiffs} TIFFs)",
@@ -128,26 +113,17 @@ def fetch(
     dry_run: Annotated[bool, typer.Option(help="Log actions without transferring.")] = False,
 ) -> None:
     """Fetch the CPJUMP1 dataset from S3 (AWS CLI or rclone)."""
-    with open(config) as f:
-        cpjump = yaml.safe_load(f)["cpjump"]
+    cpjump = load_dataset_config(config)
+    batch = cpjump.batch
+    plates = cpjump.plates
+    raw_root = cpjump.local.raw_images
+    metadata_root = cpjump.local.metadata
+    no_sign_request = cpjump.fetch.aws_no_sign_request
+    rclone_remote = cpjump.fetch.rclone_remote
 
-    endpoint = cpjump["endpoint"]
-    batch = cpjump["batch"]
-    plates = cpjump["plates"]
-
-    local = cpjump.get("local", {})
-    raw_root = Path(local.get("raw_images", "data/raw"))
-    metadata_root = Path(local.get("metadata", "data/metadata"))
-
-    fetch_cfg = cpjump.get("fetch", {})
-    no_sign_request = bool(fetch_cfg.get("aws_no_sign_request", True))
-    rclone_remote = str(fetch_cfg.get("rclone_remote", DEFAULT_RCLONE_REMOTE))
-
-    backend_name = choose_backend(
-        str(backend.value if backend else fetch_cfg.get("backend", "auto"))
-    )
+    backend_name = choose_backend(str(backend.value if backend else cpjump.fetch.backend))
     on_existing = str(
-        on_existing_plate.value if on_existing_plate else fetch_cfg.get("on_existing_plate", "ask")
+        on_existing_plate.value if on_existing_plate else cpjump.fetch.on_existing_plate
     )
 
     console.rule("[bold blue]CPJUMP1 Dataset Fetch")
@@ -155,7 +131,7 @@ def fetch(
 
     console.print("\n[bold]Downloading plate maps...[/bold]")
     sync_s3_path(
-        build_s3_uri(endpoint, cpjump["metadata"], batch),
+        cpjump.s3_uri(cpjump.metadata),
         metadata_root / "platemaps" / batch,
         backend=backend_name,
         no_sign_request=no_sign_request,
@@ -165,7 +141,7 @@ def fetch(
 
     console.print("\n[bold]Downloading external metadata...[/bold]")
     sync_s3_path(
-        build_s3_uri(endpoint, cpjump["external_metadata"], batch),
+        cpjump.s3_uri(cpjump.external_metadata),
         metadata_root / "external_metadata",
         backend=backend_name,
         no_sign_request=no_sign_request,
@@ -177,7 +153,7 @@ def fetch(
         console.print("\n[bold green]Metadata download complete (images skipped).[/bold green]")
         return
 
-    images_uri = build_s3_uri(endpoint, cpjump["images"], batch)
+    images_uri = cpjump.s3_uri(cpjump.images)
     downloaded = 0
     for plate in plates:
         dl = _process_plate(
@@ -195,10 +171,6 @@ def fetch(
     console.print(f"\n[bold green]Done.[/bold green] Downloaded: {downloaded}/{len(plates)} plates")
 
 
-# --------------------------------------------------------------------------- #
-# check-plates
-# --------------------------------------------------------------------------- #
-
 S3_BASE = "s3://cellpainting-gallery/cpg0000-jump-pilot/source_4/images/2020_11_04_CPJUMP1/images/"
 """Base S3 URI for the CPJUMP1 images. Plates are subdirectories under this path."""
 
@@ -208,10 +180,13 @@ MAX_WORKERS = 10
 
 def _run_aws(args: list[str]) -> str:
     """Run an AWS CLI command and return stdout, or exit on error."""
+    # check=False on purpose: the branch below turns a non-zero exit into a
+    # readable message rather than a CalledProcessError traceback.
     result = subprocess.run(
         ["aws", "s3", *args, "--no-sign-request"],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         console.log(f"[red]AWS CLI error:[/red] {result.stderr.strip()}")

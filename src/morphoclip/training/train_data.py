@@ -9,7 +9,8 @@ from torch.utils.data.distributed import DistributedSampler
 from morphoclip.data.dataset import MorphoCLIPDataset, collate_fn
 from morphoclip.data.metadata import MetadataIndex
 from morphoclip.data.perturbation import extract_plate_barcode
-from morphoclip.data.splits import create_splits
+from morphoclip.splits.api import create_splits
+from morphoclip.splits.strategies import SplitParams
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.distributed import DistributedState
 from morphoclip.training.samplers import PerturbationBatchSampler, resolve_base_dataset
@@ -83,14 +84,13 @@ def build_train_data(
     )
     train_set, val_set, _test_set = create_splits(
         dataset,
-        strategy=ds_cfg.split_strategy,
-        val_fraction=ds_cfg.val_fraction,
-        seed=config.runtime.seed,
+        ds_cfg.split_strategy,
+        SplitParams(val_fraction=ds_cfg.val_fraction, seed=config.runtime.seed),
     )
 
     # Preload train+val features into RAM for fast training
     if ds_cfg.preload:
-        used_indices = set(train_set.indices + val_set.indices)
+        used_indices = set(train_set.indices) | set(val_set.indices)
         dataset.preload(indices=used_indices)
 
     dist_sampler: DistributedSampler | None = None

@@ -25,7 +25,7 @@ from cellclip.training.dataset import prepare_datasets
 from cellclip.training.evaluate import _move_optional_tokens, _move_tokens, evaluate_epoch
 from cellclip.training.losses import compute_loss
 from cellclip.training.model import CellCLIP, build_cellclip_model
-from cellclip.training.optim import build_optimizer, build_scheduler, save_checkpoint
+from cellclip.training.optim import build_optimizer, save_checkpoint
 from morphoclip.training.distributed import (
     DistributedState,
     all_reduce_scalar,
@@ -33,6 +33,7 @@ from morphoclip.training.distributed import (
     setup_distributed,
 )
 from morphoclip.training.metrics import compute_grad_norm, compute_logit_stats
+from morphoclip.training.optim import build_warmup_cosine_scheduler
 from morphoclip.training.tb_logger import TrainingLogger
 from morphoclip.utils.device import autocast_context, resolve_device, resolve_num_workers
 
@@ -58,7 +59,6 @@ def train_cellclip(
     """Run local CellCLIP training and return a summary."""
     dist_cfg = config.distributed
 
-    # --- Distributed setup ---
     dist_state: DistributedState | None = None
     if dist_cfg.enabled:
         dist_state = setup_distributed(dist_cfg.backend)
@@ -102,7 +102,6 @@ def _train_loop(
     model: nn.Module = build_cellclip_model(config.model).to(device)
     augmenter = _build_augmenter(prepared, config)
 
-    # --- DDP wrapping ---
     if use_ddp:
         assert dist_state is not None  # implied by use_ddp
         model = DDP(
@@ -111,7 +110,6 @@ def _train_loop(
             find_unused_parameters=dist_cfg.find_unused_parameters,
         )
 
-    # --- Distributed sampler ---
     train_sampler: DistributedSampler | None = None
     if use_ddp:
         assert dist_state is not None  # implied by use_ddp
@@ -138,7 +136,7 @@ def _train_loop(
     total_steps = max(1, steps_per_epoch * config.optimization.epochs)
     if config.runtime.max_train_steps is not None:
         total_steps = min(total_steps, config.runtime.max_train_steps)
-    scheduler = build_scheduler(
+    scheduler = build_warmup_cosine_scheduler(
         optimizer,
         total_steps=total_steps,
         warmup_steps=config.optimization.warmup_steps,
@@ -147,7 +145,6 @@ def _train_loop(
     use_scaler = config.runtime.amp and device.type == "cuda"
     grad_scaler = torch.amp.GradScaler("cuda" if use_scaler else "cpu", enabled=use_scaler)
 
-    # --- TensorBoard logger ---
     rank = dist_state.rank if dist_state else 0
     logger = TrainingLogger(run_dir, rank=rank)
     logger.log_config(config)
@@ -283,7 +280,6 @@ def _train_loop(
             "epoch_seconds": float(time.time() - epoch_start),
         }
 
-        # --- Evaluation (rank 0 only) ---
         eval_metrics: dict[str, float] | None = None
         if epoch % config.runtime.eval_every_epochs == 0 and is_main:
             eval_metrics = evaluate_epoch(
@@ -330,7 +326,6 @@ def _train_loop(
         if use_ddp:
             torch_dist.barrier()
 
-        # --- TensorBoard epoch logging ---
         logger.log_epoch(epoch, train_metrics, eval_metrics)
 
         tb_cfg = config.tensorboard

@@ -9,10 +9,6 @@ import re
 
 from morphoclip.data.perturbation import PerturbationInfo, PerturbationType
 
-# ---------------------------------------------------------------------------
-# Templates
-# ---------------------------------------------------------------------------
-
 TEMPLATES: dict[str, str] = {
     "compound": (
         "Cell Painting morphological profile of {cell_line} cells "
@@ -67,11 +63,6 @@ _PERT_TYPE_TO_MODALITY: dict[PerturbationType, str] = {
 def extract_template_fields(template: str) -> list[str]:
     """Extract {field_name} placeholders from a template string."""
     return _FIELD_PATTERN.findall(template)
-
-
-# ---------------------------------------------------------------------------
-# Build prompts
-# ---------------------------------------------------------------------------
 
 
 def build_prompt(metadata: dict, templates: dict[str, str] | None = None) -> str:

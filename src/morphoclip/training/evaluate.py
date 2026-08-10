@@ -6,9 +6,9 @@ from torch.utils.data import DataLoader
 
 from morphoclip.data.perturbation import PerturbationInfo, target_gene_key
 from morphoclip.training.batch_correction import cross_well_alignment
-from morphoclip.training.engine import autocast_context
 from morphoclip.training.losses import compute_loss
 from morphoclip.training.retrieval import compute_retrieval_metrics
+from morphoclip.utils.device import autocast_context
 
 
 def lookup_text_embeddings(

@@ -19,7 +19,6 @@ Usage:
 
 import json
 import random
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -27,21 +26,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import typer
-import yaml
 from rich.console import Console
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-
-from morphoclip.data.image_loader import CHANNEL_NAMES, FLUORESCENCE_CHANNELS  # noqa: E402
+from morphoclip.data.config import load_dataset_config
+from morphoclip.data.image_loader import CHANNEL_NAMES, FLUORESCENCE_CHANNELS
 
 console = Console()
 
 # Short labels for plots
 CH_LABELS: list[str] = [CHANNEL_NAMES[ch] for ch in FLUORESCENCE_CHANNELS]
 CH_SHORT: list[str] = ["Mito", "Actin", "Golgi/PM", "ER", "DNA"]
-
-
-# ── helpers ──────────────────────────────────────────────────────────────────
 
 
 def load_features(
@@ -74,9 +68,6 @@ def cosine_sim(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     a_n = a / a.norm(dim=-1, keepdim=True).clamp(min=1e-8)
     b_n = b / b.norm(dim=-1, keepdim=True).clamp(min=1e-8)
     return (a_n * b_n).sum(dim=-1)
-
-
-# ── metric computation ───────────────────────────────────────────────────────
 
 
 def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
@@ -240,9 +231,6 @@ def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
     return m
 
 
-# ── plot generation ──────────────────────────────────────────────────────────
-
-
 def plot_similarity_heatmap(metrics: dict, output_dir: Path) -> Path:
     """Save inter-channel cosine similarity heatmap."""
     matrix = np.array(metrics["intra_site_similarity"]["matrix"])
@@ -313,7 +301,7 @@ def plot_pca_channels(features: torch.Tensor, output_dir: Path, *, seed: int = 4
     else:
         ch_labels = np.tile(np.arange(n_channels), n_sites)
 
-    _, s, v = torch.svd_lowrank(flat_centered, q=10)
+    _, _s, v = torch.svd_lowrank(flat_centered, q=10)
     proj = (flat_centered @ v[:, :2]).numpy()
 
     colors = ["#c44e52", "#dd8452", "#55a868", "#ccb974", "#4c72b0"]
@@ -406,16 +394,9 @@ def main(
     output_dir: Annotated[Path | None, typer.Option(help="Override output directory.")] = None,
 ) -> None:
     """Diagnose DINOv3 feature extraction quality."""
-    with open(config) as f:
-        cfg = yaml.safe_load(f)["cpjump"]
+    features_root = load_dataset_config(config).local.features
 
-    local = cfg.get("local", {})
-    features_root = Path(local.get("features", "data/features"))
-
-    if plate:
-        plates = [plate]
-    else:
-        plates = [d.name for d in sorted(features_root.iterdir()) if d.is_dir()]
+    plates = [plate] if plate else [d.name for d in sorted(features_root.iterdir()) if d.is_dir()]
 
     if not plates:
         console.print("[red]No feature directories found.[/red]")
@@ -434,7 +415,7 @@ def main(
         console.rule(f"[bold blue]Diagnosing {plate} ({n_files} sites)")
 
         # Load
-        features, names = load_features(feature_dir, max_sites=max_sites)
+        features, _names = load_features(feature_dir, max_sites=max_sites)
         console.print(f"  Loaded {features.shape[0]} sites, shape: {tuple(features.shape)}")
 
         # Compute metrics

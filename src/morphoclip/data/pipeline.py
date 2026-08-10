@@ -5,11 +5,9 @@ Designed for unattended overnight runs with automatic resume on interruption.
 
 Usage via CLI::
 
-    uv run poe extract-pipeline
-    uv run poe extract-pipeline --retry-failed
-    uv run poe extract-pipeline --tensors-only
-
-CLI entry point: ``scripts/features/run_pipeline.py``.
+    uv run morphoclip features pipeline
+    uv run morphoclip features pipeline --retry-failed
+    uv run morphoclip features pipeline --tensors-only
 """
 
 import logging
@@ -18,9 +16,8 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
 
+from morphoclip.data.config import CPJumpConfig
 from morphoclip.data.feature_extractor import (
     extract_plate_features_with_model,
     feature_filename,
@@ -44,51 +41,11 @@ from morphoclip.data.progress import (
     load_progress,
     save_progress,
 )
-from morphoclip.utils.s3 import build_s3_uri, sync_s3_path
+from morphoclip.data.tiffs import count_tiffs, delete_tiffs
+from morphoclip.utils.console import console, make_progress
+from morphoclip.utils.s3 import sync_s3_path
 
 logger = logging.getLogger(__name__)
-console = Console()
-
-
-def _count_tiffs(image_dir: Path) -> int:
-    """Count TIFF files in a directory."""
-    return len(list(image_dir.glob("*.tif"))) + len(list(image_dir.glob("*.tiff")))
-
-
-def _delete_tiffs(image_dir: Path, *, dry_run: bool = False) -> int:
-    """Delete original TIFF images. Returns deleted file count."""
-    tif_paths = sorted(image_dir.glob("*.tif")) + sorted(image_dir.glob("*.tiff"))
-    if not dry_run:
-        for p in tif_paths:
-            p.unlink(missing_ok=True)
-    return len(tif_paths)
-
-
-def setup_logging(log_path: Path) -> None:
-    """Configure dual logging: file (DEBUG) + console (INFO).
-
-    Args:
-        log_path: Path to the log file.
-    """
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    fmt = logging.Formatter(
-        "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
-
-    root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
-
-    fh = logging.FileHandler(log_path, encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(fmt)
-    root.addHandler(fh)
-
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(fmt)
-    root.addHandler(ch)
 
 
 class PlateExtractionPipeline:
@@ -110,7 +67,7 @@ class PlateExtractionPipeline:
     def __init__(
         self,
         *,
-        config: dict[str, Any],
+        config: CPJumpConfig,
         progress_path: Path,
         backend: str,
         save_tensors: bool = False,
@@ -126,28 +83,20 @@ class PlateExtractionPipeline:
         self._dry_run = dry_run
         self._retry_failed = retry_failed
 
-        local = config.get("local", {})
-        self._raw_root = Path(local.get("raw_images", "data/raw"))
-        self._features_root = Path(local.get("features", "data/features"))
-        self._tensors_root = Path(local.get("tensors", "data/tensors"))
-        self._metadata_root = Path(local.get("metadata", "data/metadata"))
+        self._raw_root = config.local.raw_images
+        self._features_root = config.local.features
+        self._tensors_root = config.local.tensors
+        self._metadata_root = config.local.metadata
 
-        self._batch = config.get("batch", "")
-        self._endpoint = config["endpoint"]
-        self._plates: list[str] = config.get("plates", [])
+        self._batch = config.batch
+        self._plates = config.plates
 
-        fetch_cfg = config.get("fetch", {})
-        self._no_sign_request = bool(fetch_cfg.get("aws_no_sign_request", True))
-        self._rclone_remote = str(
-            fetch_cfg.get(
-                "rclone_remote", ":s3,provider=AWS,region=us-east-1,no_check_bucket=true:"
-            )
-        )
+        self._no_sign_request = config.fetch.aws_no_sign_request
+        self._rclone_remote = config.fetch.rclone_remote
 
-        extraction = config.get("extraction", {})
-        self._model_name = extraction.get("model", "facebook/dinov3-vitl16-pretrain-lvd1689m")
-        self._device = extraction.get("device", "auto")
-        self._batch_size = extraction.get("batch_size", 48)
+        self._model_name = config.extraction.model
+        self._device = config.extraction.device
+        self._batch_size = config.extraction.batch_size
 
         self._progress = load_progress(progress_path, compute_config_hash(self._plates))
 
@@ -232,9 +181,12 @@ class PlateExtractionPipeline:
                 self._save_progress()
 
                 if self._tensors_only:
-                    sites_count = self._save_tensors_only(image_dir, tensor_dir, batch_size)
+                    sites_count = self._save_tensors_only(image_dir, tensor_dir)
                 else:
-                    assert model is not None and processor is not None
+                    if model is None or processor is None:
+                        raise RuntimeError(
+                            "DINOv3 model and processor are required unless tensors_only is set"
+                        )
                     saved = extract_plate_features_with_model(
                         image_dir,
                         feature_dir,
@@ -260,7 +212,7 @@ class PlateExtractionPipeline:
                 record["error"] = f"{type(exc).__name__}: {exc}"
                 record["completed_at"] = _utcnow()
                 self._save_progress()
-                logger.error("Plate %s failed: %s", plate_name, exc, exc_info=True)
+                logger.exception("Plate %s failed: %s", plate_name, exc)
                 console.print(f"  [bold red]Failed: {exc}[/bold red]")
                 failed += 1
 
@@ -376,12 +328,10 @@ class PlateExtractionPipeline:
             return
 
         console.print("\n[bold]Downloading metadata...[/bold]")
-        platemaps_uri = build_s3_uri(self._endpoint, self._config["metadata"], self._batch)
+        platemaps_uri = self._config.s3_uri(self._config.metadata)
         self._sync(platemaps_uri, self._metadata_root / "platemaps" / self._batch)
 
-        ext_metadata_uri = build_s3_uri(
-            self._endpoint, self._config["external_metadata"], self._batch
-        )
+        ext_metadata_uri = self._config.s3_uri(self._config.external_metadata)
         self._sync(ext_metadata_uri, self._metadata_root / "external_metadata")
 
         self._progress.metadata_downloaded = True
@@ -390,18 +340,18 @@ class PlateExtractionPipeline:
 
     def _fetch_plate(self, plate_name: str, image_dir: Path) -> None:
         """Download plate images from S3."""
-        existing_tiffs = _count_tiffs(image_dir) if image_dir.exists() else 0
+        existing_tiffs = count_tiffs(image_dir)
         if existing_tiffs > 0:
             console.print(f"  Raw images already present ({existing_tiffs} TIFFs)")
             return
 
-        images_uri = build_s3_uri(self._endpoint, self._config["images"], self._batch)
+        images_uri = self._config.s3_uri(self._config.images)
         plate_uri = f"{images_uri}/{plate_name}/Images"
 
         console.print("  Fetching from S3...")
         self._sync(plate_uri, image_dir)
 
-        tiff_count = _count_tiffs(image_dir)
+        tiff_count = count_tiffs(image_dir)
         console.print(f"  Downloaded {tiff_count} TIFFs")
         logger.info("Fetched plate %s: %d TIFFs", plate_name, tiff_count)
 
@@ -409,14 +359,12 @@ class PlateExtractionPipeline:
         self,
         image_dir: Path,
         tensor_dir: Path,
-        batch_size: int,
     ) -> int:
         """Save only resized image tensors, no DINOv3 extraction.
 
         Args:
             image_dir: Path to the plate's ``Images/`` directory.
             tensor_dir: Directory to save tensor ``.pt`` files.
-            batch_size: Number of sites to process per batch (for progress display).
 
         Returns:
             Number of sites saved.
@@ -430,11 +378,7 @@ class PlateExtractionPipeline:
         site_keys = sorted(sites.keys(), key=str)
         saved = 0
 
-        with Progress(
-            SpinnerColumn(),
-            *Progress.get_default_columns(),
-            TimeElapsedColumn(),
-        ) as progress:
+        with make_progress() as progress:
             task = progress.add_task("Saving tensors", total=len(site_keys))
 
             for key in site_keys:
@@ -457,11 +401,11 @@ class PlateExtractionPipeline:
             if not image_dir.exists():
                 return
 
-            tiff_count = _count_tiffs(image_dir)
+            tiff_count = count_tiffs(image_dir)
             if tiff_count == 0:
                 return
 
-            deleted = _delete_tiffs(image_dir, dry_run=self._dry_run)
+            deleted = delete_tiffs(image_dir, dry_run=self._dry_run)
             if deleted:
                 console.print(f"  Cleaned up {deleted} TIFFs")
                 logger.info("Cleanup: deleted %d TIFFs from %s", deleted, image_dir)

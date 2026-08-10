@@ -115,11 +115,11 @@ def _run_legacy_pipeline(
     dict_pairs = matcher.get_all_pairs(sameby=pos_sameby, diffby=pos_diffby)
     pos_pairs = legacy["dict_to_dframe"](dict_pairs, pos_sameby)
     dict_pairs = matcher.get_all_pairs(sameby=neg_sameby, diffby=neg_diffby)
-    neg_pairs = set(itertools.chain.from_iterable(dict_pairs.values()))
-    neg_pairs = pd.DataFrame(neg_pairs, columns=["ix1", "ix2"])
+    neg_index = set(itertools.chain.from_iterable(dict_pairs.values()))
+    neg_frame = pd.DataFrame(neg_index, columns=["ix1", "ix2"])
 
     pos_pairs = _compute_legacy_similarities(pos_pairs, features, batch_size, use_abs)
-    neg_pairs = _compute_legacy_similarities(neg_pairs, features, batch_size, use_abs)
+    neg_pairs = _compute_legacy_similarities(neg_frame, features, batch_size, use_abs)
     if pos_pairs.empty or neg_pairs.empty:
         return pd.DataFrame()
 

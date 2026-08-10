@@ -118,7 +118,7 @@ def _check_torch(device_mode: str, expected_cuda: str | None) -> tuple[bool, lis
 
     if device_mode == "gpu":
         if not cuda_available:
-            return False, messages + ["[FAIL] GPU required but CUDA is unavailable."]
+            return False, [*messages, "[FAIL] GPU required but CUDA is unavailable."]
         device = "cuda"
     elif device_mode == "cpu":
         device = "cpu"

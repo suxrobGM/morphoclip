@@ -1,167 +1,133 @@
-"""Tests for the morphoclip.data.dataset module.
+"""Tests for morphoclip.data.dataset.
 
-Uses real metadata from data/metadata/ and synthesized .pt feature files.
-Benchmark split-strategy tests live in tests/benchmark/test_splits.py.
+Uses the committed CPJUMP1 platemap fixture and a synthesized ``.pt`` feature
+tree. Split-strategy tests live in tests/splits/test_splits.py.
 """
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
 
-from morphoclip.data.dataset import (
-    MorphoCLIPDataset,
-    MorphoCLIPSample,
-    collate_fn,
-)
+from morphoclip.data.dataset import MorphoCLIPDataset, collate_fn
 from morphoclip.data.metadata import MetadataIndex
 from morphoclip.data.perturbation import PerturbationType
+from tests.support.constants import HIDDEN_DIM, NUM_CHANNELS
+from tests.support.features import make_feature_root
 
-BATCH = "2020_11_04_CPJUMP1"
-HIDDEN_DIM = 384
-NUM_CHANNELS = 5
-
-
-@pytest.fixture
-def metadata_index(metadata_dir: Path) -> MetadataIndex:
-    """Build MetadataIndex from real metadata."""
-    return MetadataIndex.from_directory(metadata_dir, batch=BATCH)
+PLATE = "BR00116991"
+# A02 is the DMSO control well on this plate; A01 and A03 are compounds.
+WELLS = ("A01", "A02", "A03")
+SITES = 2
 
 
 @pytest.fixture
-def fake_features(tmp_path: Path) -> Path:
-    """Create synthetic feature .pt files mimicking extracted features.
-
-    Creates features for plate BR00116991 (compound plate):
-    - 4 sites across 2 wells (A01 has fields f01,f02; A03 has fields f01,f02)
-    """
-    plate_dir = tmp_path / "BR00116991"
-    plate_dir.mkdir()
-
-    for row, col in [(1, 1), (1, 3)]:  # A01 and A03
-        for field in [1, 2]:
-            feat = torch.randn(NUM_CHANNELS, HIDDEN_DIM)
-            filename = f"r{row:02d}c{col:02d}f{field:02d}.pt"
-            torch.save(feat, plate_dir / filename)
-
-    return tmp_path
+def feature_root(tmp_path: Path) -> Path:
+    return make_feature_root(tmp_path / "features", {PLATE: WELLS}, sites=SITES, dim=HIDDEN_DIM)
 
 
-class TestMorphoCLIPDataset:
-    def test_basic_construction(self, fake_features: Path, metadata_index: MetadataIndex) -> None:
-        ds = MorphoCLIPDataset(
-            feature_dir=fake_features,
-            metadata=metadata_index,
-            plates=["BR00116991"],
-        )
-        # 2 wells: A01 and A03
-        assert len(ds) == 2
+def _dataset(feature_root: Path, metadata: MetadataIndex, **kwargs: Any) -> MorphoCLIPDataset:
+    return MorphoCLIPDataset(feature_dir=feature_root, metadata=metadata, plates=[PLATE], **kwargs)
 
-    def test_getitem_returns_sample(
-        self, fake_features: Path, metadata_index: MetadataIndex
+
+def _all_features(ds: MorphoCLIPDataset) -> list[torch.Tensor]:
+    return [ds[i].features for i in range(len(ds))]
+
+
+def test_a_sample_stacks_the_wells_sites_and_carries_its_perturbation_text(
+    feature_root: Path, metadata_index: MetadataIndex
+) -> None:
+    ds = _dataset(feature_root, metadata_index)
+    sample = ds[0]
+
+    assert len(ds) == len(WELLS)
+    assert (sample.plate, sample.well) == (PLATE, "A01")
+    assert sample.features.shape == (SITES, NUM_CHANNELS, HIDDEN_DIM)
+    assert sample.pert_info.pert_type == PerturbationType.COMPOUND
+    assert sample.text.startswith("Chemical perturbation: gabapentin-enacarbil. Target: CACNB4.")
+
+
+def test_the_text_level_reaches_the_generated_prompt(
+    feature_root: Path, metadata_index: MetadataIndex
+) -> None:
+    ds = _dataset(feature_root, metadata_index, text_level="name_only")
+    assert ds[0].text == "Chemical perturbation: gabapentin-enacarbil."
+
+
+@pytest.mark.parametrize(
+    ("options", "expected_wells"),
+    [
+        ({}, ["A01", "A02", "A03"]),
+        ({"exclude_controls": True}, ["A01", "A03"]),
+        ({"pert_types": {PerturbationType.COMPOUND}}, ["A01", "A03"]),
+        ({"pert_types": {PerturbationType.CRISPR}}, []),
+    ],
+)
+def test_the_index_holds_only_the_wells_the_filters_admit(
+    feature_root: Path,
+    metadata_index: MetadataIndex,
+    options: dict[str, Any],
+    expected_wells: list[str],
+) -> None:
+    ds = _dataset(feature_root, metadata_index, **options)
+    assert [well for _plate, well, _paths in ds.index_entries] == expected_wells
+
+
+def test_max_sites_per_well_caps_the_stacked_sites(
+    feature_root: Path, metadata_index: MetadataIndex
+) -> None:
+    ds = _dataset(feature_root, metadata_index, max_sites_per_well=1)
+    assert ds[0].features.shape[0] == 1
+
+
+def test_a_plate_with_no_feature_directory_contributes_no_wells(
+    tmp_path: Path, metadata_index: MetadataIndex
+) -> None:
+    ds = MorphoCLIPDataset(feature_dir=tmp_path, metadata=metadata_index, plates=["NONEXISTENT"])
+    assert len(ds) == 0
+
+
+class TestPreload:
+    """Preloading must change only where tensors come from, never what they are."""
+
+    def test_a_partial_preload_serves_its_own_wells_from_memory_and_the_rest_from_disk(
+        self, feature_root: Path, metadata_index: MetadataIndex
     ) -> None:
-        ds = MorphoCLIPDataset(
-            feature_dir=fake_features,
-            metadata=metadata_index,
-            plates=["BR00116991"],
-        )
-        sample = ds[0]
-        assert isinstance(sample, MorphoCLIPSample)
-        # 2 sites per well, 5 channels, 384 dim
-        assert sample.features.shape == (2, NUM_CHANNELS, HIDDEN_DIM)
-        assert isinstance(sample.text, str)
-        assert len(sample.text) > 0
+        """Training preloads train+val only, so test-split wells miss the cache."""
+        expected = _all_features(_dataset(feature_root, metadata_index))
 
-    def test_exclude_controls(
-        self, fake_features: Path, metadata_index: MetadataIndex, tmp_path: Path
+        ds = _dataset(feature_root, metadata_index)
+        ds.preload(indices={0})
+        for _plate, _well, site_paths in ds.index_entries[:1]:
+            for path in site_paths:
+                path.unlink()
+
+        assert all(torch.equal(a, b) for a, b in zip(_all_features(ds), expected, strict=True))
+
+    def test_preloading_everything_twice_leaves_the_samples_unchanged(
+        self, feature_root: Path, metadata_index: MetadataIndex
     ) -> None:
-        """A02 is DMSO (negcon). Add features for it and verify exclusion."""
-        plate_dir = tmp_path / "BR00116991"
-        feat = torch.randn(NUM_CHANNELS, HIDDEN_DIM)
-        torch.save(feat, plate_dir / "r01c02f01.pt")  # A02
+        expected = _all_features(_dataset(feature_root, metadata_index))
 
-        ds_all = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00116991"],
-            exclude_controls=False,
-        )
-        ds_no_ctrl = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00116991"],
-            exclude_controls=True,
-        )
-        assert len(ds_all) > len(ds_no_ctrl)
+        ds = _dataset(feature_root, metadata_index)
+        ds.preload()
+        ds.preload()
 
-    def test_pert_type_filter(self, fake_features: Path, metadata_index: MetadataIndex) -> None:
-        ds = MorphoCLIPDataset(
-            feature_dir=fake_features,
-            metadata=metadata_index,
-            plates=["BR00116991"],
-            pert_types={PerturbationType.COMPOUND},
-        )
-        for i in range(len(ds)):
-            sample = ds[i]
-            assert sample.pert_info.pert_type == PerturbationType.COMPOUND
-
-    def test_metadata_property(self, fake_features: Path, metadata_index: MetadataIndex) -> None:
-        ds = MorphoCLIPDataset(
-            feature_dir=fake_features,
-            metadata=metadata_index,
-            plates=["BR00116991"],
-        )
-        assert ds.metadata is metadata_index
-
-    def test_text_levels(self, fake_features: Path, metadata_index: MetadataIndex) -> None:
-        for level in ["name_only", "name_target", "full"]:
-            ds = MorphoCLIPDataset(
-                feature_dir=fake_features,
-                metadata=metadata_index,
-                plates=["BR00116991"],
-                text_level=level,
-            )
-            sample = ds[0]
-            assert isinstance(sample.text, str)
-            assert len(sample.text) > 0
-
-    def test_max_sites_per_well(self, fake_features: Path, metadata_index: MetadataIndex) -> None:
-        ds = MorphoCLIPDataset(
-            feature_dir=fake_features,
-            metadata=metadata_index,
-            plates=["BR00116991"],
-            max_sites_per_well=1,
-        )
-        sample = ds[0]
-        assert sample.features.shape[0] == 1
-
-    def test_missing_plate_dir(self, tmp_path: Path, metadata_index: MetadataIndex) -> None:
-        ds = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["NONEXISTENT"],
-        )
-        assert len(ds) == 0
+        assert all(torch.equal(a, b) for a, b in zip(_all_features(ds), expected, strict=True))
 
 
-class TestCollateFn:
-    def test_pads_variable_sites(
-        self, fake_features: Path, metadata_index: MetadataIndex, tmp_path: Path
-    ) -> None:
-        """Add a 3rd site to one well so sites differ across wells."""
-        plate_dir = tmp_path / "BR00116991"
-        feat = torch.randn(NUM_CHANNELS, HIDDEN_DIM)
-        torch.save(feat, plate_dir / "r01c01f03.pt")  # A01 now has 3 sites
+def test_collate_pads_to_the_widest_well_and_masks_the_padding(
+    tmp_path: Path, metadata_index: MetadataIndex
+) -> None:
+    root = make_feature_root(
+        tmp_path / "ragged", {PLATE: ["A01", "A03"]}, sites={"A01": 3, "A03": 2}, dim=HIDDEN_DIM
+    )
+    ds = _dataset(root, metadata_index)
 
-        ds = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00116991"],
-        )
-        batch = collate_fn([ds[0], ds[1]])
-        assert batch["features"].shape[0] == 2  # batch size
-        assert batch["features"].shape[1] == 3  # max sites (A01 has 3)
-        assert batch["site_mask"].shape == (2, 3)
-        # A01 has 3 sites, A03 has 2 — mask should differ
-        assert batch["site_mask"][0].sum() == 3
-        assert batch["site_mask"][1].sum() == 2
+    batch = collate_fn([ds[0], ds[1]])
+
+    assert batch["features"].shape == (2, 3, NUM_CHANNELS, HIDDEN_DIM)
+    assert batch["site_mask"].tolist() == [[True, True, True], [True, True, False]]
+    assert torch.equal(batch["features"][1, 2], torch.zeros(NUM_CHANNELS, HIDDEN_DIM))
+    assert batch["wells"] == ["A01", "A03"]

@@ -1,6 +1,7 @@
 """Local CellCLIP model for training on precomputed site features."""
 
 from contextlib import nullcontext
+from typing import cast
 
 import numpy as np
 import torch
@@ -8,41 +9,8 @@ import torch.nn.functional as F
 from torch import nn
 from transformers import AutoModel
 
-from cellclip.benchmark.model import CrossChannelFormer
+from cellclip.model import CrossChannelFormer, MILPooling
 from cellclip.training.config import CellCLIPModelConfig
-
-
-class MILPooling(nn.Module):
-    """Channel-independent multi-instance pooling."""
-
-    def __init__(self, input_dim: int, hidden_dim: int = 128, pooling: str = "mean"):
-        super().__init__()
-        self.pooling = pooling
-        if pooling == "attention":
-            self.V = nn.Linear(input_dim, hidden_dim)
-            self.U = nn.Linear(input_dim, hidden_dim)
-            self.attention = nn.Linear(hidden_dim, 1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Pool site bags from ``(B, M, C, D)`` to ``(B, C, D)``."""
-        batch_size, num_sites, num_channels, width = x.shape
-
-        if self.pooling == "attention":
-            x = x.permute(0, 2, 1, 3).reshape(batch_size * num_channels, num_sites, width)
-            h_v = torch.tanh(self.V(x))
-            h_u = torch.sigmoid(self.U(x))
-            attn_scores = self.attention(h_v * h_u)
-
-            mask = (x.abs().sum(dim=-1) > 0).unsqueeze(-1)
-            attn_scores = attn_scores.masked_fill(~mask, float("-inf"))
-            attn_weights = torch.softmax(attn_scores, dim=1)
-            pooled = torch.sum(attn_weights * x, dim=1)
-            return pooled.view(batch_size, num_channels, width)
-
-        if self.pooling == "median":
-            return torch.median(x, dim=1).values
-
-        return torch.mean(x, dim=1)
 
 
 class CellCLIP(nn.Module):
@@ -74,7 +42,8 @@ class CellCLIP(nn.Module):
 
     @property
     def dtype(self) -> torch.dtype:
-        return self.visual.transformer.resblocks[0].mlp.c_fc.weight.dtype
+        mlp = cast(nn.Module, self.visual.transformer.resblocks[0].mlp)
+        return cast(nn.Linear, mlp.c_fc).weight.dtype
 
     def encode_mil(self, image: torch.Tensor) -> torch.Tensor:
         """Pool site bags before the visual transformer."""
@@ -162,8 +131,9 @@ class CellCLIPChemBERTa(CellCLIP):
                 nn.GELU(),
                 nn.Linear(prompt_width * 2, prompt_width),
             )
-        nn.init.zeros_(self.chem_fusion[-1].weight)
-        nn.init.zeros_(self.chem_fusion[-1].bias)
+        last_fusion = cast(nn.Linear, self.chem_fusion[-1])
+        nn.init.zeros_(last_fusion.weight)
+        nn.init.zeros_(last_fusion.bias)
         self._configure_chemberta_trainability()
 
     def _configure_chemberta_trainability(self) -> None:
@@ -191,7 +161,7 @@ class CellCLIPChemBERTa(CellCLIP):
             self.chemberta.eval()
         return self
 
-    def load_state_dict(self, state_dict, strict: bool = True):
+    def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
         """Support legacy FiLM checkpoints after the fusion-module rename."""
         if "chem_fusion.0.weight" not in state_dict and "film.0.weight" in state_dict:
             remapped = dict(state_dict)
@@ -199,7 +169,7 @@ class CellCLIPChemBERTa(CellCLIP):
                 if key.startswith("film."):
                     remapped[key.replace("film.", "chem_fusion.", 1)] = value
             state_dict = remapped
-        return super().load_state_dict(state_dict, strict=strict)
+        return super().load_state_dict(state_dict, strict=strict, assign=assign)
 
     @staticmethod
     def _masked_mean_norm(values: torch.Tensor, mask: torch.Tensor) -> float:

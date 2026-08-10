@@ -9,7 +9,6 @@ import torch
 from torch.utils.data import DataLoader, Subset
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
-from benchmark import splits as benchmark_splits_module
 from benchmark.data import normalize_subset_label
 from cellclip.training.config import (
     CellCLIPDatasetConfig,
@@ -19,6 +18,9 @@ from morphoclip.data.dataset import MorphoCLIPDataset
 from morphoclip.data.dataset import collate_fn as morphoclip_collate_fn
 from morphoclip.data.metadata import MetadataIndex
 from morphoclip.data.perturbation import PerturbationInfo, PerturbationType, extract_plate_barcode
+from morphoclip.splits import contexts as split_contexts
+from morphoclip.splits import manifest as split_manifest
+from morphoclip.splits.strategies import SplitParams
 
 
 @dataclass(slots=True)
@@ -125,7 +127,7 @@ class CellCLIPCollator:
     chemberta_context_length: int = 512
 
     def __call__(self, batch: list[Any]) -> dict[str, Any]:
-        payload = morphoclip_collate_fn(batch)
+        payload: dict[str, Any] = dict(morphoclip_collate_fn(batch))
         prompts: list[str] = []
         smiles_strings: list[str] = []
         has_smiles: list[bool] = []
@@ -192,7 +194,7 @@ def _filter_official_contexts(
     official_contexts: dict[tuple[str, str], Any],
 ) -> None:
     """Restrict a dataset index to wells present in the official split metadata."""
-    dataset._index = [  # noqa: SLF001
+    dataset._index = [
         entry
         for entry in dataset.index_entries
         if (extract_plate_barcode(entry[0]), entry[1].upper()) in official_contexts
@@ -278,19 +280,17 @@ def prepare_datasets(
     )
     official_contexts: dict[tuple[str, str], Any] | None = None
     if dataset_config.split_strategy.startswith("cpjump1_official_"):
-        official_contexts = benchmark_splits_module.load_official_split_contexts()
+        official_contexts = split_contexts.load_official_split_contexts()
         _filter_official_contexts(dataset, official_contexts)
 
-    plate_contexts = benchmark_splits_module.load_plate_contexts()
+    plate_contexts = split_contexts.load_plate_contexts()
     if dataset_config.split_manifest_path:
         manifest = pd.read_csv(dataset_config.split_manifest_path)
     else:
-        manifest = benchmark_splits_module.build_split_manifest(
+        manifest = split_manifest.build_split_manifest(
             dataset,
-            strategy=dataset_config.split_strategy,
-            val_fraction=dataset_config.val_fraction,
-            test_fraction=dataset_config.test_fraction,
-            seed=dataset_config.seed,
+            dataset_config.split_strategy,
+            SplitParams(val_fraction=dataset_config.val_fraction, seed=dataset_config.seed),
         )
 
     train_source_dataset = MorphoCLIPDataset(

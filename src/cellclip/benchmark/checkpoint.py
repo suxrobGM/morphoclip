@@ -4,7 +4,7 @@ from pathlib import Path
 
 import torch
 
-from cellclip.benchmark.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
+from cellclip.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
 
 DEFAULT_CHECKPOINT_REPO = "suinleelab/CellCLIP"
 DEFAULT_CHECKPOINT_FILENAME = "model.safetensors"
@@ -28,14 +28,11 @@ def resolve_checkpoint(
             "Install it or pass --ckpt-path."
         ) from exc
 
-    kwargs = {
-        "repo_id": checkpoint_repo_id,
-        "filename": checkpoint_filename,
-    }
-    if download_dir is not None:
-        kwargs["local_dir"] = str(download_dir)
-
-    return hf_hub_download(**kwargs)
+    return hf_hub_download(
+        repo_id=checkpoint_repo_id,
+        filename=checkpoint_filename,
+        local_dir=str(download_dir) if download_dir is not None else None,
+    )
 
 
 def _load_raw_checkpoint(checkpoint_path: str, device: str) -> dict[str, torch.Tensor]:
@@ -120,16 +117,12 @@ def load_cellclip_visual_encoder(
     )
 
     missing, unexpected = model.load_state_dict(state_dict, strict=False)
-    required_missing = [
-        key for key in missing if key.startswith("visual.") or key.startswith("image_pool.")
-    ]
+    required_missing = [key for key in missing if key.startswith(("visual.", "image_pool."))]
     if required_missing:
         preview = ", ".join(required_missing[:5])
         raise RuntimeError(f"Checkpoint is missing visual pooling weights: {preview}")
 
-    unexpected_visual = [
-        key for key in unexpected if key.startswith("visual.") or key.startswith("image_pool.")
-    ]
+    unexpected_visual = [key for key in unexpected if key.startswith(("visual.", "image_pool."))]
     if unexpected_visual:
         preview = ", ".join(unexpected_visual[:5])
         raise RuntimeError(f"Checkpoint has unexpected visual pooling weights: {preview}")

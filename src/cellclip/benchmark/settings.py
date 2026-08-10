@@ -13,12 +13,13 @@ from pathlib import Path
 
 import torch
 
+from benchmark.timelines import normalize_timelines
 from cellclip.benchmark.checkpoint import (
     DEFAULT_CHECKPOINT_FILENAME,
     DEFAULT_CHECKPOINT_REPO,
     resolve_checkpoint,
 )
-from cellclip.benchmark.export import normalize_timelines, resolve_path
+from cellclip.benchmark.export import resolve_path
 
 
 @dataclass(frozen=True)
@@ -29,11 +30,7 @@ class ExportSettings:
     source_profiles: Path
     features: Path
     output_profiles: Path
-    download_dir: Path | None
-    repo_id: str
-    filename: str
     device: str
-    site_batch_size: int
     input_dim: int
     cell_filter: str | None
     timelines: list[str]
@@ -58,7 +55,6 @@ def resolve_export_settings(
     checkpoint_filename: str | None,
     download_dir: str | None,
     device: str | None,
-    site_batch_size: int | None,
     input_dim: int | None,
     model_type: str | None,
     loss_type: str | None,
@@ -118,7 +114,6 @@ def resolve_export_settings(
     resolved_device = device or export_config.get("device") or default_device
     if resolved_device == "auto":
         resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
-    resolved_site_batch_size = int(site_batch_size or export_config.get("site_batch_size", 16))
     resolved_input_dim = int(input_dim or export_config.get("input_dim", 1536))
 
     if model_type is not None:
@@ -146,11 +141,7 @@ def resolve_export_settings(
         source_profiles=source_profiles,
         features=features,
         output_profiles=output_profiles,
-        download_dir=resolved_download_dir,
-        repo_id=resolved_repo_id,
-        filename=resolved_filename,
         device=resolved_device,
-        site_batch_size=resolved_site_batch_size,
         input_dim=resolved_input_dim,
         cell_filter=resolved_cell_filter,
         timelines=resolved_timelines,

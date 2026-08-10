@@ -14,8 +14,12 @@ from torch.optim.lr_scheduler import LambdaLR
 
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.distributed import DistributedState, LogitScaleModule
-from morphoclip.training.engine import build_optimizer, build_scheduler, split_params
 from morphoclip.training.inference import build_models
+from morphoclip.training.optim import (
+    build_optimizer,
+    build_warmup_cosine_scheduler,
+    split_params,
+)
 from morphoclip.utils.device import build_grad_scaler
 
 # OpenAI CLIP initial temperature (tau=0.07 -> logit_scale = ln(1/0.07))
@@ -129,7 +133,7 @@ def build_optimization(
     total_steps = max(1, steps_per_epoch * opt_cfg.epochs)
     if config.runtime.max_train_steps is not None:
         total_steps = min(total_steps, config.runtime.max_train_steps)
-    scheduler = build_scheduler(
+    scheduler = build_warmup_cosine_scheduler(
         optimizer, total_steps=total_steps, warmup_steps=opt_cfg.warmup_steps
     )
     grad_scaler = build_grad_scaler(device, enabled=config.runtime.amp)

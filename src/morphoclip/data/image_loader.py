@@ -128,8 +128,7 @@ def discover_sites(
             continue
         sites.setdefault(key, {})[ch] = path
 
-    complete = {key: ch_paths for key, ch_paths in sites.items() if len(ch_paths) == len(channels)}
-    return complete
+    return {key: ch_paths for key, ch_paths in sites.items() if len(ch_paths) == len(channels)}
 
 
 def load_single_channel(path: Path, normalize: bool = True) -> np.ndarray:
@@ -151,9 +150,8 @@ def load_single_channel(path: Path, normalize: bool = True) -> np.ndarray:
         raise ValueError(f"Expected a single-channel image at {path}, got shape {arr.shape}")
 
     arr = arr.astype(np.float32)
-    if normalize:
-        if np.issubdtype(original_dtype, np.integer):
-            arr /= float(np.iinfo(original_dtype).max)
+    if normalize and np.issubdtype(original_dtype, np.integer):
+        arr /= float(np.iinfo(original_dtype).max)
     return arr
 
 

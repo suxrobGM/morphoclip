@@ -8,19 +8,16 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.table import Table
 
-from benchmark.split_contexts import OFFICIAL_SPLIT_METADATA_PATH
 from morphoclip.benchmark.export import (
     PlateNotInReferenceError,
     export_plate_profiles,
     load_export_models,
 )
-from morphoclip.cli.logging import setup_logging
+from morphoclip.splits.contexts import OFFICIAL_SPLIT_METADATA_PATH
 from morphoclip.training.inference import discover_plates
-
-console = Console()
+from morphoclip.utils.console import console, setup_logging
 
 DEFAULT_METADATA_CSV = OFFICIAL_SPLIT_METADATA_PATH
 DEFAULT_OUTPUT_ROOT = Path("data/profiles_morphoclip")
@@ -106,8 +103,7 @@ def export_profiles(
 
     console.print(table)
     console.print(
-        f"\nExported {n_ok}/{len(resolved_plates)} plates "
-        f"({n_skipped} skipped, {n_failed} failed)."
+        f"\nExported {n_ok}/{len(resolved_plates)} plates ({n_skipped} skipped, {n_failed} failed)."
     )
     if n_failed:
         raise typer.Exit(1)

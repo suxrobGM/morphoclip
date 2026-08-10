@@ -1,51 +1,70 @@
-# Coding Conventions
+# Coding conventions
 
-## Python Style
+## Python style
 
-- Target Python >=3.14. Use modern syntax: `type` unions (`X | Y`), `tuple[str, str]` not `Tuple`.
-- Don't use `from __future__ import annotations` since Python 3.14 has PEP 563 semantics by default.
-- Type hints on all public functions. Private helpers can omit them when types are obvious.
-- Docstrings follow Google style with `Args:`, `Returns:`, `Raises:` sections.
-- Use keyword-only arguments (`*`) for functions with more than 2-3 parameters, especially booleans.
+- Target Python >=3.14. Modern syntax: `X | Y` unions, `tuple[str, str]` not `Tuple`.
+- No `from __future__ import annotations`. Python 3.14 already has those semantics.
+- Type hints on all public functions. Private helpers may omit them when obvious.
+- Google-style docstrings with `Args:`, `Returns:`, `Raises:`.
+- Keyword-only arguments (`*`) past two or three parameters, especially booleans.
+- PEP 695 generics are fine (`def load_config[ModelT: BaseModel]`), except for
+  Typer option aliases, which must be plain assignment.
 
 ## Imports
 
-- Always use full package paths: `from morphoclip.data.metadata import MetadataIndex`, `from cellclip.training.config import CellCLIPTrainingConfig`.
-- Never use relative imports within `src/` packages.
-- Group imports: stdlib, third-party, local (`morphoclip.*`, `cellclip.*`, `benchmark.*`), separated by blank lines.
-- CellCLIP code may import from `morphoclip.data` and `benchmark.data`, but `morphoclip` library code (`data`, `models`, `utils`) must never import from `cellclip`. The one exception is `morphoclip.cli`, the CLI composition root, which imports from `cellclip.*` and `benchmark.*` to expose their commands.
-- In the remaining dev scripts under `scripts/`, place the `sys.path.insert` before local imports with `# noqa: E402` on the import lines. Package and CLI code never use `sys.path.insert`.
+- Full package paths: `from morphoclip.data.metadata import MetadataIndex`.
+- Never relative imports inside `src/`.
+- Group: stdlib, third-party, local (`morphoclip.*`, `cellclip.*`, `benchmark.*`).
+- `morphoclip` library code must never import from `cellclip`. `morphoclip.cli`
+  is the one exception; it is the composition root.
+- Imports that pull an optional extra go inside the function that needs them.
+- Only `scripts/` uses `sys.path.insert`, before its local imports, with
+  `# noqa: E402`.
 
 ## Naming
 
-- Modules: `snake_case.py`
-- Classes: `PascalCase` (e.g., `MetadataIndex`, `PromptBuilder`, `ProjectionHead`)
-- Functions/methods: `snake_case`
-- Constants: `UPPER_SNAKE_CASE`
-- Private helpers: prefix with `_`
+- Modules `snake_case.py`, classes `PascalCase`, functions `snake_case`,
+  constants `UPPER_SNAKE_CASE`, private helpers `_prefixed`.
+- Name a thing once. Three importable things called `benchmark` and two called
+  `setup_logging` is how this codebase got confusing the first time.
 
-## File Size
+## File size
 
-- Target ~300–350 LOC per module. Split files that exceed ~350 lines.
-- Extract dataclasses, constants, and pure functions into their own modules first.
-- Keep orchestration logic in the original module.
+Aim for 300 to 350 lines. Split a file when it does two unrelated jobs, not
+because it crossed a line count: splitting a coherent module by size produces
+two files that must be read together.
 
-## Comments and Docstrings
+Extract dataclasses, constants and pure functions first. Keep orchestration in
+the original module.
 
-- Keep docstrings concise. Include `Args:`/`Returns:` but don't over-explain obvious parameters.
-- Docstrings can be skipped only for trivially obvious private helpers (e.g., simple getters).
-- No inline comments that restate the code. Only comment the *why*, not the *what*.
+## Comments and docstrings
 
-## Error Handling
+- Comment the why, never the what. Default to no comment.
+- No banner comments (`# --- Helpers ---`) and no numbered step comments.
+- No em dashes or en dashes anywhere, including docstrings. Use a comma, colon,
+  period or parentheses.
+- Do not add comments to lines you did not otherwise change.
 
-- Raise `ValueError` for invalid arguments.
-- Raise `RuntimeError` for environment/system issues (missing tools, failed commands).
-- Use `subprocess.run(cmd, check=True)` — let `CalledProcessError` propagate.
+## Error handling
+
+- `ValueError` for a bad argument, `RuntimeError` for a broken environment.
+- `subprocess.run(cmd, check=True)`; let `CalledProcessError` propagate.
+- Do not widen an `except` clause to make a failure quiet. `benchmark`'s
+  unpaired guard is deliberately narrow because widening it would have turned a
+  crash into published zeros.
 
 ## Testing
 
-- Test files: `test_<module>.py`
-- Test classes: `Test<ClassName>` for grouped tests, plain functions for standalone tests.
-- Use `tmp_path` fixture for filesystem tests.
-- Use `pytest.mark.skipif` for tests that need optional dependencies or local data.
-- Run tests: `uv run poe test` (which runs `pytest tests/ -v`).
+- Files `test_<module>.py`, mirroring `src/morphoclip/`.
+- `Test<Thing>` classes for grouped tests, plain functions otherwise.
+- Test names are contract sentences: `test_dry_run_reports_the_count_without_deleting`.
+- Use `tmp_path` and the builders in `tests/support/`. Do not hand-roll a fake
+  feature root, plate image directory or profile CSV that already has a builder.
+- Prefer one `parametrize` over several tests that differ only by input.
+- Mark `realdata` for anything needing the downloaded dataset. Do not add a
+  `skipif` that silently passes on a fresh clone.
+- Before adding a test, name the one-line source change it catches. If the only
+  way it can fail is a rename, do not write it.
+
+Run with `uv run poe test`, or `uv run poe check` for format, lint, types and
+tests together.

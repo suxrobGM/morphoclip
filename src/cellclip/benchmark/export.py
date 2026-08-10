@@ -1,22 +1,24 @@
 """Benchmark export helpers for local CellCLIP profile generation."""
 
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
 import torch
 import yaml
 
-from benchmark.data import get_timepoint_label
-from benchmark.export_utils import (
-    feature_columns,
+from benchmark.profiles import (
+    metadata_columns,
     negcon_center_profiles,
-    output_profile_path,
+    numbered_feature_columns,
+    profile_path,
+    write_profile,
 )
+from benchmark.timelines import get_timepoint_label
+from cellclip.model import CellCLIPVisualEncoder
 from morphoclip.data.image_loader import FEATURE_PATTERN
 from morphoclip.data.perturbation import well_from_row_col
-
-TIMELINE_CHOICES = ("short", "long")
 
 
 def resolve_path(path_str: str | Path, project_root: Path) -> Path:
@@ -44,29 +46,6 @@ def load_yaml_section(path: Path, section: str) -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"Config section '{section}' must be a mapping: {path}")
     return data
-
-
-def normalize_timelines(value) -> list[str]:
-    """Normalize timeline selection to a deduplicated list."""
-    if value is None:
-        return list(TIMELINE_CHOICES)
-
-    items = [value] if isinstance(value, str) else list(value)
-    normalized: list[str] = []
-    for item in items:
-        label = str(item).strip().lower()
-        if label not in TIMELINE_CHOICES:
-            raise ValueError(
-                f"Invalid timeline {item!r}; expected one of: {', '.join(TIMELINE_CHOICES)}"
-            )
-        if label not in normalized:
-            normalized.append(label)
-    return normalized or list(TIMELINE_CHOICES)
-
-
-def get_profile_metadata_columns(df: pd.DataFrame) -> list[str]:
-    """Return metadata columns preserved in exported profile CSVs."""
-    return [c for c in df.columns if c.startswith("Metadata_") or c.startswith("Meta_")]
 
 
 def select_target_plates(
@@ -115,21 +94,16 @@ def resolve_feature_dir(feature_root: Path, plate: str) -> Path:
 
 def load_source_profile(source_profiles_root: Path, batch: str, plate: str) -> pd.DataFrame:
     """Load the source benchmark profile CSV for a plate."""
-    profile_path = (
-        source_profiles_root
-        / batch
-        / plate
-        / f"{plate}_normalized_feature_select_negcon_batch.csv.gz"
-    )
-    if not profile_path.exists():
-        raise FileNotFoundError(f"Source profile not found for plate {plate}: {profile_path}")
+    path = profile_path(source_profiles_root, batch, plate)
+    if not path.exists():
+        raise FileNotFoundError(f"Source profile not found for plate {plate}: {path}")
 
-    df = pd.read_csv(profile_path, low_memory=False)
+    df = pd.read_csv(path, low_memory=False)
     if "Metadata_Well" not in df.columns:
-        raise ValueError(f"Source profile missing Metadata_Well: {profile_path}")
+        raise ValueError(f"Source profile missing Metadata_Well: {path}")
     if df["Metadata_Well"].duplicated().any():
         raise ValueError(
-            f"Source profile has duplicate wells; exporter expects one row per well: {profile_path}"
+            f"Source profile has duplicate wells; exporter expects one row per well: {path}"
         )
     return df
 
@@ -162,12 +136,11 @@ def encode_well(
     model: torch.nn.Module,
     sites: torch.Tensor,
     device: str,
-    site_batch_size: int,
 ) -> np.ndarray:
     """Encode one well using the trainer-faithful MIL pooling path."""
-    del site_batch_size
-    pooled_sites = model.encode_mil(sites.unsqueeze(0).to(device))
-    well_embedding = model.encode_image(pooled_sites).squeeze(0).detach().cpu().float()
+    encoder = cast(CellCLIPVisualEncoder, model)
+    pooled_sites = encoder.encode_mil(sites.unsqueeze(0).to(device))
+    well_embedding = encoder.encode_image(pooled_sites).squeeze(0).detach().cpu().float()
     return well_embedding.numpy()
 
 
@@ -180,11 +153,10 @@ def export_plate(
     output_profiles_root: Path,
     batch: str,
     plate: str,
-    site_batch_size: int,
 ) -> Path:
     """Export one benchmark-compatible plate profile CSV."""
     source_df = load_source_profile(source_profiles_root, batch, plate)
-    metadata_cols = get_profile_metadata_columns(source_df)
+    metadata_cols = metadata_columns(source_df)
     metadata_df = source_df[metadata_cols].copy().reset_index(drop=True)
 
     feature_dir = resolve_feature_dir(feature_root, plate)
@@ -201,7 +173,7 @@ def export_plate(
             continue
 
         sites = load_well_sites(site_paths)
-        encoded = encode_well(model, sites, device, site_batch_size)
+        encoded = encode_well(model, sites, device)
         if embedding_width is None:
             embedding_width = int(encoded.shape[0])
         exported_features.append(encoded)
@@ -218,13 +190,9 @@ def export_plate(
 
     features_df = pd.DataFrame(
         np.vstack(exported_features),
-        columns=feature_columns(embedding_width),
+        columns=numbered_feature_columns(embedding_width),
     )
     output_df = pd.concat([metadata_df, features_df], axis=1)
     output_df = negcon_center_profiles(output_df)
 
-    output_path = output_profile_path(output_profiles_root, batch, plate)
-    output_dir = output_path.parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_df.to_csv(output_path, index=False, compression="gzip")
-    return output_path
+    return write_profile(output_df, profile_path(output_profiles_root, batch, plate))

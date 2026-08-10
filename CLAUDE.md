@@ -2,128 +2,94 @@
 
 Text-supervised contrastive learning for perturbation matching in Cell Painting images.
 
-## Project Overview
+MorphoCLIP aligns microscopy image embeddings with text descriptions of biological
+perturbations (compounds, CRISPR knockouts, ORF overexpressions) in a shared 512-d
+L2-normalized space.
 
-MorphoCLIP aligns microscopy image embeddings (DINOv3 CLS tokens) with text descriptions of biological perturbations (compounds, CRISPR knockouts, ORF overexpressions) using contrastive learning. The text encoder is a frozen BioClinical ModernBERT (150M params) with a trainable projection head (768 -> 512).
+**Dataset:** CPJUMP1 pilot, 56 plates from the Cell Painting Gallery (public S3 bucket).
 
-**Dataset:** CPJUMP1 pilot — 56 plates of Cell Painting images from the Cell Painting Gallery (public S3 bucket).
+Layout, layering and code style live in `.claude/rules/`:
+[architecture](.claude/rules/architecture.md),
+[project-structure](.claude/rules/project-structure.md),
+[coding-conventions](.claude/rules/coding-conventions.md).
+This file covers what those do not: the model itself, and how to run things.
 
-## Quick Reference
+## Quick reference
 
 ```bash
 # One-time setup: install deps + PyTorch for your hardware
 uv sync --extra cu128           # (or --extra cu130 / --extra cpu)
 
-# Tasks run through poe (poethepoet): `uv run poe <task>`
-uv run poe test                 # Run all tests
-uv run poe fetch-dataset        # Download dataset from S3
-uv run poe extract-features     # Extract DINOv3 CLS tokens
-uv run poe precompute-text      # Pre-compute text embeddings
-uv run poe train                # Train the model
-
-# Pipeline entry points are also a Typer CLI (poe tasks wrap this):
-uv run morphoclip --help                        # List all commands/groups
-uv run morphoclip data fetch                    # e.g. same as `poe fetch-dataset`
+# Every pipeline step is a `morphoclip` subcommand
+uv run morphoclip --help                    # list all commands and groups
+uv run morphoclip data fetch                # download dataset from S3
+uv run morphoclip features extract          # extract DINOv3 CLS tokens
+uv run morphoclip text precompute           # pre-compute text embeddings
 uv run morphoclip train --config configs/train/base.yaml
-# Multi-GPU: torchrun --nproc_per_node=4 -m morphoclip.cli train --config configs/train/ddp.yaml --distributed
+uv run morphoclip eval --checkpoint <path>
+uv run morphoclip benchmark --config configs/benchmark.yml
 
-# Documentation site (Nextra)
-cd docs && bun install          # Install docs dependencies (first time)
-cd docs && bun run dev          # Dev server at http://localhost:4000
-cd docs && bun run build        # Static export to docs/out/
+# Multi-GPU
+uv run torchrun --nproc_per_node=4 -m morphoclip.cli train \
+  --config configs/train/ddp.yaml --distributed
+
+# Dev loop (poethepoet)
+uv run poe check                # format-check, lint, typecheck, test
+uv run poe test
+
+# Docs site
+cd docs && bun install && bun run dev       # http://localhost:4000
 ```
 
-## Package Structure
+## Model
 
-```text
-src/morphoclip/
-  cli/            # Typer `morphoclip` CLI: pipeline entry points (train, eval, infer, data, features, text, benchmark, cellclip)
-  data/           # Dataset, metadata, image loading, perturbation types, splits
-  models/         # Text encoder, projection head, prompt builder, prompt templates
-  utils/          # Text embedding caching, S3 transfer utilities
-src/benchmark/    # General benchmark evaluation (metrics, plotting, stable helpers, stable benchmark runner)
-src/cellclip/     # CellCLIP baseline (separate from MorphoCLIP)
-  benchmark/      # CellCLIP visual encoder, checkpoint loading, export pipeline
-  training/       # Local CellCLIP trainer (config, dataset, engine, losses, model)
-data/reference/   # First-party CPJUMP1 reference metadata (cpjump1_metadata.csv, JUMP-Target-1 annotations)
-scripts/          # Dev/exploration one-offs only (pipeline entry points live in morphoclip.cli)
-  data/           # Dataset inspection, label generation
-  features/       # Feature diagnostics, DINO heatmap / downsampling inspection
-  text/           # Text embedding inspection
-  benchmark/      # Benchmark comparison
-  cellclip/       # Training-run analysis, scheduler
-  analysis/       # Metadata analysis, visualization
-  sanitycheck/    # GPU / setup checks
-tests/            # Mirrors src/ structure (data/, models/, benchmark/, cellclip/)
-configs/
-  dataset.yml     # MorphoCLIP configuration (S3, plates, extraction, splits)
-  train/          # MorphoCLIP training configs (base, mean_pool, ddp)
-  benchmark.yml   # Benchmark configuration
-  cellclip/       # CellCLIP training configs (base + experiment variants)
-docs/             # Documentation website (Nextra 4 + Next.js 16.2 + Bun)
-  app/            # Next.js App Router (layout, catch-all route)
-  content/        # MDX content organized by topic
-    getting-started/  # Installation, quick start
-    pipeline/         # Training pipeline, feature extraction, text encoder, data fetching
-    dataset/          # CPJUMP1 overview, splits, compression
-    background/       # Proposal, literature review
-    baselines/        # CellCLIP, benchmark guides
-  public/         # Static assets (images, diagrams)
-  _internal/      # Internal-only docs (not served by Nextra)
-```
+**Image branch.** Frozen DINOv3 ViT-L/16 (300M params). Each site's 5 fluorescence
+channels are replicated to pseudo-RGB and encoded to `(5, 1024)` CLS tokens, cached
+to disk as `.pt` (about 3 GB and 7 minutes per plate on an RTX 5080). At train time a
+CrossChannelFormer (1 layer, 4 heads) collapses the 5 channel tokens into one image
+representation, sites are pooled, and a projection head maps 1024 to 512 with
+L2-normalization.
 
-## Model Architecture
+Four aggregators are available: `ccf-mean` (default), `meanpool-mean`, `ccf-attn`,
+`wellformer`. Sites within a well are an unordered bag; channels are ordered, and
+every aggregator except `meanpool` adds a learned per-channel embedding.
 
-MorphoCLIP aligns image and text embeddings in a shared 512-d L2-normalized space using contrastive learning (CWCL loss + CWA batch correction).
+**Text branch.** Frozen BioClinical ModernBERT (150M params, CLS pooling by default)
+plus a trainable projection head (768 to 512, L2-normalized). Prompts come from
+verbose per-modality templates covering compound, gene, CRISPR, ORF and negcon. The
+raw 768-d BERT features are cached separately from the projected 512-d output, so
+changing the projection does not mean re-encoding text.
 
-**Image encoder:**
+**Training.** CWCL (Continuously Weighted Contrastive Loss) handles soft positives;
+CWA (Cross-Well Alignment) corrects batch effects and is off by default. Temperature
+is learnable, clamped to ln(100). Unlike CellCLIP, MorphoCLIP trains on compounds and
+genetic perturbations together.
 
-- Frozen DINOv3 ViT-L/16 (300M params, 1024-d CLS tokens)
-- 5 fluorescence channels per site -> each replicated to pseudo-RGB -> DINOv3 -> `(5, 1024)` per site
-- Features pre-extracted and cached as `.pt` files (~3 GB/plate, ~7 min/plate on RTX 5080)
-- CrossChannelFormer (1-layer transformer, 4 heads) aggregates 5 channel tokens into 1 image representation
-- Image projection head (1024 -> 512, L2-normalized)
-- Alternative: mean pooling (`configs/train/mean_pool.yaml`)
+`configs/train/base.yaml` sets batch_size=512, lr=1e-4, weight_decay=0.2, 100 epochs,
+sized for a single RTX 5080 (16 GB). The dataclass fallbacks are smaller and only
+apply when no config is given.
 
-**Text encoder:**
+Both encoders read from pre-extracted caches, which is what makes a 3 to 5 minute
+epoch possible.
 
-- Frozen BioClinical ModernBERT (150M params, CLS or mean pooling)
-- Trainable `ProjectionHead` (768 -> 512, L2-normalized output)
-- Verbose prompt templates with compound/gene/CRISPR/ORF/negcon modalities
-- Raw 768-d BERT features cached separately from projected 512-d output
+## Things worth knowing before you change something
 
-**Training:**
+- **The benchmark is not reproducible run to run.** Two runs of identical code differ
+  in all six result CSVs. Only replicability `mean_average_precision` is
+  deterministic; fraction-retrieved varies because the matching population is
+  filtered by a random permutation null. Do not treat a small delta as a regression,
+  and do not chase byte-identical output.
+- **CellCLIP is frozen.** Its results are in `report/`. Keep it runnable; do not
+  extend it. Its OpenAI-CLIP layers are a checkpoint contract.
+- **Text prompts and dataset labels are two systems.** Verbose prompts in
+  `models/prompts.py` feed BERT; concise labels in `data/perturbation.py` are for
+  display. `build_prompt_from_info` bridges them.
+- **Split bucketing is a deliberate stable md5.** Changing it repartitions every
+  split already on disk.
 
-- CWCL (Continuously Weighted Contrastive Loss) for soft-positive handling
-- CWA (Cross-Well Alignment) for batch effect correction (disabled by default)
-- Learnable temperature (LogitScaleModule, clamped to ln(100))
-- Trains on both compounds AND genetic perturbations (unlike CellCLIP)
-- Default: batch_size=512, lr=1e-4, weight_decay=0.2, 100 epochs
-- Target hardware: single RTX 5080 (16 GB VRAM)
+## Environment
 
-## Key Architecture Decisions
-
-- **src-layout**: MorphoCLIP code under `src/morphoclip/`, CellCLIP baseline under `src/cellclip/`, general benchmark under `src/benchmark/`. The project is an installable package (hatchling); pipeline entry points are a single Typer CLI (`morphoclip`, defined in `src/morphoclip/cli/`). Remaining `scripts/` files are dev/exploration one-offs
-- **Two template systems**: Verbose templates in `models/prompt_templates.py` (for BERT input), concise labels in `data/perturbation.py` (for dataset display)
-- **`PerturbationInfo` bridge**: `PromptBuilder.build_from_info()` connects the data layer to text generation
-- **Pre-computed features**: DINOv3 CLS tokens and BERT embeddings are both pre-extracted and cached to enable rapid training iteration (~3-5 min/epoch)
-
-## Development
-
-- **Python**: >=3.14, <3.15
-- **Package manager**: uv (single source of truth; PyTorch via `--extra {cpu|cu128|cu130}`)
-- **Task runner**: poethepoet (`uv run poe <task>`; tasks defined under `[tool.poe.tasks]`)
-- **Test runner**: pytest (`pythonpath = ["src"]` configured in pyproject.toml)
-- **Linter**: ruff (`[tool.ruff]` in pyproject.toml)
-- **Type checker**: mypy (`mypy_path = "src"`)
-- **Config**: `configs/dataset.yml` for MorphoCLIP, `configs/train/` for training, `configs/benchmark.yml` for benchmarks, `configs/cellclip/` for CellCLIP training
-- **Docs site**: Nextra 4 + Next.js 16.2 + Bun (in `docs/`)
-
-## Conventions
-
-- Type hints on all public functions
-- Docstrings follow Google style (Args/Returns/Raises)
-- Imports use full package paths: `from morphoclip.data.metadata import MetadataIndex`, `from cellclip.training.config import ...`
-- Pipeline commands live in `morphoclip.cli` and import the package directly (no path hacks). Only the remaining dev scripts under `scripts/` use `sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))`
-- Tests mirror `src/` structure: `tests/data/`, `tests/models/`, `tests/cellclip/`, `tests/benchmark/`
-- Commit messages follow conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, etc.
+- Python >=3.14, <3.15; uv is the single source of truth for dependencies
+- PyTorch via `--extra {cpu|cu128|cu130}`
+- ruff, mypy, pytest and poethepoet all configured in `pyproject.toml`
+- Docs: Nextra 4 + Next.js + Bun, in `docs/`

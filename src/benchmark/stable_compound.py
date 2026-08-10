@@ -15,7 +15,6 @@ from benchmark.data import (
     compute_consensus,
     filter_profiles_to_split_subset,
     filter_replicable,
-    get_timepoint_label,
     remove_empty_wells,
     remove_negcon_wells,
 )
@@ -29,6 +28,7 @@ from benchmark.stable_helpers import (
     run_with_unpaired_guard,
 )
 from benchmark.stable_results import StableResults
+from benchmark.timelines import get_timepoint_label
 
 REPLICATE_FEATURE = "Metadata_broad_sample"
 MODALITY_1_PERTURBATION = "compound"
@@ -94,7 +94,6 @@ def evaluate_compound(
         add_negcon_indicator(modality_1_df),
         null_size=null_size,
         batch_size=batch_size,
-        copairs_mode="stable",
     )
     if result.empty:
         print(f"Skipping {description} replicability - no valid pairs")
@@ -104,7 +103,6 @@ def evaluate_compound(
         "replicability_fr",
         result=result,
         group_cols=[REPLICATE_FEATURE],
-        null_size=null_size,
         metadata={
             "Description": description,
             "Modality": modality_1_perturbation,
@@ -114,7 +112,6 @@ def evaluate_compound(
         },
     )
 
-    # --- Compound matching ---
     modality_1_df = remove_negcon_wells(modality_1_df)
     modality_1_consensus_df = compute_consensus(modality_1_df, REPLICATE_FEATURE)
 
@@ -146,7 +143,6 @@ def evaluate_compound(
         multilabel=True,
         null_size=null_size,
         batch_size=batch_size,
-        copairs_mode="stable",
     )
     if result.empty:
         print(f"Skipping {description} matching - no valid pairs")
@@ -156,7 +152,6 @@ def evaluate_compound(
             "matching_fr",
             result=result,
             group_cols=["Metadata_matching_target"],
-            null_size=null_size,
             metadata={
                 "Description": description,
                 "Modality": modality_1_perturbation,

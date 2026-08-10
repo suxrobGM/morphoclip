@@ -105,5 +105,4 @@ class CrossChannelFormer(nn.Module):
         x = self.transformer(x)  # (B, C+1, D)
 
         # Extract CLS token output
-        x = self.ln_post(x[:, 0, :])  # (B, D)
-        return x
+        return self.ln_post(x[:, 0, :])  # (B, D)

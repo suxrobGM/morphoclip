@@ -28,9 +28,7 @@ def is_plate_extracted(plate_dir: Path) -> bool:
     return plate_dir.is_dir() and any(plate_dir.glob("*.pt"))
 
 
-def partition_pending_archives(
-    archives: list[str], output_dir: Path
-) -> tuple[list[str], int]:
+def partition_pending_archives(archives: list[str], output_dir: Path) -> tuple[list[str], int]:
     """Split repo archives into (pending, already-extracted-count)."""
     pending: list[str] = []
     skipped = 0
@@ -44,7 +42,7 @@ def partition_pending_archives(
 
 
 def download_and_extract_archive(
-    *, api: HfApi, repo_id: str, filename: str, output_dir: Path, skip_extract: bool
+    *, repo_id: str, filename: str, output_dir: Path, skip_extract: bool
 ) -> str:
     """Download a single archive and extract it. Returns a status string."""
     plate_name = filename.removesuffix(".tar.gz")

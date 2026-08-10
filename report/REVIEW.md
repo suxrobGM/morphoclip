@@ -81,7 +81,7 @@ also lift image→text out of the noise floor. **This is the top pre-journal act
 - **Batch size: 512 → 256.** The reported checkpoint's config is `batch_size: 256`.
 - **Split description.** The paper's default "CRISPR/ORF → train, compounds → val/test" is not
   what ran. The `pert_type` strategy hashes each `broad_sample` into an 80/10/10 train/val/test
-  split with all modalities in every split ([`splits.py`](../src/morphoclip/data/splits.py)).
+  split with all modalities in every split ([`strategies.py`](../src/morphoclip/splits/strategies.py)).
   Corrected in the experiments section.
 - **Checkpoint selection.** Best-on-validation is epoch 9 of the 100-epoch schedule, now stated.
 

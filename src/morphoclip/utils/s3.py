@@ -5,11 +5,9 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 
-from rich.console import Console
+from morphoclip.utils.console import console
 
 DEFAULT_RCLONE_REMOTE = ":s3,provider=AWS,region=us-east-1,no_check_bucket=true:"
-
-console = Console()
 
 
 def build_s3_uri(endpoint: str, path_template: str, batch: str) -> str:

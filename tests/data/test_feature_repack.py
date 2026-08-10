@@ -1,57 +1,38 @@
 """Tests for cached-feature repacking."""
 
+from pathlib import Path
+
 import torch
 
 from morphoclip.data.feature_extractor import repack_feature_file
 
 
-def _write_sliced_feature(path, n_sites: int = 8, channels: int = 5, dim: int = 64):
+def _write_sliced_feature(path: Path) -> torch.Tensor:
     """Save one site as a bare slice of a batch tensor (the oversized form)."""
-    batch = torch.randn(n_sites, channels, dim)
+    batch = torch.randn(8, 5, 64)
     torch.save(batch[0], path)
     return batch[0].clone()
 
 
-class TestRepackFeatureFile:
-    def test_shrinks_oversized_file(self, tmp_path):
-        path = tmp_path / "r01c01f01.pt"
-        _write_sliced_feature(path)
+def test_repacking_drops_the_shared_storage_and_keeps_the_values(tmp_path: Path) -> None:
+    path = tmp_path / "r01c01f01.pt"
+    expected = _write_sliced_feature(path)
 
-        before, after = repack_feature_file(path)
+    before, after = repack_feature_file(path)
 
-        assert after < before
+    assert after < before
+    assert after == path.stat().st_size
+    assert list(tmp_path.glob("*.tmp")) == []
 
-    def test_preserves_values_exactly(self, tmp_path):
-        path = tmp_path / "r01c01f01.pt"
-        expected = _write_sliced_feature(path)
+    tensor = torch.load(path, map_location="cpu")
+    assert torch.equal(tensor, expected)
+    assert tensor.untyped_storage().nbytes() == tensor.nbytes
 
-        repack_feature_file(path)
 
-        assert torch.equal(torch.load(path, map_location="cpu"), expected)
+def test_an_already_packed_file_is_left_on_disk_untouched(tmp_path: Path) -> None:
+    path = tmp_path / "r01c01f01.pt"
+    torch.save(torch.randn(5, 64), path)
+    original_size = path.stat().st_size
 
-    def test_drops_excess_storage(self, tmp_path):
-        path = tmp_path / "r01c01f01.pt"
-        _write_sliced_feature(path)
-
-        repack_feature_file(path)
-
-        tensor = torch.load(path, map_location="cpu")
-        assert tensor.untyped_storage().nbytes() == tensor.nbytes
-
-    def test_already_packed_file_is_untouched(self, tmp_path):
-        path = tmp_path / "r01c01f01.pt"
-        torch.save(torch.randn(5, 64), path)
-        original_size = path.stat().st_size
-
-        before, after = repack_feature_file(path)
-
-        assert (before, after) == (original_size, original_size)
-        assert path.stat().st_size == original_size
-
-    def test_leaves_no_temp_file(self, tmp_path):
-        path = tmp_path / "r01c01f01.pt"
-        _write_sliced_feature(path)
-
-        repack_feature_file(path)
-
-        assert list(tmp_path.glob("*.tmp")) == []
+    assert repack_feature_file(path) == (original_size, original_size)
+    assert path.stat().st_size == original_size

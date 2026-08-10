@@ -95,7 +95,7 @@ def load_plate_profile_metadata(
         return pd.DataFrame(columns=["Metadata_Well"])
 
     header = pd.read_csv(profile_path, nrows=0)
-    meta_cols = [c for c in header.columns if c.startswith("Meta_") or c.startswith("Metadata_")]
+    meta_cols = [c for c in header.columns if c.startswith(("Meta_", "Metadata_"))]
 
     if "Metadata_Well" not in meta_cols and "Metadata_Well" in header.columns:
         meta_cols.append("Metadata_Well")

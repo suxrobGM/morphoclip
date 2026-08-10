@@ -7,7 +7,7 @@ single-process mode.
 
 Usage with torchrun::
 
-    torchrun --nproc_per_node=4 scripts/training/train.py \\
+    torchrun --nproc_per_node=4 -m morphoclip.cli train \\
         --config configs/train/ddp.yaml --distributed
 """
 
@@ -18,10 +18,6 @@ from typing import Any
 import torch
 import torch.distributed as dist
 from torch import nn
-
-# ------------------------------------------------------------------
-# Distributed state
-# ------------------------------------------------------------------
 
 
 @dataclass(slots=True, frozen=True)
@@ -101,11 +97,6 @@ def is_distributed() -> bool:
     return dist.is_initialized()
 
 
-# ------------------------------------------------------------------
-# Communication helpers
-# ------------------------------------------------------------------
-
-
 def all_reduce_scalar(value: float, *, op: str = "mean") -> float:
     """All-reduce a scalar across processes.
 
@@ -155,7 +146,7 @@ class _GatherWithGrad(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx: Any, tensor: torch.Tensor) -> torch.Tensor:  # noqa: ANN401
+    def forward(ctx: Any, tensor: torch.Tensor) -> torch.Tensor:
         world_size = dist.get_world_size()
         gathered = [torch.zeros_like(tensor) for _ in range(world_size)]
         dist.all_gather(gathered, tensor)
@@ -164,7 +155,7 @@ class _GatherWithGrad(torch.autograd.Function):
         return torch.cat(gathered, dim=0)
 
     @staticmethod
-    def backward(ctx: Any, grad_output: torch.Tensor) -> torch.Tensor:  # noqa: ANN401
+    def backward(ctx: Any, grad_output: torch.Tensor) -> torch.Tensor:
         start = ctx.rank * ctx.batch_size
         end = start + ctx.batch_size
         return grad_output[start:end]
@@ -221,11 +212,6 @@ def gather_string_lists(
     for g in gathered:
         result.extend(g)
     return result
-
-
-# ------------------------------------------------------------------
-# LogitScaleModule — wraps the learnable temperature for DDP
-# ------------------------------------------------------------------
 
 
 class LogitScaleModule(nn.Module):

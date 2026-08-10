@@ -11,6 +11,7 @@ dependencies = [
   "Pillow>=12.1.0",
   "numpy>=2.4.0",
   "PyYAML>=6.0.3",
+  "pydantic>=2.12.0",
   "opencv-python>=4.13.0",
   "transformers>=5.3.0",
   "huggingface-hub>=1.7.0",
@@ -62,10 +63,12 @@ packages = ["src/morphoclip", "src/cellclip", "src/benchmark"]
 [dependency-groups]
 dev = [
   "pytest>=9.0.0",
+  "pytest-cov>=6.0.0",
   "ruff>=0.15.0",
   "mypy>=1.19.0",
   "types-PyYAML>=6.0.12",
   "poethepoet>=0.30.0",
+  "pandas-stubs>=3.0.5.260730",
 ]
 
 [tool.uv]
@@ -100,39 +103,30 @@ torchvision = [
 ]
 
 # Task runner (poethepoet). Run with: uv run poe <task>
+#
+# Pipeline commands are NOT aliased here. They live in the `morphoclip` CLI
+# (`uv run morphoclip --help`); a second name for each one only gave the docs
+# something extra to fall out of sync with. What is left is the dev loop, the
+# two commands that supply a default config, and the script runners.
 [tool.poe.tasks]
-test = "pytest tests/ -v"
+test = "pytest"
+test-cov = "pytest --cov --cov-report=term-missing --cov-report=xml"
+test-realdata = "pytest -m realdata"
 lint = "ruff check ."
 format = "ruff format ."
+format-check = "ruff format --check ."
 typecheck = "mypy src"
-
-# Pipeline entry points now live in the `morphoclip` CLI (src/morphoclip/cli/).
-check-plates = "morphoclip data check-plates"
-fetch-dataset = "morphoclip data fetch"
-fetch-dataset-rclone = "morphoclip data fetch --backend rclone"
-inspect-perturbation = "python scripts/data/inspect_perturbation.py"
-inspect-dataset = "python scripts/data/inspect_dataset.py"
-
-extract-features = "morphoclip features extract"
-cellclip-train = "morphoclip cellclip train"
-cellclip-export = "morphoclip cellclip export"
-cellclip-pipeline = "morphoclip cellclip pipeline"
-extract-pipeline = "morphoclip features pipeline"
-upload-features = "morphoclip features upload"
-download-features = "morphoclip features download"
-downsampling-inspection = "python scripts/features/downsampling_inspection.py"
-dino-heatmap-inspection = "python scripts/features/dino_heatmap_inspection.py"
-
-precompute-text = "morphoclip text precompute"
-inspect-text = "python scripts/text/inspect_text_embeddings.py"
+check = ["format-check", "lint", "typecheck", "test"]
 
 train = "morphoclip train --config configs/train/base.yaml"
-eval = "morphoclip eval --checkpoint output/morphoclip_runs/default/checkpoints/best.pt"
-infer = "morphoclip infer --checkpoint output/morphoclip_runs/default/checkpoints/best.pt"
-split = "morphoclip split"
+benchmark = "morphoclip benchmark --config configs/benchmark.yml"
 tensorboard = "python -m tensorboard.main --logdir output/morphoclip_runs"
 
-benchmark = "morphoclip benchmark --config configs/benchmark.yml"
+inspect-dataset = "python scripts/data/inspect_dataset.py"
+inspect-perturbation = "python scripts/data/inspect_perturbation.py"
+inspect-text = "python scripts/text/inspect_text_embeddings.py"
+downsampling-inspection = "python scripts/features/downsampling_inspection.py"
+dino-heatmap-inspection = "python scripts/features/dino_heatmap_inspection.py"
 
 [tool.ruff]
 target-version = "py314"
@@ -140,7 +134,47 @@ line-length = 100
 src = ["src", "scripts"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = [
+  "E",    # pycodestyle
+  "F",    # pyflakes
+  "I",    # import sorting
+  "UP",   # pyupgrade
+  "B",    # bugbear
+  "SIM",  # collapsible ifs, contextlib.suppress, ternaries
+  "C4",   # comprehensions
+  "RET",  # assign-then-return
+  "PIE",  # incl. PIE810, multiple startswith/endswith in the column parsers
+  "ISC",  # implicit string concat, easy to do by accident in the literal tables
+  "FURB", # modern stdlib idioms
+  "ERA",  # commented-out code, which a big refactor invites
+  "RUF",  # incl. RUF100 (stale noqa) and RUF022 (unsorted __all__)
+  "TID",  # no relative imports; the layering ban lands here once the layout is final
+  "ARG",  # dead parameters
+  "PT",   # pytest style
+  "T20",  # library code must not print
+  "PLC",
+  "PLE",
+  "PLW",  # incl. PLW1510, subprocess.run without check
+  "LOG",
+  "G",    # logging call shape
+  "DTZ",  # naive datetime
+]
+ignore = [
+  # Optional extras (copairs, sklearn) are imported inside command bodies on
+  # purpose, so `morphoclip --help` works without them installed.
+  "PLC0415",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Report printers and dev scripts are presentation layers; converting their
+# ~110 print calls to logging is its own job.
+"src/benchmark/*" = ["T20"]
+"src/cellclip/*" = ["T20"]
+"scripts/*" = ["T20"]
+# Mixes 19 bare prints with rich output. Both go when this file is split.
+"src/morphoclip/cli/cellclip_cmds.py" = ["T20"]
+# Tests print for debugging and take fixtures purely for their side effects.
+"tests/*" = ["T20", "ARG"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["morphoclip", "cellclip", "benchmark"]
@@ -148,8 +182,37 @@ known-first-party = ["morphoclip", "cellclip", "benchmark"]
 [tool.mypy]
 python_version = "3.14"
 mypy_path = "src"
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true
+
+# Only these third-party packages ship no usable stubs. A blanket
+# ignore_missing_imports hides real typos in first-party import paths.
+[[tool.mypy.overrides]]
+module = ["copairs.*", "cv2.*", "seaborn.*", "skimage.*", "sklearn.*", "torchvision.*", "tqdm.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config -m 'not realdata'"
+markers = [
+  "realdata: needs the downloaded data/ tree; excluded from the default run",
+  "slow: takes more than a couple of seconds",
+]
+# Warnings are errors so a torch or pandas deprecation cannot land silently.
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = ["*/__main__.py"]
+
+[tool.coverage.report]
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "@overload"]
+# Measured, not aspirational: 43% over all of src/ (60% over src/morphoclip alone).
+# `benchmark` and `cellclip` are frozen and deliberately untested, which is most of
+# the gap. Treat this as a ratchet: raise it when coverage rises, never lower it.
+fail_under = 40

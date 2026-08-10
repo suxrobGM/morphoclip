@@ -2,16 +2,14 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from benchmark.export_utils import output_profile_path
+from benchmark.profiles import profile_path
 from cellclip.benchmark.export import (
     export_plate,
-    load_yaml_section,
     resolve_path,
 )
 from morphoclip.data.feature_extractor import (
@@ -51,14 +49,6 @@ class PlateResult:
     features_reused: bool = False
     features_deleted: int = 0
     tensors_deleted: int = 0
-
-
-def load_dataset_config(path: Path) -> dict[str, Any]:
-    """Load the dataset config section used by the extractor."""
-    data = load_yaml_section(path, "cpjump")
-    if not data:
-        raise ValueError(f"Dataset config missing 'cpjump' section: {path}")
-    return data
 
 
 def resolve_dataset_path(path_value: str | Path, project_root: Path) -> Path:
@@ -118,7 +108,7 @@ def resolve_plate_paths(
                 image_dir=image_dir,
                 feature_dir=features_root / barcode,
                 tensor_dir=tensors_root / barcode,
-                output_path=output_profile_path(output_profiles_root, batch, barcode),
+                output_path=profile_path(output_profiles_root, batch, barcode),
             )
         )
 
@@ -239,7 +229,6 @@ def run_plate_pipeline(
     cellclip_device: str,
     source_profiles_root: Path,
     batch: str,
-    site_batch_size: int,
     input_dim: int,
     force_export: bool,
     keep_features: bool,
@@ -302,7 +291,6 @@ def run_plate_pipeline(
         output_profiles_root=plate.output_path.parents[2],
         batch=batch,
         plate=plate.barcode,
-        site_batch_size=site_batch_size,
     )
 
     deleted_features = 0

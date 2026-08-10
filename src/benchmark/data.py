@@ -6,28 +6,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from benchmark.profiles import PROFILE_SUFFIX, feature_columns, metadata_frame
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-
-def get_metadata_columns(df: pd.DataFrame) -> list[str]:
-    """Return list of metadata columns (prefixed with 'Metadata_')."""
-    return [c for c in df.columns if c.startswith("Metadata_")]
-
-
-def get_feature_columns(df: pd.DataFrame) -> list[str]:
-    """Return list of feature columns (not prefixed with 'Metadata')."""
-    return [c for c in df.columns if not c.startswith("Metadata")]
-
-
-def get_metadata(df: pd.DataFrame) -> pd.DataFrame:
-    """Return dataframe containing only metadata columns."""
-    return df[get_metadata_columns(df)]
-
-
-def get_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Return dataframe containing only feature columns."""
-    return df[get_feature_columns(df)]
 
 
 def normalize_subset_label(subset: str) -> str:
@@ -125,7 +107,7 @@ class ProfileLoader:
         self,
         batch: str,
         plate: str,
-        file_pattern: str = "normalized_feature_select_negcon_batch.csv.gz",
+        file_pattern: str = PROFILE_SUFFIX,
     ) -> pd.DataFrame:
         """Load profiles for a single plate.
 
@@ -144,33 +126,6 @@ class ProfileLoader:
             raise FileNotFoundError(f"No files matching pattern in {plate_dir}")
 
         dfs = [pd.read_csv(f, low_memory=False) for f in files]
-        return pd.concat(dfs, ignore_index=True)
-
-    def load_plates(
-        self,
-        batch: str,
-        plates: Sequence[str],
-        file_pattern: str = "normalized_feature_select_negcon_batch.csv.gz",
-        modality: str | None = None,
-    ) -> pd.DataFrame:
-        """Load and concatenate profiles from multiple plates.
-
-        Args:
-            batch: Batch identifier.
-            plates: List of plate barcodes.
-            file_pattern: Glob pattern for profile files.
-            modality: Optional modality label to assign.
-
-        Returns:
-            Concatenated DataFrame with all plate profiles.
-        """
-        dfs = []
-        for plate in plates:
-            df = self.load_plate(batch, plate, file_pattern)
-            if modality:
-                df["Metadata_modality"] = modality
-            dfs.append(df)
-
         return pd.concat(dfs, ignore_index=True)
 
 
@@ -214,9 +169,9 @@ def compute_consensus(
     Returns:
         DataFrame with one consensus profile per group.
     """
-    metadata_df = get_metadata(df).drop_duplicates(subset=[group_col])
+    metadata_df = metadata_frame(df).drop_duplicates(subset=[group_col])
     assert metadata_df is not None, "metadata_df should not be None"
-    feature_cols = [group_col] + get_feature_columns(df)
+    feature_cols = [group_col, *feature_columns(df)]
 
     if agg_func == "median":
         consensus_df = df[feature_cols].groupby(group_col).median().reset_index()
@@ -232,19 +187,4 @@ def filter_replicable(
     id_col: str = "Metadata_broad_sample",
 ) -> pd.DataFrame:
     """Filter to keep only replicable perturbations."""
-    return df.query(f"{id_col}==@replicable_ids").reset_index(drop=True)
-
-
-def get_timepoint_label(modality: str, hours: int) -> str:
-    """Convert timepoint in hours to short/long label.
-
-    Args:
-        modality: Perturbation type ('compound', 'orf', 'crispr').
-        hours: Timepoint in hours.
-
-    Returns:
-        'short' or 'long' based on modality-specific thresholds.
-    """
-    thresholds = {"compound": 24, "orf": 48, "crispr": 96}
-    threshold = thresholds.get(modality, 96)
-    return "short" if hours <= threshold else "long"
+    return df[df[id_col].isin(replicable_ids)].reset_index(drop=True)

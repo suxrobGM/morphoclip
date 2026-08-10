@@ -2,31 +2,33 @@
 
 This guide walks you through the full MorphoCLIP pipeline: downloading data, extracting features, and training the model.
 
-Tasks are defined under `[tool.poe.tasks]` in `pyproject.toml` and run through [poe](https://poethepoet.natn.io/)
-via `uv run poe <task>`. Each task is a thin wrapper around a `morphoclip` CLI command, so you can always run
-the underlying command directly if you prefer.
+Every pipeline step is a `morphoclip` subcommand; run `uv run morphoclip --help` for the full list.
+The dev loop (tests, lint, types) runs through [poe](https://poethepoet.natn.io/) instead:
+`uv run poe check`.
 
 ## Command Reference
 
-| Task                            | Command                        | Underlying command                                                  |
-| ------------------------------- | ------------------------------ | ------------------------------------------------------------------- |
-| Run tests                       | `uv run poe test`              | `pytest tests/ -v`                                                  |
-| Fetch dataset from S3           | `uv run poe fetch-dataset`     | `uv run morphoclip data fetch`                                      |
-| Extract DINOv3 features         | `uv run poe extract-features`  | `uv run morphoclip features extract`                                |
-| Download pre-extracted features | `uv run poe download-features` | `uv run morphoclip features download`                               |
-| Pre-compute text embeddings     | `uv run poe precompute-text`   | `uv run morphoclip text precompute`                                 |
-| Train model                     | `uv run poe train`             | `uv run morphoclip train --config configs/train/base.yaml`          |
-| Evaluate model                  | `uv run poe eval`              | `uv run morphoclip eval --checkpoint <path>`                        |
-| Run inference                   | `uv run poe infer`             | `uv run morphoclip infer --checkpoint <path>`                       |
+| Step                            | Command                                                              |
+| ------------------------------- | -------------------------------------------------------------------- |
+| Fetch dataset from S3           | `uv run morphoclip data fetch`                                        |
+| Extract DINOv3 features         | `uv run morphoclip features extract`                                  |
+| Download pre-extracted features | `uv run morphoclip features download`                                 |
+| Pre-compute text embeddings     | `uv run morphoclip text precompute`                                   |
+| Train model                     | `uv run morphoclip train --config configs/train/base.yaml`            |
+| Evaluate model                  | `uv run morphoclip eval --checkpoint <path>`                          |
+| Run inference                   | `uv run morphoclip infer --checkpoint <path>`                         |
+| Run tests, lint and type checks | `uv run poe check`                                                    |
+
+`uv run poe train` is shorthand for the training row, which is the one command with a default config.
 
 ## Training Pipeline
 
 ```bash
 # 1. Download pre-extracted DINOv3 features from Hugging Face
-uv run poe download-features
+uv run morphoclip features download
 
 # 2. Pre-compute text embeddings (once)
-uv run poe precompute-text
+uv run morphoclip text precompute
 
 # 3. Train MorphoCLIP (default config configs/train/base.yaml)
 uv run poe train
@@ -66,7 +68,7 @@ Replace `poe train` with a direct `torchrun` invocation and add `--distributed`:
 uv run torchrun --nproc_per_node=4 -m morphoclip.cli train --config configs/train/base.yaml --distributed
 
 # CellCLIP on 4 GPUs
-uv run torchrun --nproc_per_node=4 -m morphoclip.cli cellclip train --config configs/cellclip/cellclip_1024dim.yaml --distributed
+uv run torchrun --nproc_per_node=4 -m morphoclip.cli cellclip train --config configs/cellclip/official_baseline.yaml --distributed
 ```
 
 The batch size in the config is **per-GPU**, so effective batch = `batch_size x num_gpus`.

@@ -13,16 +13,18 @@ import logging
 from pathlib import Path
 
 import torch
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
 from transformers import AutoImageProcessor, AutoModel
 
 from morphoclip.data.image_loader import (
     FLUORESCENCE_CHANNELS,
+    IMAGENET_MEAN,
+    IMAGENET_STD,
     ImageKey,
     discover_sites,
     load_site_as_tensor,
     prepare_channels_for_dino,
 )
+from morphoclip.utils.console import make_progress
 
 logger = logging.getLogger(__name__)
 
@@ -127,11 +129,11 @@ def _preprocess_batch(
     all_images = torch.cat(site_tensors, dim=0)  # (N*5, 3, H, W)
 
     # Apply normalization manually — processor expects PIL images but we have tensors
-    mean = torch.tensor(processor.image_mean, dtype=all_images.dtype).view(1, 3, 1, 1)
-    std = torch.tensor(processor.image_std, dtype=all_images.dtype).view(1, 3, 1, 1)
-    all_images = (all_images - mean) / std
-
-    return all_images
+    image_mean = getattr(processor, "image_mean", IMAGENET_MEAN)
+    image_std = getattr(processor, "image_std", IMAGENET_STD)
+    mean = torch.tensor(image_mean, dtype=all_images.dtype).view(1, 3, 1, 1)
+    std = torch.tensor(image_std, dtype=all_images.dtype).view(1, 3, 1, 1)
+    return (all_images - mean) / std
 
 
 def feature_filename(key: ImageKey) -> str:
@@ -194,11 +196,7 @@ def extract_plate_features_with_model(
     saved: dict[ImageKey, Path] = {}
     num_channels = len(FLUORESCENCE_CHANNELS)
 
-    with Progress(
-        SpinnerColumn(),
-        *Progress.get_default_columns(),
-        TimeElapsedColumn(),
-    ) as progress:
+    with make_progress() as progress:
         task = progress.add_task("Extracting features", total=len(site_keys))
 
         for batch_start in range(0, len(site_keys), batch_size):

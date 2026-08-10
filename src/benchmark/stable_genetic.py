@@ -13,7 +13,6 @@ from benchmark.data import (
     compute_consensus,
     filter_profiles_to_split_subset,
     filter_replicable,
-    get_timepoint_label,
     remove_empty_wells,
     remove_negcon_wells,
 )
@@ -33,6 +32,7 @@ from benchmark.stable_helpers import (
     run_with_unpaired_guard,
 )
 from benchmark.stable_results import StableResults, _already_computed
+from benchmark.timelines import get_timepoint_label
 
 
 def evaluate_genetic(
@@ -59,9 +59,7 @@ def evaluate_genetic(
             "Perturbation==@modality_2_perturbation"
         )
         for modality_2_timepoint in modality_2_experiments_df.Time.unique():
-            modality_2_timepoint_df = modality_2_experiments_df.query(
-                "Time==@modality_2_timepoint"
-            )
+            modality_2_timepoint_df = modality_2_experiments_df.query("Time==@modality_2_timepoint")
 
             modality_2_df = load_profiles_for_plates(
                 loader=loader,
@@ -78,8 +76,7 @@ def evaluate_genetic(
 
             if modality_2_df.empty:
                 print(
-                    f"Skipping {modality_2_perturbation}_{cell}_"
-                    f"{modality_2_timepoint}h - no data"
+                    f"Skipping {modality_2_perturbation}_{cell}_{modality_2_timepoint}h - no data"
                 )
                 continue
 
@@ -97,7 +94,6 @@ def evaluate_genetic(
                     add_negcon_indicator(modality_2_df),
                     null_size=null_size,
                     batch_size=batch_size,
-                    copairs_mode="stable",
                 )
                 if result.empty:
                     print(f"Skipping {description_2} replicability - no valid pairs")
@@ -107,7 +103,6 @@ def evaluate_genetic(
                     "replicability_fr",
                     result=result,
                     group_cols=[REPLICATE_FEATURE],
-                    null_size=null_size,
                     metadata={
                         "Description": description_2,
                         "Modality": modality_2_perturbation,
@@ -141,38 +136,37 @@ def evaluate_genetic(
                 ~modality_2_consensus_df["Metadata_gene"].isin(genes_without_sister)
             ].reset_index(drop=True)
 
-            if modality_2_perturbation == "crispr":
-                if not _already_computed(results.matching_map, description_2):
-                    print(f"[{count}] Computing {description_2} matching")
+            if modality_2_perturbation == "crispr" and not _already_computed(
+                results.matching_map, description_2
+            ):
+                print(f"[{count}] Computing {description_2} matching")
 
-                    result = run_with_unpaired_guard(
-                        evaluate_matching,
-                        modality_2_consensus_for_matching_df,
-                        target_col="Metadata_matching_target",
-                        use_abs=False,
-                        multilabel=False,
-                        null_size=null_size,
-                        batch_size=batch_size,
-                        copairs_mode="stable",
-                    )
-                    if result.empty:
-                        print(f"Skipping {description_2} matching - no valid pairs")
-                        continue
+                result = run_with_unpaired_guard(
+                    evaluate_matching,
+                    modality_2_consensus_for_matching_df,
+                    target_col="Metadata_matching_target",
+                    use_abs=False,
+                    multilabel=False,
+                    null_size=null_size,
+                    batch_size=batch_size,
+                )
+                if result.empty:
+                    print(f"Skipping {description_2} matching - no valid pairs")
+                    continue
 
-                    results.append(
-                        "matching_map",
-                        "matching_fr",
-                        result=result,
-                        group_cols=["Metadata_matching_target"],
-                        null_size=null_size,
-                        metadata={
-                            "Description": description_2,
-                            "Modality": modality_2_perturbation,
-                            "Cell": cell,
-                            "time": _time_2,
-                            "timepoint": modality_2_timepoint,
-                        },
-                    )
+                results.append(
+                    "matching_map",
+                    "matching_fr",
+                    result=result,
+                    group_cols=["Metadata_matching_target"],
+                    metadata={
+                        "Description": description_2,
+                        "Modality": modality_2_perturbation,
+                        "Cell": cell,
+                        "time": _time_2,
+                        "timepoint": modality_2_timepoint,
+                    },
+                )
 
             _evaluate_cross_modality(
                 results,
@@ -242,8 +236,7 @@ def _evaluate_cross_modality(
         return
 
     description_cross = (
-        f"{modality_1_perturbation}_{cell}_{_time}"
-        f"-{modality_2_perturbation}_{cell}_{time_2}"
+        f"{modality_1_perturbation}_{cell}_{_time}-{modality_2_perturbation}_{cell}_{time_2}"
     )
     print(f"[{count}] Computing {description_cross} matching")
 
@@ -257,7 +250,6 @@ def _evaluate_cross_modality(
         target_col="Metadata_matching_target",
         null_size=null_size,
         batch_size=batch_size,
-        copairs_mode="stable",
     )
     if result.empty:
         print(f"Skipping {description_cross} matching - no valid pairs")
@@ -268,7 +260,6 @@ def _evaluate_cross_modality(
         "gene_compound_matching_fr",
         result=result,
         group_cols=["Metadata_matching_target"],
-        null_size=null_size,
         metadata={
             "Description": description_cross,
             "Modality1": modality_1_perturbation,

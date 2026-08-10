@@ -19,10 +19,13 @@ checkpoints/
 *.ckpt
 
 # Data (keep structure via .gitkeep)
+# `data/**/` excludes directories outright, so git never descends into them and a bare
+# `!data/<dir>/` negation cannot re-include anything. Un-ignoring a subtree needs both the
+# directory and its contents, as `data/reference/` does below. The platemap tree the tests
+# need is committed under tests/fixtures/ instead, so it lives with the tests that read it.
 data/**/
 data/.cache/
 !data/**/.gitkeep
-!data/metadata/
 !data/features/.gitkeep
 !data/tensors/.gitkeep
 !data/visualizations/**
@@ -54,9 +57,10 @@ build/
 # Logs / coverage
 *.log
 .coverage
+.coverage.*
+coverage.xml
+coverage.json
 htmlcov/
-
-.DS_Store
 
 .claude/settings.local.json
 output/

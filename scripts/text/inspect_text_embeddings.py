@@ -6,7 +6,6 @@ Usage:
     python scripts/text/inspect_text_embeddings.py --device mps
 """
 
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -16,10 +15,8 @@ import torch.nn.functional as F
 import typer
 from rich.console import Console
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-
-from morphoclip.models.text_encoder import MorphoCLIPTextEncoder  # noqa: E402
-from morphoclip.utils.device import resolve_device  # noqa: E402
+from morphoclip.models.text_encoder import MorphoCLIPTextEncoder
+from morphoclip.utils.device import resolve_device
 
 CACHE_PATH = "data/text/cached_text_features.pt"
 METADATA_DIR = Path("data/metadata/external_metadata")

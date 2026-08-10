@@ -98,8 +98,6 @@ class PerturbationBatchSampler(Sampler[list[int]]):
     def __len__(self) -> int:
         return len(self._batches)
 
-    # --- internals ---
-
     def _build_chunks(self, rng: random.Random) -> list[list[int]]:
         """Shuffle within each perturbation group and split into chunks."""
         chunks: list[list[int]] = []

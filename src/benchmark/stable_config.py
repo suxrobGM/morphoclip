@@ -8,15 +8,14 @@ optional ``benchmark`` extra.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 import yaml
 
 from benchmark.data import load_split_manifest, normalize_subset_label
+from benchmark.timelines import normalize_timelines
 
 CONFIG_PATH = Path("configs/benchmark.yml")
-TIMELINE_CHOICES = ("short", "long")
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -36,25 +35,6 @@ def load_benchmark_config(path: Path) -> dict:
     if not isinstance(config, dict):
         raise ValueError(f"Benchmark config section must be a mapping: {path}")
     return config
-
-
-def normalize_timelines(value: Any) -> list[str]:
-    """Normalize timeline selection to a validated list of labels."""
-    if value is None:
-        return list(TIMELINE_CHOICES)
-
-    values = [value] if isinstance(value, str) else list(value)
-
-    normalized: list[str] = []
-    for item in values:
-        label = str(item).strip().lower()
-        if label not in TIMELINE_CHOICES:
-            choices = ", ".join(TIMELINE_CHOICES)
-            raise ValueError(f"Invalid timeline {item!r}; expected one of: {choices}")
-        if label not in normalized:
-            normalized.append(label)
-
-    return normalized or list(TIMELINE_CHOICES)
 
 
 def resolve_path(project_root: Path, value: str | None) -> Path | None:

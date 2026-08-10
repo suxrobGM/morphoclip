@@ -12,19 +12,12 @@ from typing import Annotated
 
 import typer
 import yaml
-from rich.console import Console
 from rich.panel import Panel
 
-from cellclip.benchmark import (
-    export_plate,
-    load_cellclip_visual_encoder,
-    load_yaml_section,
-    resolve_export_settings,
-    select_target_plates,
-)
+from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
+from cellclip.benchmark.export import export_plate, load_yaml_section, select_target_plates
 from cellclip.benchmark.pipeline import (
     PlateResult,
-    load_dataset_config,
     render_result_table,
     render_startup,
     resolve_dataset_path,
@@ -32,33 +25,33 @@ from cellclip.benchmark.pipeline import (
     run_plate_pipeline,
     summarize_results,
 )
-from cellclip.training import (
-    load_training_config,
-    render_train_config,
-    render_train_summary,
-    train_cellclip,
-)
-from morphoclip.data.feature_extractor import DEFAULT_MODEL, infer_feature_width, load_dinov3
+from cellclip.benchmark.settings import resolve_export_settings
+from cellclip.training.config import load_training_config
+from cellclip.training.engine import train_cellclip
+from cellclip.training.reporting import render_train_config, render_train_summary
+from morphoclip.data.config import load_dataset_config
+from morphoclip.data.feature_extractor import infer_feature_width, load_dinov3
+from morphoclip.utils.console import console
+
+# Bare pass-through options, repeated across the export and pipeline commands.
+# Plain assignment, not `type X = ...`: Typer cannot resolve a PEP 695 alias.
+OptStr = Annotated[str | None, typer.Option()]
+OptInt = Annotated[int | None, typer.Option()]
+OptFlag = Annotated[bool, typer.Option()]
 
 app = typer.Typer(no_args_is_help=True, help="CellCLIP baseline: train and export profiles.")
-console = Console()
 
-DEFAULT_TRAIN_CONFIG = Path("configs/cellclip/cellclip_jumpcp.yaml")
+DEFAULT_TRAIN_CONFIG = Path("configs/cellclip/official_baseline.yaml")
 BENCHMARK_CONFIG_PATH = Path("configs/benchmark.yml")
 DATASET_CONFIG_PATH = Path("configs/dataset.yml")
 CELLCLIP_DEFAULT_MODEL = "facebook/dinov2-giant"
-
-
-# --------------------------------------------------------------------------- #
-# train
-# --------------------------------------------------------------------------- #
 
 
 def _resolve_run_dir(config, *, run_name: str | None, output_dir: Path | None) -> Path:
     base_output = output_dir or (Path.cwd() / config.runtime.output_root)
     resolved_name = run_name or config.runtime.run_name
     if resolved_name is None:
-        resolved_name = datetime.now().strftime("cellclip_%Y%m%d_%H%M%S")
+        resolved_name = datetime.now().astimezone().strftime("cellclip_%Y%m%d_%H%M%S")
     return base_output / resolved_name
 
 
@@ -97,34 +90,28 @@ def train(
     render_train_summary(result)
 
 
-# --------------------------------------------------------------------------- #
-# export
-# --------------------------------------------------------------------------- #
-
-
 @app.command()
 def export(
     config: Annotated[Path, typer.Option(help="Benchmark config YAML.")] = BENCHMARK_CONFIG_PATH,
-    experiment_metadata_path: Annotated[str | None, typer.Option()] = None,
-    source_profiles_root: Annotated[str | None, typer.Option()] = None,
-    feature_root: Annotated[str | None, typer.Option()] = None,
-    output_profiles_root: Annotated[str | None, typer.Option()] = None,
-    batch: Annotated[str | None, typer.Option()] = None,
+    experiment_metadata_path: OptStr = None,
+    source_profiles_root: OptStr = None,
+    feature_root: OptStr = None,
+    output_profiles_root: OptStr = None,
+    batch: OptStr = None,
     plates: Annotated[
         list[str] | None, typer.Option(help="Restrict to specific plates (repeatable).")
     ] = None,
-    cell_filter: Annotated[str | None, typer.Option()] = None,
+    cell_filter: OptStr = None,
     timelines: Annotated[
         list[str] | None, typer.Option(help="Timeline labels to export: short and/or long.")
     ] = None,
-    ckpt_path: Annotated[str | None, typer.Option()] = None,
-    checkpoint_repo_id: Annotated[str | None, typer.Option()] = None,
-    checkpoint_filename: Annotated[str | None, typer.Option()] = None,
-    download_dir: Annotated[str | None, typer.Option()] = None,
-    device: Annotated[str | None, typer.Option()] = None,
-    site_batch_size: Annotated[int | None, typer.Option()] = None,
+    ckpt_path: OptStr = None,
+    checkpoint_repo_id: OptStr = None,
+    checkpoint_filename: OptStr = None,
+    download_dir: OptStr = None,
+    device: OptStr = None,
     model_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
-    input_dim: Annotated[int | None, typer.Option()] = None,
+    input_dim: OptInt = None,
     loss_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
 ) -> None:
     """Export benchmark-ready CPJUMP1 profiles using a pretrained CellCLIP model."""
@@ -152,7 +139,6 @@ def export(
         checkpoint_filename=checkpoint_filename,
         download_dir=download_dir,
         device=device,
-        site_batch_size=site_batch_size,
         input_dim=input_dim,
         model_type=model_type,
         loss_type=loss_type,
@@ -200,7 +186,6 @@ def export(
             output_profiles_root=settings.output_profiles,
             batch=resolved_batch,
             plate=plate,
-            site_batch_size=settings.site_batch_size,
         )
         exported_paths.append(output_path)
         print(f"Saved: {output_path}")
@@ -210,46 +195,40 @@ def export(
     print("=" * 60)
 
 
-# --------------------------------------------------------------------------- #
-# pipeline
-# --------------------------------------------------------------------------- #
-
-
 @app.command()
 def pipeline(
     dataset_config: Annotated[Path, typer.Option()] = DATASET_CONFIG_PATH,
     benchmark_config: Annotated[Path, typer.Option()] = BENCHMARK_CONFIG_PATH,
-    experiment_metadata_path: Annotated[str | None, typer.Option()] = None,
-    source_profiles_root: Annotated[str | None, typer.Option()] = None,
-    compressed_root: Annotated[str | None, typer.Option()] = None,
-    feature_root: Annotated[str | None, typer.Option()] = None,
-    output_profiles_root: Annotated[str | None, typer.Option()] = None,
-    tensors_root: Annotated[str | None, typer.Option()] = None,
-    batch: Annotated[str | None, typer.Option()] = None,
+    experiment_metadata_path: OptStr = None,
+    source_profiles_root: OptStr = None,
+    compressed_root: OptStr = None,
+    feature_root: OptStr = None,
+    output_profiles_root: OptStr = None,
+    tensors_root: OptStr = None,
+    batch: OptStr = None,
     plates: Annotated[
         list[str] | None, typer.Option(help="Restrict to specific plates (repeatable).")
     ] = None,
-    cell_filter: Annotated[str | None, typer.Option()] = None,
+    cell_filter: OptStr = None,
     timelines: Annotated[
         list[str] | None, typer.Option(help="Timeline labels to export: short and/or long.")
     ] = None,
-    model_name: Annotated[str | None, typer.Option()] = None,
-    device: Annotated[str | None, typer.Option()] = None,
-    batch_size: Annotated[int | None, typer.Option()] = None,
-    no_tensors: Annotated[bool, typer.Option()] = False,
-    ckpt_path: Annotated[str | None, typer.Option()] = None,
-    checkpoint_repo_id: Annotated[str | None, typer.Option()] = None,
-    checkpoint_filename: Annotated[str | None, typer.Option()] = None,
-    download_dir: Annotated[str | None, typer.Option()] = None,
-    site_batch_size: Annotated[int | None, typer.Option()] = None,
+    model_name: OptStr = None,
+    device: OptStr = None,
+    batch_size: OptInt = None,
+    no_tensors: OptFlag = False,
+    ckpt_path: OptStr = None,
+    checkpoint_repo_id: OptStr = None,
+    checkpoint_filename: OptStr = None,
+    download_dir: OptStr = None,
     model_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
-    input_dim: Annotated[int | None, typer.Option()] = None,
+    input_dim: OptInt = None,
     loss_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
-    force_export: Annotated[bool, typer.Option()] = False,
-    keep_features: Annotated[bool, typer.Option()] = False,
-    keep_tensors: Annotated[bool, typer.Option()] = False,
-    prune_empty_dirs: Annotated[bool, typer.Option()] = False,
-    stop_on_error: Annotated[bool, typer.Option()] = False,
+    force_export: OptFlag = False,
+    keep_features: OptFlag = False,
+    keep_tensors: OptFlag = False,
+    prune_empty_dirs: OptFlag = False,
+    stop_on_error: OptFlag = False,
 ) -> None:
     """Run extraction, CellCLIP export, and cache cleanup one plate at a time."""
     project_root = Path.cwd()
@@ -258,7 +237,7 @@ def pipeline(
     export_config = load_yaml_section(benchmark_config, "cellclip_export")
 
     resolved_batch = (
-        batch or export_config.get("batch") or bm_config.get("batch") or ds_config.get("batch")
+        batch or export_config.get("batch") or bm_config.get("batch") or ds_config.batch
     )
     if not resolved_batch:
         raise ValueError("Batch must be provided via --batch or the benchmark/dataset config.")
@@ -268,7 +247,7 @@ def pipeline(
         benchmark_config=bm_config,
         export_config=export_config,
         context="pipeline",
-        default_device=ds_config.get("extraction", {}).get("device", "cuda"),
+        default_device=ds_config.extraction.device,
         experiment_metadata_path=experiment_metadata_path,
         source_profiles_root=source_profiles_root,
         feature_root=feature_root,
@@ -280,33 +259,22 @@ def pipeline(
         checkpoint_filename=checkpoint_filename,
         download_dir=download_dir,
         device=device,
-        site_batch_size=site_batch_size,
         input_dim=input_dim,
         model_type=model_type,
         loss_type=loss_type,
     )
 
     compressed = resolve_dataset_path(
-        compressed_root
-        or ds_config.get("local", {}).get("compressed_images")
-        or ds_config.get("compression", {})
-        .get("default", {})
-        .get("output_root", "data/raw_compressed"),
-        project_root,
+        compressed_root or ds_config.local.compressed_images, project_root
     )
-    tensors = resolve_dataset_path(
-        tensors_root or ds_config.get("local", {}).get("tensors", "data/tensors"),
-        project_root,
-    )
+    tensors = resolve_dataset_path(tensors_root or ds_config.local.tensors, project_root)
 
     resolved_model_name = model_name or export_config.get("model_name")
-    extraction_batch_size = int(batch_size or ds_config.get("extraction", {}).get("batch_size", 32))
+    extraction_batch_size = int(batch_size or ds_config.extraction.batch_size)
     save_tensors = not no_tensors
     if resolved_model_name is None:
         resolved_model_name = (
-            CELLCLIP_DEFAULT_MODEL
-            if settings.input_dim == 1536
-            else ds_config.get("extraction", {}).get("model", DEFAULT_MODEL)
+            CELLCLIP_DEFAULT_MODEL if settings.input_dim == 1536 else ds_config.extraction.model
         )
 
     if plates:
@@ -395,7 +363,6 @@ def pipeline(
                 cellclip_device=settings.device,
                 source_profiles_root=settings.source_profiles,
                 batch=resolved_batch,
-                site_batch_size=settings.site_batch_size,
                 input_dim=settings.input_dim,
                 force_export=force_export,
                 keep_features=keep_features,
