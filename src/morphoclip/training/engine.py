@@ -1,7 +1,6 @@
 """Optimizer, scheduler, checkpointing, and training step utilities."""
 
 import math
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
@@ -121,7 +120,7 @@ def save_checkpoint(
             "epoch": epoch,
             "steps": global_step,
             "best_eval_loss": best_eval_loss,
-            "config": asdict(config),
+            "config": config.to_dict(),
         },
         path,
     )

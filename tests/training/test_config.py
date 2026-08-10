@@ -78,7 +78,7 @@ class TestMorphoCLIPTrainingConfig:
         config_path = tmp_path / "bad_model.yaml"
         config_path.write_text(yaml.dump({"model": {"channel_aggregation": "ccf"}}))
 
-        with pytest.raises(ValueError, match="Unknown config key"):
+        with pytest.raises(ValueError, match=r"model\.channel_aggregation"):
             load_training_config(config_path)
 
     def test_to_dict_roundtrip(self) -> None:
@@ -127,7 +127,7 @@ class TestMorphoCLIPTrainingConfig:
         config_path = tmp_path / "bad_config.yaml"
         config_path.write_text(yaml.dump(config_data))
 
-        with pytest.raises(ValueError, match="Unknown config key"):
+        with pytest.raises(ValueError, match=r"dataset\.not_a_real_field"):
             load_training_config(config_path)
 
     def test_dotted_overrides_apply_after_extends(self, tmp_path: Path) -> None:
@@ -163,7 +163,8 @@ class TestTrainingConfigFromDict:
     """Tests for reconstructing configs from a plain dict (e.g. checkpoints)."""
 
     def test_rejects_unknown_keys(self) -> None:
-        with pytest.raises(ValueError, match="Unknown config key"):
+        """`betas` is a CellCLIP key. Loading it here must name the offending path."""
+        with pytest.raises(ValueError, match=r"optimization\.betas"):
             training_config_from_dict({"optimization": {"betas": [0.9, 0.999]}})
 
     def test_populates_every_section(self) -> None:

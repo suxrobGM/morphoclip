@@ -1,13 +1,11 @@
-"""Config loading for MorphoCLIP training."""
+"""Config schema for MorphoCLIP training."""
 
-import logging
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
+from pydantic import Field
 
-logger = logging.getLogger(__name__)
+from morphoclip.config import StrictModel, load_config
 
 # Properties of the pre-extracted feature cache, not tunable choices.
 EMBED_DIM = 1024  # DINOv3 ViT-L/16 CLS token dimension
@@ -22,8 +20,7 @@ GRAD_CLIP_NORM = 1.0
 LOGIT_SCALE_MAX = 4.6052  # ln(100), CLIP default ceiling for learnable temperature
 
 
-@dataclass(slots=True)
-class MorphoCLIPDatasetConfig:
+class MorphoCLIPDatasetConfig(StrictModel):
     """Dataset, split, and data-loading settings."""
 
     dataset_config_path: str = "configs/dataset.yml"
@@ -43,8 +40,7 @@ class MorphoCLIPDatasetConfig:
     replicates_per_group: int = 2  # Target replicates per perturbation chunk
 
 
-@dataclass(slots=True)
-class MorphoCLIPModelConfig:
+class MorphoCLIPModelConfig(StrictModel):
     """Image encoder and projection head architecture."""
 
     output_dim: int = 512
@@ -56,8 +52,7 @@ class MorphoCLIPModelConfig:
     proj_dropout: float = 0.1
 
 
-@dataclass(slots=True)
-class MorphoCLIPOptimizationConfig:
+class MorphoCLIPOptimizationConfig(StrictModel):
     """Optimizer, scheduler, and loss settings."""
 
     loss_type: str = "infonce"
@@ -76,8 +71,7 @@ class MorphoCLIPOptimizationConfig:
     replicate_temperature: float | None = None
 
 
-@dataclass(slots=True)
-class MorphoCLIPRuntimeConfig:
+class MorphoCLIPRuntimeConfig(StrictModel):
     """Runtime, logging, and checkpointing settings."""
 
     seed: int = 42
@@ -91,178 +85,31 @@ class MorphoCLIPRuntimeConfig:
     early_stop_patience: int | None = None
 
 
-@dataclass(slots=True)
-class MorphoCLIPDistributedConfig:
+class MorphoCLIPDistributedConfig(StrictModel):
     """Distributed training settings (multi-GPU via torchrun)."""
 
     enabled: bool = False
     gradient_accumulation_steps: int = 1
 
 
-@dataclass(slots=True)
-class MorphoCLIPTrainingConfig:
+class MorphoCLIPTrainingConfig(StrictModel):
     """Top-level training config."""
 
-    dataset: MorphoCLIPDatasetConfig = field(
-        default_factory=MorphoCLIPDatasetConfig,
-    )
-    model: MorphoCLIPModelConfig = field(
-        default_factory=MorphoCLIPModelConfig,
-    )
-    optimization: MorphoCLIPOptimizationConfig = field(
-        default_factory=MorphoCLIPOptimizationConfig,
-    )
-    runtime: MorphoCLIPRuntimeConfig = field(
-        default_factory=MorphoCLIPRuntimeConfig,
-    )
-    distributed: MorphoCLIPDistributedConfig = field(
-        default_factory=MorphoCLIPDistributedConfig,
-    )
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize config to a YAML-friendly dict."""
-        return asdict(self)
-
-
-def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    """Recursively merge config dictionaries."""
-    merged = dict(base)
-    for key, value in override.items():
-        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
-            merged[key] = _merge_dicts(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
-
-
-def _load_raw_config(path: Path, seen: set[Path] | None = None) -> dict[str, Any]:
-    """Load a YAML config with optional recursive ``extends`` support."""
-    resolved = path.resolve()
-    if seen is None:
-        seen = set()
-    if resolved in seen:
-        raise ValueError(f"Config extends cycle detected at {path}")
-    seen.add(resolved)
-
-    with open(resolved, encoding="utf-8") as f:
-        raw = yaml.safe_load(f) or {}
-    if not isinstance(raw, dict):
-        raise ValueError(f"Training config must be a mapping: {path}")
-
-    extends = raw.pop("extends", None)
-    if extends is None:
-        return raw
-
-    if isinstance(extends, (str, Path)):
-        parent_paths = [Path(extends)]
-    elif isinstance(extends, list):
-        parent_paths = [Path(item) for item in extends]
-    else:
-        raise ValueError("Config 'extends' must be a path or list of paths")
-
-    merged: dict[str, Any] = {}
-    for parent in parent_paths:
-        parent_path = parent if parent.is_absolute() else resolved.parent / parent
-        merged = _merge_dicts(merged, _load_raw_config(parent_path, seen.copy()))
-
-    return _merge_dicts(merged, raw)
-
-
-def _merge_dataclass(instance: Any, raw: dict[str, Any]) -> Any:
-    """Merge raw dict values into a dataclass instance.
-
-    Args:
-        instance: Dataclass instance to update in place.
-        raw: Mapping of field names to override values.
-
-    Returns:
-        The mutated *instance*.
-
-    Raises:
-        ValueError: If *raw* contains a key the dataclass does not define.
-    """
-    for key, value in raw.items():
-        if not hasattr(instance, key):
-            raise ValueError(f"Unknown config key: {type(instance).__name__}.{key}")
-        setattr(instance, key, value)
-    return instance
+    dataset: MorphoCLIPDatasetConfig = Field(default_factory=MorphoCLIPDatasetConfig)
+    model: MorphoCLIPModelConfig = Field(default_factory=MorphoCLIPModelConfig)
+    optimization: MorphoCLIPOptimizationConfig = Field(default_factory=MorphoCLIPOptimizationConfig)
+    runtime: MorphoCLIPRuntimeConfig = Field(default_factory=MorphoCLIPRuntimeConfig)
+    distributed: MorphoCLIPDistributedConfig = Field(default_factory=MorphoCLIPDistributedConfig)
 
 
 def training_config_from_dict(config_dict: dict[str, Any]) -> MorphoCLIPTrainingConfig:
-    """Reconstruct a training config from a plain nested dict.
-
-    Used for YAML-loaded configs and for configs embedded in a checkpoint.
-
-    Args:
-        config_dict: Nested dict with ``dataset``/``model``/``optimization``/
-            ``runtime``/``distributed`` sections.
-
-    Returns:
-        Populated training config.
-
-    Raises:
-        ValueError: If any section contains a key the schema does not define.
-    """
-    config = MorphoCLIPTrainingConfig()
-    _merge_dataclass(config.dataset, config_dict.get("dataset", {}))
-    _merge_dataclass(config.model, config_dict.get("model", {}))
-    _merge_dataclass(config.optimization, config_dict.get("optimization", {}))
-    _merge_dataclass(config.runtime, config_dict.get("runtime", {}))
-    _merge_dataclass(config.distributed, config_dict.get("distributed", {}))
-    return config
-
-
-def _parse_dotted_override(item: str) -> dict[str, Any]:
-    """Parse a single ``section.key=value`` CLI override into a nested dict.
-
-    Values go through :func:`yaml.safe_load` so ints, floats, bools, and null
-    round-trip without extra quoting.
-
-    Args:
-        item: A ``section.key=value`` string.
-
-    Returns:
-        A single-section nested dict, e.g. ``{"runtime": {"max_train_steps": 3}}``.
-
-    Raises:
-        ValueError: If *item* has no ``=``, or the key has no ``section.field`` dot.
-    """
-    if "=" not in item:
-        raise ValueError(f"Malformed --set override {item!r}: expected 'section.key=value'")
-    dotted_key, raw_value = item.split("=", 1)
-    parts = dotted_key.split(".")
-    if len(parts) < 2 or not all(parts):
-        raise ValueError(
-            f"Malformed --set override {item!r}: key must be 'section.key' "
-            "(e.g. 'runtime.max_train_steps=3')"
-        )
-
-    value = yaml.safe_load(raw_value)
-    nested: dict[str, Any] = value
-    for part in reversed(parts[1:]):
-        nested = {part: nested}
-    return {parts[0]: nested}
+    """Rebuild a training config from a plain nested dict, e.g. from a checkpoint."""
+    return MorphoCLIPTrainingConfig.model_validate(config_dict)
 
 
 def load_training_config(
     path: str | Path,
     overrides: list[str] | None = None,
 ) -> MorphoCLIPTrainingConfig:
-    """Load a MorphoCLIP training config from a YAML file.
-
-    Resolves ``extends`` inheritance first, then applies dotted overrides.
-
-    Args:
-        path: Path to the YAML config file.
-        overrides: ``section.key=value`` strings from repeatable ``--set``
-            options, applied in order.
-
-    Returns:
-        Populated training config.
-    """
-    path = Path(path)
-    raw = _load_raw_config(path)
-    for item in overrides or []:
-        raw = _merge_dicts(raw, _parse_dotted_override(item))
-
-    return training_config_from_dict(raw)
+    """Load a MorphoCLIP training config from YAML, applying ``--set`` overrides."""
+    return load_config(MorphoCLIPTrainingConfig, path, overrides)
