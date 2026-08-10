@@ -232,7 +232,7 @@ def filter_replicable(
     id_col: str = "Metadata_broad_sample",
 ) -> pd.DataFrame:
     """Filter to keep only replicable perturbations."""
-    return df.query(f"{id_col}==@replicable_ids").reset_index(drop=True)
+    return df[df[id_col].isin(replicable_ids)].reset_index(drop=True)
 
 
 def get_timepoint_label(modality: str, hours: int) -> str:

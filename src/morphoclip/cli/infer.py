@@ -153,7 +153,9 @@ def _print_match_summary(results, top_k):
     table.add_row("Wells with GT in cache", str(len(ranks)))
     table.add_row("Mean rank", f"{ranks_t.mean().item():.2f}")
     table.add_row("Median rank", f"{ranks_t.median().item():.1f}")
-    for k in (1, 5, 10):
+    # Only k <= top_k is meaningful: ranks come from a top-k retrieval, so any
+    # larger k reports the same number as top_k and reads as free recall.
+    for k in [k for k in (1, 5, 10) if k <= top_k] or [top_k]:
         table.add_row(f"R@{k}", f"{(ranks_t <= k).float().mean().item():.4f}")
     console.print(table)
 
