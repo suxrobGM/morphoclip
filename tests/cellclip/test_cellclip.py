@@ -4,7 +4,7 @@ import torch
 
 from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
 from cellclip.benchmark.export import encode_well
-from cellclip.benchmark.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
+from cellclip.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
 
 
 def test_visual_encoder_encode_image_shape() -> None:

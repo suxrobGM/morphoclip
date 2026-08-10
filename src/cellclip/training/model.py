@@ -9,41 +9,8 @@ import torch.nn.functional as F
 from torch import nn
 from transformers import AutoModel
 
-from cellclip.benchmark.model import CrossChannelFormer
+from cellclip.model import CrossChannelFormer, MILPooling
 from cellclip.training.config import CellCLIPModelConfig
-
-
-class MILPooling(nn.Module):
-    """Channel-independent multi-instance pooling."""
-
-    def __init__(self, input_dim: int, hidden_dim: int = 128, pooling: str = "mean"):
-        super().__init__()
-        self.pooling = pooling
-        if pooling == "attention":
-            self.V = nn.Linear(input_dim, hidden_dim)
-            self.U = nn.Linear(input_dim, hidden_dim)
-            self.attention = nn.Linear(hidden_dim, 1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Pool site bags from ``(B, M, C, D)`` to ``(B, C, D)``."""
-        batch_size, num_sites, num_channels, width = x.shape
-
-        if self.pooling == "attention":
-            x = x.permute(0, 2, 1, 3).reshape(batch_size * num_channels, num_sites, width)
-            h_v = torch.tanh(self.V(x))
-            h_u = torch.sigmoid(self.U(x))
-            attn_scores = self.attention(h_v * h_u)
-
-            mask = (x.abs().sum(dim=-1) > 0).unsqueeze(-1)
-            attn_scores = attn_scores.masked_fill(~mask, float("-inf"))
-            attn_weights = torch.softmax(attn_scores, dim=1)
-            pooled = torch.sum(attn_weights * x, dim=1)
-            return pooled.view(batch_size, num_channels, width)
-
-        if self.pooling == "median":
-            return torch.median(x, dim=1).values
-
-        return torch.mean(x, dim=1)
 
 
 class CellCLIP(nn.Module):

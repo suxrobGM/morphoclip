@@ -16,7 +16,7 @@ from benchmark.profiles import (
     profile_path,
     write_profile,
 )
-from cellclip.benchmark.model import CellCLIPVisualEncoder
+from cellclip.model import CellCLIPVisualEncoder
 from morphoclip.data.image_loader import FEATURE_PATTERN
 from morphoclip.data.perturbation import well_from_row_col
 

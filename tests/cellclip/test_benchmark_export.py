@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from cellclip.benchmark.export import encode_well
-from cellclip.benchmark.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
+from cellclip.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
 
 
 def test_encode_well_matches_trainer_pool_then_encode_path() -> None:

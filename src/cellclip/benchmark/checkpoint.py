@@ -4,7 +4,7 @@ from pathlib import Path
 
 import torch
 
-from cellclip.benchmark.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
+from cellclip.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
 
 DEFAULT_CHECKPOINT_REPO = "suinleelab/CellCLIP"
 DEFAULT_CHECKPOINT_FILENAME = "model.safetensors"
