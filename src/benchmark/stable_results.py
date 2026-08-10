@@ -112,7 +112,7 @@ class StableResults:
 
     def generate_figures(self, figures_dir: Path) -> None:
         """Render the benchmark figures (requires matplotlib/seaborn)."""
-        from benchmark.stable_helpers import (
+        from benchmark.figures import (
             plot_cross_modality_barplot,
             plot_matching_barplot,
             plot_matching_fr_faceted,
