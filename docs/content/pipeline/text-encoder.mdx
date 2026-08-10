@@ -21,7 +21,7 @@ It can run in two modes:
 Uses built-in sample metadata (5 perturbations).
 
 ```bash
-uv run poe precompute-text
+uv run morphoclip text precompute
 ```
 
 ## 2. CPJUMP1 external metadata
@@ -29,14 +29,14 @@ uv run poe precompute-text
 Load from `data/metadata/external_metadata/` TSV files. Fetch metadata first if needed:
 
 ```bash
-uv run poe fetch-dataset --metadata   # downloads platemaps + external_metadata
-uv run poe precompute-text --metadata-dir data/metadata/external_metadata
-uv run poe precompute-text --metadata-dir data/metadata/external_metadata --limit 20  # first 20 only
+uv run morphoclip data fetch --metadata   # downloads platemaps + external_metadata
+uv run morphoclip text precompute --metadata-dir data/metadata/external_metadata
+uv run morphoclip text precompute --metadata-dir data/metadata/external_metadata --limit 20  # first 20 only
 ```
 
 ## Metadata sources
 
-- **External TSVs** (recommended): `data/metadata/external_metadata/` — `JUMP-Target-1_compound_metadata_targets.tsv`, `JUMP-Target-1_crispr_metadata.tsv`, `JUMP-Target-1_orf_metadata.tsv`. Get via `uv run poe fetch-dataset --metadata`.
+- **External TSVs** (recommended): `data/metadata/external_metadata/` — `JUMP-Target-1_compound_metadata_targets.tsv`, `JUMP-Target-1_crispr_metadata.tsv`, `JUMP-Target-1_orf_metadata.tsv`. Get via `uv run morphoclip data fetch --metadata`.
 - **Profile CSVs**: If you have `*_normalized_feature_select_negcon_batch.csv.gz` with `Metadata_PlateType`, `Metadata_Name`, etc., use `load_metadata_from_csv()` and `metadata_from_cpjump1_row()`.
 
 ## Options

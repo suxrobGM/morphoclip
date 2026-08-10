@@ -194,11 +194,12 @@ The main remaining gap is now concentrated in:
 Some files in the same commit support broader CellCLIP work but are not the core
 replication fix:
 
-- [`configs/cellclip/official_chemberta_film.yaml`](../../configs/cellclip/official_chemberta_film.yaml)
-- [`configs/cellclip/official_chemberta_upstreamish_film_remove_smiles.yaml`](../../configs/cellclip/official_chemberta_upstreamish_film_remove_smiles.yaml)
-- [`configs/cellclip/official_chemberta_upstreamish_film_keep_smiles.yaml`](../../configs/cellclip/official_chemberta_upstreamish_film_keep_smiles.yaml)
-- [`configs/cellclip/official_chemberta_upstreamish_residual_add.yaml`](../../configs/cellclip/official_chemberta_upstreamish_residual_add.yaml)
-- [`configs/cellclip/official_chemberta_upstreamish_concat_mlp.yaml`](../../configs/cellclip/official_chemberta_upstreamish_concat_mlp.yaml)
+- The five ChemBERTa variant configs. Each differed from
+  `official_upstreamish_unique_cpjump_style.yaml` by two to eight keys, so they
+  are now `--set` commands in
+  [`configs/cellclip/README.md`](../../configs/cellclip/README.md) rather than
+  files. The overrides there were computed from the resolved configs, so the runs
+  reproduce exactly.
 - [`src/cellclip/training/model.py`](../../src/cellclip/training/model.py)
 
 Those support the ChemBERTa investigation. The ChemBERTa stack now supports:

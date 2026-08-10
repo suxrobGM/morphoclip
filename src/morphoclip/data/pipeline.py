@@ -5,9 +5,9 @@ Designed for unattended overnight runs with automatic resume on interruption.
 
 Usage via CLI::
 
-    uv run poe extract-pipeline
-    uv run poe extract-pipeline --retry-failed
-    uv run poe extract-pipeline --tensors-only
+    uv run morphoclip features pipeline
+    uv run morphoclip features pipeline --retry-failed
+    uv run morphoclip features pipeline --tensors-only
 
 CLI entry point: ``scripts/features/run_pipeline.py``.
 """

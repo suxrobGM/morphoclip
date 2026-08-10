@@ -41,7 +41,7 @@ OptFlag = Annotated[bool, typer.Option()]
 
 app = typer.Typer(no_args_is_help=True, help="CellCLIP baseline: train and export profiles.")
 
-DEFAULT_TRAIN_CONFIG = Path("configs/cellclip/cellclip_jumpcp.yaml")
+DEFAULT_TRAIN_CONFIG = Path("configs/cellclip/official_baseline.yaml")
 BENCHMARK_CONFIG_PATH = Path("configs/benchmark.yml")
 DATASET_CONFIG_PATH = Path("configs/dataset.yml")
 CELLCLIP_DEFAULT_MODEL = "facebook/dinov2-giant"

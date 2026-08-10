@@ -103,6 +103,11 @@ torchvision = [
 ]
 
 # Task runner (poethepoet). Run with: uv run poe <task>
+#
+# Pipeline commands are NOT aliased here. They live in the `morphoclip` CLI
+# (`uv run morphoclip --help`); a second name for each one only gave the docs
+# something extra to fall out of sync with. What is left is the dev loop, the
+# two commands that supply a default config, and the script runners.
 [tool.poe.tasks]
 test = "pytest"
 test-cov = "pytest --cov --cov-report=term-missing --cov-report=xml"
@@ -113,33 +118,15 @@ format-check = "ruff format --check ."
 typecheck = "mypy src"
 check = ["format-check", "lint", "typecheck", "test"]
 
-# Pipeline entry points now live in the `morphoclip` CLI (src/morphoclip/cli/).
-check-plates = "morphoclip data check-plates"
-fetch-dataset = "morphoclip data fetch"
-fetch-dataset-rclone = "morphoclip data fetch --backend rclone"
-inspect-perturbation = "python scripts/data/inspect_perturbation.py"
-inspect-dataset = "python scripts/data/inspect_dataset.py"
-
-extract-features = "morphoclip features extract"
-cellclip-train = "morphoclip cellclip train"
-cellclip-export = "morphoclip cellclip export"
-cellclip-pipeline = "morphoclip cellclip pipeline"
-extract-pipeline = "morphoclip features pipeline"
-upload-features = "morphoclip features upload"
-download-features = "morphoclip features download"
-downsampling-inspection = "python scripts/features/downsampling_inspection.py"
-dino-heatmap-inspection = "python scripts/features/dino_heatmap_inspection.py"
-
-precompute-text = "morphoclip text precompute"
-inspect-text = "python scripts/text/inspect_text_embeddings.py"
-
 train = "morphoclip train --config configs/train/base.yaml"
-eval = "morphoclip eval --checkpoint output/morphoclip_runs/default/checkpoints/best.pt"
-infer = "morphoclip infer --checkpoint output/morphoclip_runs/default/checkpoints/best.pt"
-split = "morphoclip split"
+benchmark = "morphoclip benchmark --config configs/benchmark.yml"
 tensorboard = "python -m tensorboard.main --logdir output/morphoclip_runs"
 
-benchmark = "morphoclip benchmark --config configs/benchmark.yml"
+inspect-dataset = "python scripts/data/inspect_dataset.py"
+inspect-perturbation = "python scripts/data/inspect_perturbation.py"
+inspect-text = "python scripts/text/inspect_text_embeddings.py"
+downsampling-inspection = "python scripts/features/downsampling_inspection.py"
+dino-heatmap-inspection = "python scripts/features/dino_heatmap_inspection.py"
 
 [tool.ruff]
 target-version = "py314"

@@ -2,36 +2,36 @@
 
 We use the **CPJUMP1** dataset from the JUMP Cell Painting Consortium - a curated benchmark of 3M+ Cell Painting images covering 303 compounds and 160 genes across 2 cell lines (U2OS, A549) and multiple timepoints.
 
-Images are fetched from the Cell Painting Gallery S3 bucket using a unified downloader (`morphoclip data fetch`, or `uv run poe fetch-dataset`) that supports both **AWS CLI** and **rclone**. Dataset configuration lives in `configs/dataset.yml`.
+Images are fetched from the Cell Painting Gallery S3 bucket using a unified downloader (`morphoclip data fetch`, or `uv run morphoclip data fetch`) that supports both **AWS CLI** and **rclone**. Dataset configuration lives in `configs/dataset.yml`.
 
 ## Commands
 
 ```bash
 # Check plate sizes before downloading (dry-run estimate)
-uv run poe check-plates
+uv run morphoclip data check-plates
 
 # Fetch dataset (backend from config: cpjump.fetch.backend)
-uv run poe fetch-dataset
+uv run morphoclip data fetch
 
 # Override backend explicitly
-uv run poe fetch-dataset --backend awscli
-uv run poe fetch-dataset --backend rclone
+uv run morphoclip data fetch --backend awscli
+uv run morphoclip data fetch --backend rclone
 
 # Existing-plate behavior
-uv run poe fetch-dataset --on-existing-plate ask        # prompt y/n per existing plate
-uv run poe fetch-dataset --on-existing-plate skip       # reuse local raw files
-uv run poe fetch-dataset --on-existing-plate redownload # force sync even if present
+uv run morphoclip data fetch --on-existing-plate ask        # prompt y/n per existing plate
+uv run morphoclip data fetch --on-existing-plate skip       # reuse local raw files
+uv run morphoclip data fetch --on-existing-plate redownload # force sync even if present
 
 # Existing-compressed behavior
-uv run poe fetch-dataset --on-existing-compressed ask        # prompt per plate
-uv run poe fetch-dataset --on-existing-compressed skip       # do not recompress plate
-uv run poe fetch-dataset --on-existing-compressed recompress # overwrite compressed output
+uv run morphoclip data fetch --on-existing-compressed ask        # prompt per plate
+uv run morphoclip data fetch --on-existing-compressed skip       # do not recompress plate
+uv run morphoclip data fetch --on-existing-compressed recompress # overwrite compressed output
 
 # Metadata only
-uv run poe fetch-dataset --metadata
+uv run morphoclip data fetch --metadata
 
 # Dry-run transfer commands (recommended before full run)
-uv run poe fetch-dataset --dry-run --backend rclone
+uv run morphoclip data fetch --dry-run --backend rclone
 ```
 
 ## Space-Restricted Download Mode
@@ -39,7 +39,7 @@ uv run poe fetch-dataset --dry-run --backend rclone
 If local disk is limited, run download + compression + cleanup in one pass:
 
 ```bash
-uv run poe fetch-dataset \
+uv run morphoclip data fetch \
   --compress-after-download \
   --delete-original-after-compress \
   --compression-workers 8

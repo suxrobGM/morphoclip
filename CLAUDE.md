@@ -14,17 +14,17 @@ MorphoCLIP aligns microscopy image embeddings (DINOv3 CLS tokens) with text desc
 # One-time setup: install deps + PyTorch for your hardware
 uv sync --extra cu128           # (or --extra cu130 / --extra cpu)
 
-# Tasks run through poe (poethepoet): `uv run poe <task>`
-uv run poe test                 # Run all tests
-uv run poe fetch-dataset        # Download dataset from S3
-uv run poe extract-features     # Extract DINOv3 CLS tokens
-uv run poe precompute-text      # Pre-compute text embeddings
-uv run poe train                # Train the model
-
-# Pipeline entry points are also a Typer CLI (poe tasks wrap this):
-uv run morphoclip --help                        # List all commands/groups
-uv run morphoclip data fetch                    # e.g. same as `poe fetch-dataset`
+# Pipeline steps are all `morphoclip` subcommands
+uv run morphoclip --help                    # List all commands/groups
+uv run morphoclip data fetch                # Download dataset from S3
+uv run morphoclip features extract          # Extract DINOv3 CLS tokens
+uv run morphoclip text precompute           # Pre-compute text embeddings
 uv run morphoclip train --config configs/train/base.yaml
+
+# The dev loop runs through poe (poethepoet): `uv run poe <task>`
+uv run poe test                 # Run all tests
+uv run poe check                # format-check, lint, typecheck, test
+uv run poe train                # `morphoclip train` with the default config
 # Multi-GPU: torchrun --nproc_per_node=4 -m morphoclip.cli train --config configs/train/ddp.yaml --distributed
 
 # Documentation site (Nextra)
