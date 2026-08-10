@@ -1,29 +1,76 @@
-"""Benchmark split-strategy builders (subsets + grouping keys).
+"""Split-strategy builders: train/validate/test subsets and grouping keys.
 
-Each strategy annotates dataset wells against split contexts and produces either
-train/validate/test index subsets or grouping keys. :data:`STRATEGY_BUILDERS`
-maps a strategy name to its ``(subsets_fn, groups_fn)`` pair, driving dispatch in
-:mod:`benchmark.splits`.
+Each strategy annotates dataset wells and produces index subsets, optionally
+alongside grouping keys. :data:`STRATEGIES` maps a name to its builders and
+drives dispatch in :mod:`morphoclip.splits.api`.
+
+``pert_type`` needs only local metadata. The rest read the CPJUMP1 reference
+metadata under ``data/reference/cpjump1/`` or the benchmark experiment TSV, and
+their partition is fixed by that metadata, so they ignore :class:`SplitParams`.
 """
 
+import hashlib
 from collections import defaultdict
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from benchmark.split_contexts import (
-    OfficialSplitContext,
-    load_official_split_contexts,
-    load_plate_contexts,
-    resolve_metadata_path,
-    resolve_official_split_metadata_path,
-)
 from morphoclip.data.dataset import MorphoCLIPDataset
 from morphoclip.data.perturbation import (
     PerturbationInfo,
     extract_plate_barcode,
     is_control_or_empty,
 )
+from morphoclip.splits.contexts import (
+    OfficialSplitContext,
+    load_official_split_contexts,
+    load_plate_contexts,
+    resolve_metadata_path,
+    resolve_official_split_metadata_path,
+)
+
+
+@dataclass(frozen=True)
+class SplitParams:
+    """Knobs for strategies that partition at random rather than by metadata."""
+
+    val_fraction: float = 0.1
+    seed: int = 42
+
+
+def build_pert_type_subsets(
+    dataset: MorphoCLIPDataset, params: SplitParams
+) -> dict[str, list[int]]:
+    """Split wells by hashing ``broad_sample``, stratified across modalities.
+
+    Every perturbation type reaches every subset, and wells sharing a
+    ``broad_sample`` always land together. ``test`` gets the same fraction as
+    ``validate``.
+
+    The md5 bucketing is a deliberately stable hash: changing it repartitions
+    every split that already exists on disk.
+    """
+    sample_to_indices: dict[str, list[int]] = defaultdict(list)
+    for i, (plate, well, _) in enumerate(dataset.index_entries):
+        barcode = extract_plate_barcode(plate)
+        info = dataset.metadata.lookup(barcode, well)
+        if is_control_or_empty(info):
+            continue
+        sample_to_indices[info.broad_sample].append(i)
+
+    subsets: dict[str, list[int]] = {"train": [], "validate": [], "test": []}
+    for sample in sorted(sample_to_indices):
+        digest = hashlib.md5(f"{params.seed}:{sample}".encode()).hexdigest()
+        fraction = int(digest[:8], 16) / 0xFFFFFFFF
+        if fraction < params.val_fraction:
+            subset = "validate"
+        elif fraction < 2 * params.val_fraction:
+            subset = "test"
+        else:
+            subset = "train"
+        subsets[subset].extend(sample_to_indices[sample])
+    return subsets
 
 
 def _iterate_wells[K, C](
@@ -114,7 +161,9 @@ def _classify_representation(context: OfficialSplitContext) -> str:
     )
 
 
-def build_official_representation_subsets(dataset: MorphoCLIPDataset) -> dict[str, list[int]]:
+def build_official_representation_subsets(
+    dataset: MorphoCLIPDataset, _params: SplitParams
+) -> dict[str, list[int]]:
     """CRISPR/ORF -> train, compound low -> validate, compound high -> test."""
     subsets: dict[str, list[int]] = {"train": [], "validate": [], "test": []}
     for i, context, _info in _annotated_official_wells(dataset):
@@ -140,7 +189,9 @@ def build_official_representation_groups(dataset: MorphoCLIPDataset) -> dict[str
     return dict(grouped)
 
 
-def build_official_gene_compound_subsets(dataset: MorphoCLIPDataset) -> dict[str, list[int]]:
+def build_official_gene_compound_subsets(
+    dataset: MorphoCLIPDataset, _params: SplitParams
+) -> dict[str, list[int]]:
     """60/20/20 split on unique 'across' targets."""
     target_to_indices: dict[str, list[int]] = defaultdict(list)
     target_to_radix: dict[str, int | None] = {}
@@ -196,7 +247,9 @@ def build_official_gene_compound_groups(dataset: MorphoCLIPDataset) -> dict[str,
     return dict(grouped)
 
 
-def build_cellclip_cpjump_subsets(dataset: MorphoCLIPDataset) -> dict[str, list[int]]:
+def build_cellclip_cpjump_subsets(
+    dataset: MorphoCLIPDataset, _params: SplitParams
+) -> dict[str, list[int]]:
     """Reproduce the CellCLIP CP-JUMP1 split at the well-bag level.
 
     75/25 train/test split within each (Cell_type, Time, Perturbation) slice.
@@ -239,21 +292,29 @@ def build_cellclip_cpjump_groups(dataset: MorphoCLIPDataset) -> dict[str, list[i
     return dict(grouped)
 
 
-StrategyBuilders = tuple[
-    Callable[[MorphoCLIPDataset], dict[str, list[int]]],
-    Callable[[MorphoCLIPDataset], dict[str, list[int]]],
-]
+@dataclass(frozen=True)
+class Strategy:
+    """How one strategy partitions a dataset, and how it groups wells.
 
-STRATEGY_BUILDERS: dict[str, StrategyBuilders] = {
-    "cpjump1_official_representation": (
+    ``groups`` is None for strategies with no grouping notion; asking for their
+    groups is an error rather than an empty dict.
+    """
+
+    subsets: Callable[[MorphoCLIPDataset, SplitParams], dict[str, list[int]]]
+    groups: Callable[[MorphoCLIPDataset], dict[str, list[int]]] | None = None
+
+
+STRATEGIES: dict[str, Strategy] = {
+    "pert_type": Strategy(build_pert_type_subsets),
+    "cpjump1_official_representation": Strategy(
         build_official_representation_subsets,
         build_official_representation_groups,
     ),
-    "cpjump1_official_gene_compound": (
+    "cpjump1_official_gene_compound": Strategy(
         build_official_gene_compound_subsets,
         build_official_gene_compound_groups,
     ),
-    "cellclip_cpjump_style": (
+    "cellclip_cpjump_style": Strategy(
         build_cellclip_cpjump_subsets,
         build_cellclip_cpjump_groups,
     ),

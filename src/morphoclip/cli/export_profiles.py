@@ -11,13 +11,13 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from benchmark.split_contexts import OFFICIAL_SPLIT_METADATA_PATH
 from morphoclip.benchmark.export import (
     PlateNotInReferenceError,
     export_plate_profiles,
     load_export_models,
 )
 from morphoclip.cli.logging import setup_logging
+from morphoclip.splits.contexts import OFFICIAL_SPLIT_METADATA_PATH
 from morphoclip.training.inference import discover_plates
 
 console = Console()

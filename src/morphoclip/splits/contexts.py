@@ -1,7 +1,7 @@
 """Metadata paths, context dataclasses, and loaders for benchmark splits.
 
 Split-strategy code reads the module-level path constants here *through the
-resolvers*, so tests patch ``benchmark.split_contexts.METADATA_PATH`` /
+resolvers*, so tests patch ``morphoclip.splits.contexts.METADATA_PATH`` /
 ``OFFICIAL_SPLIT_METADATA_PATH`` to redirect them. Keep the constants, resolvers,
 and loaders together in this module.
 """

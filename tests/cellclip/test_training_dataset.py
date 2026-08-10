@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-import benchmark.split_contexts as split_contexts_module
+import morphoclip.splits.contexts as split_contexts_module
 from cellclip.training.config import CellCLIPDatasetConfig, CellCLIPModelConfig
 from cellclip.training.dataset import build_tokenized_collate_fn, prepare_datasets
 from morphoclip.data.metadata import MetadataIndex
@@ -103,7 +103,7 @@ def test_prepare_datasets_uses_official_subsets(
             return_value=DummyTokenizer(),
         ),
         patch(
-            "cellclip.training.dataset.benchmark_splits_module.load_plate_contexts",
+            "cellclip.training.dataset.split_contexts.load_plate_contexts",
             return_value={
                 "BR00117000": SimpleNamespace(cell_type="U2OS"),
                 "BR00117020": SimpleNamespace(cell_type="A549"),
@@ -161,7 +161,7 @@ def test_prepare_datasets_unique_perturbations_preserve_timepoint_distinct_wells
             lambda *_args, **_kwargs: DummyTokenizer(),
         )
         monkeypatch.setattr(
-            "cellclip.training.dataset.benchmark_splits_module.load_plate_contexts",
+            "cellclip.training.dataset.split_contexts.load_plate_contexts",
             lambda: {
                 "BR00116991": SimpleNamespace(cell_type="A549"),
                 "BR00117017": SimpleNamespace(cell_type="A549"),
@@ -213,7 +213,7 @@ def test_prepare_datasets_supports_split_specific_site_caps(
             lambda *_args, **_kwargs: DummyTokenizer(),
         )
         monkeypatch.setattr(
-            "cellclip.training.dataset.benchmark_splits_module.load_plate_contexts",
+            "cellclip.training.dataset.split_contexts.load_plate_contexts",
             lambda: {"BR00116991": SimpleNamespace(cell_type="A549")},
         )
         prepared = prepare_datasets(dataset_cfg, model_cfg)

@@ -21,11 +21,12 @@ from typing import Annotated, Any
 import typer
 from rich.console import Console
 
-from benchmark import splits as benchmark_splits
 from morphoclip.data import dataset as dataset_module
 from morphoclip.data import metadata as metadata_module
 from morphoclip.data import perturbation
 from morphoclip.data.perturbation import PerturbationType
+from morphoclip.splits import api as splits_api
+from morphoclip.splits import contexts as split_contexts
 
 console = Console()
 
@@ -460,9 +461,9 @@ def main(
     MorphoCLIPSample = dataset_module.MorphoCLIPSample
     collate_fn = dataset_module.collate_fn
 
-    create_splits = benchmark_splits.create_splits
-    build_split_groups = benchmark_splits.build_split_groups
-    metadata_path = benchmark_splits.METADATA_PATH
+    create_splits = splits_api.create_splits
+    build_split_groups = splits_api.build_split_groups
+    metadata_path = split_contexts.METADATA_PATH
 
     pert_types_set = set(pert_types) if pert_types is not None else None
 

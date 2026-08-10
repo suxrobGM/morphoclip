@@ -1,6 +1,6 @@
-"""Tests for benchmark.splits (official + cellclip CPJUMP1 split strategies).
+"""Tests for the split strategies in morphoclip.splits.
 
-Uses real metadata from data/metadata/ and synthesized .pt feature files.
+Uses the committed CPJUMP1 metadata fixture and synthesized .pt feature files.
 """
 
 from pathlib import Path
@@ -8,19 +8,11 @@ from pathlib import Path
 import pytest
 import torch
 
-import benchmark.split_contexts as split_contexts_module
-from benchmark.splits import (
-    build_split_groups as benchmark_build_split_groups,
-)
-from benchmark.splits import (
-    build_split_manifest as benchmark_build_split_manifest,
-)
-from benchmark.splits import (
-    create_splits as benchmark_create_splits,
-)
+import morphoclip.splits.contexts as split_contexts_module
 from morphoclip.data.dataset import MorphoCLIPDataset
 from morphoclip.data.metadata import MetadataIndex
-from morphoclip.data.splits import create_splits
+from morphoclip.splits.api import build_split_groups, create_splits
+from morphoclip.splits.manifest import build_split_manifest
 
 BATCH = "2020_11_04_CPJUMP1"
 HIDDEN_DIM = 384
@@ -91,7 +83,7 @@ class TestCreateSplits:
     def test_invalid_strategy(self, tmp_path: Path, metadata_index: MetadataIndex) -> None:
         ds = self._make_multi_well_dataset(tmp_path, metadata_index)
         with pytest.raises(ValueError, match="Unknown split strategy"):
-            create_splits(ds, strategy="invalid")
+            create_splits(ds, "invalid")
 
     def test_deterministic(self, tmp_path: Path, metadata_index: MetadataIndex) -> None:
         for plate, well in [
@@ -107,12 +99,8 @@ class TestCreateSplits:
             metadata=metadata_index,
             plates=["BR00117003", "BR00117020", "BR00116991", "BR00117017"],
         )
-        train1, val1, test1 = benchmark_create_splits(
-            ds, strategy="cpjump1_official_representation"
-        )
-        train2, val2, test2 = benchmark_create_splits(
-            ds, strategy="cpjump1_official_representation"
-        )
+        train1, val1, test1 = create_splits(ds, "cpjump1_official_representation")
+        train2, val2, test2 = create_splits(ds, "cpjump1_official_representation")
         assert list(train1.indices) == list(train2.indices)
         assert list(val1.indices) == list(val2.indices)
         assert list(test1.indices) == list(test2.indices)
@@ -144,7 +132,7 @@ class TestCreateSplits:
         )
         index_map = self._index_by_plate_well(ds)
 
-        train, val, test = benchmark_create_splits(ds, strategy="cpjump1_official_representation")
+        train, val, test = create_splits(ds, "cpjump1_official_representation")
 
         assert set(train.indices) == {
             index_map[("BR00117003", "A01")],
@@ -178,7 +166,7 @@ class TestCreateSplits:
             metadata=metadata_index,
             plates=["BR00117003", "BR00117020", "BR00116991", "BR00117017"],
         )
-        groups = benchmark_build_split_groups(ds, strategy="cpjump1_official_representation")
+        groups = build_split_groups(ds, "cpjump1_official_representation")
         assert any(key.startswith("train::") for key in groups)
         assert any(key.startswith("validate::") for key in groups)
         assert any(key.startswith("test::") for key in groups)
@@ -212,7 +200,7 @@ class TestCreateSplits:
         )
         index_map = self._index_by_plate_well(ds)
 
-        train, val, test = benchmark_create_splits(ds, strategy="cpjump1_official_gene_compound")
+        train, val, test = create_splits(ds, "cpjump1_official_gene_compound")
 
         assert set(train.indices) == {
             index_map[("BR00117000", "A04")],
@@ -248,7 +236,7 @@ class TestCreateSplits:
             metadata=metadata_index,
             plates=["BR00117000", "BR00116991", "BR00117017"],
         )
-        groups = benchmark_build_split_groups(ds, strategy="cpjump1_official_gene_compound")
+        groups = build_split_groups(ds, "cpjump1_official_gene_compound")
 
         assert set(groups["OPRL1"]) == {0, 1}
         assert set(groups["CACNB4"]) == {2, 3}
@@ -290,7 +278,7 @@ class TestCreateSplits:
         )
         index_map = self._index_by_plate_well(ds)
 
-        train, val, test = benchmark_create_splits(ds, strategy="cellclip_cpjump_style")
+        train, val, test = create_splits(ds, "cellclip_cpjump_style")
 
         assert len(val.indices) == 0
         assert len(train.indices) + len(test.indices) == len(ds)
@@ -335,7 +323,7 @@ class TestCreateSplits:
             metadata=metadata_index,
             plates=["BR00116991", "BR00116992", "BR00116995"],
         )
-        groups = benchmark_build_split_groups(ds, strategy="cellclip_cpjump_style")
+        groups = build_split_groups(ds, "cellclip_cpjump_style")
 
         assert groups["A549::compound::24::BRD-A86665761-001-01-1"] == [0, 1]
         assert groups["U2OS::compound::24::BRD-A86665761-001-01-1"] == [2]
@@ -366,7 +354,7 @@ class TestCreateSplits:
             plates=["BR00117003", "BR00117020", "BR00116991", "BR00117017"],
         )
 
-        manifest = benchmark_build_split_manifest(ds, strategy="cpjump1_official_representation")
+        manifest = build_split_manifest(ds, "cpjump1_official_representation")
 
         assert manifest[["Metadata_Plate", "Metadata_Well"]].duplicated().sum() == 0
         assert set(manifest["subset"]) == {"train", "validate", "test"}

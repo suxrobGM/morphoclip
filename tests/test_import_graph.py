@@ -50,3 +50,15 @@ def test_benchmark_data_does_not_pull_the_metrics_stack() -> None:
     """profile_ops exists so result accumulation is importable without copairs."""
     loaded = _probe("import sys, benchmark.data; print('benchmark.metrics' in sys.modules)")
     assert loaded == "False"
+
+
+@pytest.mark.parametrize("forbidden", ["torch", "morphoclip"])
+def test_the_whole_benchmark_package_stays_free_of(forbidden: str) -> None:
+    """`benchmark` is standalone. It used to import a torch Dataset through splits."""
+    loaded = _probe(
+        "import importlib, pkgutil, sys, benchmark\n"
+        "for m in [x.name for x in pkgutil.iter_modules(benchmark.__path__)]:\n"
+        "    importlib.import_module('benchmark.' + m)\n"
+        f"print(any(k == {forbidden!r} or k.startswith({forbidden!r} + '.') for k in sys.modules))"
+    )
+    assert loaded == "False", f"a benchmark module now imports {forbidden}"

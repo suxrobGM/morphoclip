@@ -11,7 +11,8 @@ from rich.console import Console
 from rich.table import Table
 
 from morphoclip.cli.logging import setup_logging
-from morphoclip.data.splits import create_splits
+from morphoclip.splits.api import create_splits
+from morphoclip.splits.strategies import SplitParams
 from morphoclip.training.config import load_training_config
 from morphoclip.training.evaluate import evaluate_epoch
 from morphoclip.training.inference import (
@@ -42,9 +43,8 @@ def _build_eval_loader(config, device, *, split):
     dataset = build_eval_dataset(config)
     _, val_set, test_set = create_splits(
         dataset,
-        strategy=ds_cfg.split_strategy,
-        val_fraction=ds_cfg.val_fraction,
-        seed=config.runtime.seed,
+        ds_cfg.split_strategy,
+        SplitParams(val_fraction=ds_cfg.val_fraction, seed=config.runtime.seed),
     )
     target = val_set if split == "val" else test_set
 
