@@ -4,31 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from benchmark.stable_config import (
-    TIMELINE_CHOICES,
-    load_benchmark_config,
-    normalize_timelines,
-    resolve_params,
-    resolve_path,
-)
-
-
-class TestNormalizeTimelines:
-    def test_none_returns_all_choices(self):
-        assert normalize_timelines(None) == list(TIMELINE_CHOICES)
-
-    def test_single_string(self):
-        assert normalize_timelines("short") == ["short"]
-
-    def test_case_and_whitespace_normalized(self):
-        assert normalize_timelines(["  LONG "]) == ["long"]
-
-    def test_deduplicates_preserving_order(self):
-        assert normalize_timelines(["long", "short", "long"]) == ["long", "short"]
-
-    def test_invalid_raises(self):
-        with pytest.raises(ValueError, match="Invalid timeline"):
-            normalize_timelines(["medium"])
+from benchmark.stable_config import load_benchmark_config, resolve_params, resolve_path
+from benchmark.timelines import TIMELINE_CHOICES
 
 
 class TestResolvePath:

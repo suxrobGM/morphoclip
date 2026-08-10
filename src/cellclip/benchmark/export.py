@@ -8,7 +8,6 @@ import pandas as pd
 import torch
 import yaml
 
-from benchmark.data import get_timepoint_label
 from benchmark.profiles import (
     metadata_columns,
     negcon_center_profiles,
@@ -16,11 +15,10 @@ from benchmark.profiles import (
     profile_path,
     write_profile,
 )
+from benchmark.timelines import get_timepoint_label
 from cellclip.model import CellCLIPVisualEncoder
 from morphoclip.data.image_loader import FEATURE_PATTERN
 from morphoclip.data.perturbation import well_from_row_col
-
-TIMELINE_CHOICES = ("short", "long")
 
 
 def resolve_path(path_str: str | Path, project_root: Path) -> Path:
@@ -48,24 +46,6 @@ def load_yaml_section(path: Path, section: str) -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"Config section '{section}' must be a mapping: {path}")
     return data
-
-
-def normalize_timelines(value) -> list[str]:
-    """Normalize timeline selection to a deduplicated list."""
-    if value is None:
-        return list(TIMELINE_CHOICES)
-
-    items = [value] if isinstance(value, str) else list(value)
-    normalized: list[str] = []
-    for item in items:
-        label = str(item).strip().lower()
-        if label not in TIMELINE_CHOICES:
-            raise ValueError(
-                f"Invalid timeline {item!r}; expected one of: {', '.join(TIMELINE_CHOICES)}"
-            )
-        if label not in normalized:
-            normalized.append(label)
-    return normalized or list(TIMELINE_CHOICES)
 
 
 def select_target_plates(

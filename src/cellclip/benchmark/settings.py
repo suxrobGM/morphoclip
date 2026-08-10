@@ -13,12 +13,13 @@ from pathlib import Path
 
 import torch
 
+from benchmark.timelines import normalize_timelines
 from cellclip.benchmark.checkpoint import (
     DEFAULT_CHECKPOINT_FILENAME,
     DEFAULT_CHECKPOINT_REPO,
     resolve_checkpoint,
 )
-from cellclip.benchmark.export import normalize_timelines, resolve_path
+from cellclip.benchmark.export import resolve_path
 
 
 @dataclass(frozen=True)

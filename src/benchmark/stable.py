@@ -16,13 +16,13 @@ import pandas as pd
 from benchmark.data import (
     ProfileLoader,
     filter_experiment_metadata_to_split_subset,
-    get_timepoint_label,
 )
 from benchmark.stable_compound import evaluate_compound
 from benchmark.stable_config import CONFIG_PATH, BenchmarkParams, resolve_params
 from benchmark.stable_genetic import evaluate_genetic
 from benchmark.stable_helpers import fit_batch_correction
 from benchmark.stable_results import StableResults
+from benchmark.timelines import get_timepoint_label
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)

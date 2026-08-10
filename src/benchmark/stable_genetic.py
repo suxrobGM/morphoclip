@@ -13,7 +13,6 @@ from benchmark.data import (
     compute_consensus,
     filter_profiles_to_split_subset,
     filter_replicable,
-    get_timepoint_label,
     remove_empty_wells,
     remove_negcon_wells,
 )
@@ -33,6 +32,7 @@ from benchmark.stable_helpers import (
     run_with_unpaired_guard,
 )
 from benchmark.stable_results import StableResults, _already_computed
+from benchmark.timelines import get_timepoint_label
 
 
 def evaluate_genetic(

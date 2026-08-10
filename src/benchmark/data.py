@@ -188,18 +188,3 @@ def filter_replicable(
 ) -> pd.DataFrame:
     """Filter to keep only replicable perturbations."""
     return df[df[id_col].isin(replicable_ids)].reset_index(drop=True)
-
-
-def get_timepoint_label(modality: str, hours: int) -> str:
-    """Convert timepoint in hours to short/long label.
-
-    Args:
-        modality: Perturbation type ('compound', 'orf', 'crispr').
-        hours: Timepoint in hours.
-
-    Returns:
-        'short' or 'long' based on modality-specific thresholds.
-    """
-    thresholds = {"compound": 24, "orf": 48, "crispr": 96}
-    threshold = thresholds.get(modality, 96)
-    return "short" if hours <= threshold else "long"
