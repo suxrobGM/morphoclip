@@ -13,7 +13,6 @@ import logging
 from pathlib import Path
 
 import torch
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
 from transformers import AutoImageProcessor, AutoModel
 
 from morphoclip.data.image_loader import (
@@ -25,6 +24,7 @@ from morphoclip.data.image_loader import (
     load_site_as_tensor,
     prepare_channels_for_dino,
 )
+from morphoclip.utils.console import make_progress
 
 logger = logging.getLogger(__name__)
 
@@ -196,11 +196,7 @@ def extract_plate_features_with_model(
     saved: dict[ImageKey, Path] = {}
     num_channels = len(FLUORESCENCE_CHANNELS)
 
-    with Progress(
-        SpinnerColumn(),
-        *Progress.get_default_columns(),
-        TimeElapsedColumn(),
-    ) as progress:
+    with make_progress() as progress:
         task = progress.add_task("Extracting features", total=len(site_keys))
 
         for batch_start in range(0, len(site_keys), batch_size):

@@ -12,7 +12,6 @@ from typing import Annotated
 
 import typer
 import yaml
-from rich.console import Console
 from rich.panel import Panel
 
 from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
@@ -32,9 +31,9 @@ from cellclip.training.engine import train_cellclip
 from cellclip.training.reporting import render_train_config, render_train_summary
 from morphoclip.data.config import load_dataset_config
 from morphoclip.data.feature_extractor import infer_feature_width, load_dinov3
+from morphoclip.utils.console import console
 
 app = typer.Typer(no_args_is_help=True, help="CellCLIP baseline: train and export profiles.")
-console = Console()
 
 DEFAULT_TRAIN_CONFIG = Path("configs/cellclip/cellclip_jumpcp.yaml")
 BENCHMARK_CONFIG_PATH = Path("configs/benchmark.yml")

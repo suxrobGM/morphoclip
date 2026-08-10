@@ -4,11 +4,9 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 
 from morphoclip.data.label_splits import create_split_keys, load_and_prepare_labels
-
-console = Console()
+from morphoclip.utils.console import console
 
 
 def split(

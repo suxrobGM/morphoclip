@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.table import Table
 
 from morphoclip.benchmark.export import (
@@ -16,11 +15,9 @@ from morphoclip.benchmark.export import (
     export_plate_profiles,
     load_export_models,
 )
-from morphoclip.cli.logging import setup_logging
 from morphoclip.splits.contexts import OFFICIAL_SPLIT_METADATA_PATH
 from morphoclip.training.inference import discover_plates
-
-console = Console()
+from morphoclip.utils.console import console, setup_logging
 
 DEFAULT_METADATA_CSV = OFFICIAL_SPLIT_METADATA_PATH
 DEFAULT_OUTPUT_ROOT = Path("data/profiles_morphoclip")

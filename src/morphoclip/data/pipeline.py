@@ -18,8 +18,6 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
 
 from morphoclip.data.config import CPJumpConfig
 from morphoclip.data.feature_extractor import (
@@ -45,10 +43,10 @@ from morphoclip.data.progress import (
     load_progress,
     save_progress,
 )
+from morphoclip.utils.console import console, make_progress
 from morphoclip.utils.s3 import sync_s3_path
 
 logger = logging.getLogger(__name__)
-console = Console()
 
 
 def _count_tiffs(image_dir: Path) -> int:
@@ -63,33 +61,6 @@ def _delete_tiffs(image_dir: Path, *, dry_run: bool = False) -> int:
         for p in tif_paths:
             p.unlink(missing_ok=True)
     return len(tif_paths)
-
-
-def setup_logging(log_path: Path) -> None:
-    """Configure dual logging: file (DEBUG) + console (INFO).
-
-    Args:
-        log_path: Path to the log file.
-    """
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    fmt = logging.Formatter(
-        "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S",
-    )
-
-    root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
-
-    fh = logging.FileHandler(log_path, encoding="utf-8")
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(fmt)
-    root.addHandler(fh)
-
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    ch.setFormatter(fmt)
-    root.addHandler(ch)
 
 
 class PlateExtractionPipeline:
@@ -422,11 +393,7 @@ class PlateExtractionPipeline:
         site_keys = sorted(sites.keys(), key=str)
         saved = 0
 
-        with Progress(
-            SpinnerColumn(),
-            *Progress.get_default_columns(),
-            TimeElapsedColumn(),
-        ) as progress:
+        with make_progress() as progress:
             task = progress.add_task("Saving tensors", total=len(site_keys))
 
             for key in site_keys:

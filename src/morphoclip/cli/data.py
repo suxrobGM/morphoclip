@@ -8,18 +8,14 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from morphoclip.data.config import load_dataset_config
-from morphoclip.utils.s3 import (
-    choose_backend,
-    sync_s3_path,
-)
+from morphoclip.utils.console import console
+from morphoclip.utils.s3 import choose_backend, sync_s3_path
 
 app = typer.Typer(no_args_is_help=True, help="Dataset fetching and inspection.")
-console = Console()
 
 CONFIG_PATH = Path("configs/dataset.yml")
 

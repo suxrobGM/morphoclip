@@ -7,10 +7,8 @@ from typing import Annotated, Any
 
 import torch
 import typer
-from rich.console import Console
 from rich.table import Table
 
-from morphoclip.cli.logging import setup_logging
 from morphoclip.splits.api import create_splits
 from morphoclip.splits.strategies import SplitParams
 from morphoclip.training.config import load_training_config
@@ -27,9 +25,8 @@ from morphoclip.training.metrics import (
     compute_uniformity,
 )
 from morphoclip.utils.caching import load_cached_text_features
+from morphoclip.utils.console import console, setup_logging
 from morphoclip.utils.device import resolve_device
-
-console = Console()
 
 
 class Split(StrEnum):

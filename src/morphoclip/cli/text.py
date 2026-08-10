@@ -5,17 +5,16 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 
 from morphoclip.data.metadata import MetadataIndex
 from morphoclip.data.perturbation import PerturbationInfo, PerturbationType
 from morphoclip.models.prompts import build_prompt_from_info
 from morphoclip.models.text_encoder import MorphoCLIPTextEncoder
 from morphoclip.utils.caching import precompute_and_cache_text_embeddings
+from morphoclip.utils.console import console
 from morphoclip.utils.device import resolve_device
 
 app = typer.Typer(no_args_is_help=True, help="Text embedding pre-computation.")
-console = Console()
 
 
 def _unique_perturbations(index: MetadataIndex) -> list[PerturbationInfo]:

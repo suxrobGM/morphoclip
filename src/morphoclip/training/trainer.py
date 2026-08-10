@@ -13,7 +13,6 @@ from typing import Any
 import pandas as pd
 import torch
 import torch.distributed as torch_dist
-from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeRemainingColumn
 
 from morphoclip.training.config import MorphoCLIPTrainingConfig
@@ -35,9 +34,8 @@ from morphoclip.training.setup import (
 from morphoclip.training.tb_logger import HISTOGRAM_EVERY_EPOCHS, TrainingLogger
 from morphoclip.training.train_data import build_train_data
 from morphoclip.utils.caching import load_cached_text_features
+from morphoclip.utils.console import console
 from morphoclip.utils.device import resolve_device
-
-console = Console()
 
 
 def train_morphoclip(

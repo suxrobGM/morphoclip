@@ -9,15 +9,6 @@ import torch
 import typer
 from dotenv import load_dotenv
 from huggingface_hub import HfApi
-from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    Progress,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
 
 from morphoclip.cli.data import Backend
 from morphoclip.data.config import load_dataset_config
@@ -28,7 +19,7 @@ from morphoclip.data.feature_extractor import (
 )
 from morphoclip.data.perturbation import extract_plate_barcode
 from morphoclip.data.pipeline import PlateExtractionPipeline
-from morphoclip.data.pipeline import setup_logging as setup_pipeline_logging
+from morphoclip.utils.console import console, make_progress, setup_logging
 from morphoclip.utils.hf_features import (
     DEFAULT_REPO_ID,
     download_and_extract_archive,
@@ -40,7 +31,6 @@ from morphoclip.utils.hf_features import (
 from morphoclip.utils.s3 import choose_backend
 
 app = typer.Typer(no_args_is_help=True, help="DINOv3 feature extraction and transfer.")
-console = Console()
 
 CONFIG_PATH = Path("configs/dataset.yml")
 
@@ -215,7 +205,7 @@ def pipeline(
     backend_name = choose_backend(str(backend.value if backend else cfg.fetch.backend))
 
     log_path = log_file or Path(f"data/pipeline_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}.log")
-    setup_pipeline_logging(log_path)
+    setup_logging(log_path=log_path)
 
     extraction_pipeline = PlateExtractionPipeline(
         config=cfg,
@@ -321,14 +311,7 @@ def download(
         return
 
     console.print(f"[cyan]Downloading {len(pending)} archives with {workers} workers...[/cyan]")
-    with Progress(
-        TextColumn("{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        TimeRemainingColumn(),
-        console=console,
-    ) as progress_bar:
+    with make_progress() as progress_bar:
         overall = progress_bar.add_task("[green]Overall", total=len(pending))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
@@ -404,14 +387,7 @@ def repack(
         return
 
     total_before, total_after = 0, 0
-    with Progress(
-        TextColumn("{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        TimeElapsedColumn(),
-        TimeRemainingColumn(),
-        console=console,
-    ) as progress_bar:
+    with make_progress() as progress_bar:
         task = progress_bar.add_task("[green]Repacking", total=len(files))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(repack_feature_file, path): path for path in files}

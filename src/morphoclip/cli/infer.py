@@ -11,10 +11,8 @@ from typing import Annotated
 import pandas as pd
 import torch
 import typer
-from rich.console import Console
 from rich.table import Table
 
-from morphoclip.cli.logging import setup_logging
 from morphoclip.training.config import load_training_config
 from morphoclip.training.inference import (
     build_eval_dataloader,
@@ -24,9 +22,8 @@ from morphoclip.training.inference import (
     load_models_from_checkpoint,
 )
 from morphoclip.utils.caching import load_cached_text_features
+from morphoclip.utils.console import console, setup_logging
 from morphoclip.utils.device import autocast_context, resolve_device
-
-console = Console()
 
 
 class InferMode(StrEnum):
