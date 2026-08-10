@@ -11,9 +11,10 @@ import seaborn as sns
 from sklearn.decomposition import KernelPCA
 from sklearn.preprocessing import StandardScaler
 
-from benchmark.data import ProfileLoader, get_feature_columns
+from benchmark.data import ProfileLoader
 from benchmark.metrics import compute_fraction_retrieved, compute_map
 from benchmark.profile_ops import concat_profiles
+from benchmark.profiles import feature_columns
 
 __all__ = [
     "BatchCorrectionTransform",
@@ -96,7 +97,7 @@ def fit_batch_correction(
             print(f"Warning: {exc}")
             continue
         if feature_cols is None:
-            feature_cols = get_feature_columns(df)
+            feature_cols = feature_columns(df)
             if not feature_cols:
                 raise ValueError("Batch correction requires at least one feature column.")
 

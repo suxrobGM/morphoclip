@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from benchmark import copairs_backend, stable_map
-from benchmark.data import get_features, get_metadata
+from benchmark.profiles import feature_frame, metadata_frame
 
 __all__ = [
     "compute_fraction_retrieved",
@@ -133,8 +133,8 @@ def evaluate_replicability(
     neg_sameby = [plate_col]
     neg_diffby = [negcon_col]
 
-    meta = get_metadata(profiles)
-    features = get_features(profiles).values
+    meta = metadata_frame(profiles)
+    features = feature_frame(profiles).values
 
     result = run_map_pipeline(
         meta,
@@ -186,8 +186,8 @@ def evaluate_matching(
     neg_sameby: list[str] = []
     neg_diffby = [target_col]
 
-    meta = get_metadata(profiles)
-    features = get_features(profiles).values
+    meta = metadata_frame(profiles)
+    features = feature_frame(profiles).values
 
     return run_map_pipeline(
         meta,
@@ -229,8 +229,8 @@ def evaluate_cross_modality_matching(
     neg_sameby: list[str] = []
     neg_diffby = [target_col, modality_col]
 
-    meta = get_metadata(profiles)
-    features = get_features(profiles).values
+    meta = metadata_frame(profiles)
+    features = feature_frame(profiles).values
 
     return run_map_pipeline(
         meta,

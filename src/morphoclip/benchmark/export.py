@@ -15,8 +15,13 @@ import pandas as pd
 import torch
 from torch import nn
 
-from benchmark.data import get_metadata_columns
-from benchmark.export_utils import feature_columns, negcon_center_profiles, output_profile_path
+from benchmark.profiles import (
+    metadata_columns,
+    negcon_center_profiles,
+    numbered_feature_columns,
+    profile_path,
+    write_profile,
+)
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.inference import (
     build_eval_dataloader,
@@ -169,13 +174,13 @@ def build_plate_profile(
     if kept_rows.empty:
         raise ValueError("No wells align between embeddings and reference metadata")
 
-    metadata_cols = get_metadata_columns(metadata_df)
+    metadata_cols = metadata_columns(metadata_df)
     feature_matrix = np.vstack(
         [embedding_by_well[str(well)] for well in kept_rows["Metadata_Well"]]
     )
     features_df = pd.DataFrame(
         feature_matrix.astype(np.float32),
-        columns=feature_columns(feature_matrix.shape[1]),
+        columns=numbered_feature_columns(feature_matrix.shape[1]),
     )
     metadata_out = kept_rows[metadata_cols].reset_index(drop=True)
     return pd.concat([metadata_out, features_df], axis=1)
@@ -219,7 +224,7 @@ def export_plate_profiles(
 
     Encodes every cached well including controls, aligns them with reference
     metadata, optionally centers against plate negative controls, and writes to
-    the path :func:`benchmark.export_utils.output_profile_path` expects.
+    the path :func:`benchmark.profiles.profile_path` expects.
 
     Args:
         models: ``(image_encoder, config, device)`` from
@@ -258,7 +263,4 @@ def export_plate_profiles(
             )
         profile_df = negcon_center_profiles(profile_df)
 
-    output_path = output_profile_path(output_root, batch, plate)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    profile_df.to_csv(output_path, index=False, compression="gzip")
-    return output_path
+    return write_profile(profile_df, profile_path(output_root, batch, plate))

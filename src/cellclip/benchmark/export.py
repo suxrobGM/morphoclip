@@ -9,10 +9,12 @@ import torch
 import yaml
 
 from benchmark.data import get_timepoint_label
-from benchmark.export_utils import (
-    feature_columns,
+from benchmark.profiles import (
+    metadata_columns,
     negcon_center_profiles,
-    output_profile_path,
+    numbered_feature_columns,
+    profile_path,
+    write_profile,
 )
 from cellclip.benchmark.model import CellCLIPVisualEncoder
 from morphoclip.data.image_loader import FEATURE_PATTERN
@@ -66,11 +68,6 @@ def normalize_timelines(value) -> list[str]:
     return normalized or list(TIMELINE_CHOICES)
 
 
-def get_profile_metadata_columns(df: pd.DataFrame) -> list[str]:
-    """Return metadata columns preserved in exported profile CSVs."""
-    return [c for c in df.columns if c.startswith(("Metadata_", "Meta_"))]
-
-
 def select_target_plates(
     experiment_metadata_path: Path,
     batch: str,
@@ -117,21 +114,16 @@ def resolve_feature_dir(feature_root: Path, plate: str) -> Path:
 
 def load_source_profile(source_profiles_root: Path, batch: str, plate: str) -> pd.DataFrame:
     """Load the source benchmark profile CSV for a plate."""
-    profile_path = (
-        source_profiles_root
-        / batch
-        / plate
-        / f"{plate}_normalized_feature_select_negcon_batch.csv.gz"
-    )
-    if not profile_path.exists():
-        raise FileNotFoundError(f"Source profile not found for plate {plate}: {profile_path}")
+    path = profile_path(source_profiles_root, batch, plate)
+    if not path.exists():
+        raise FileNotFoundError(f"Source profile not found for plate {plate}: {path}")
 
-    df = pd.read_csv(profile_path, low_memory=False)
+    df = pd.read_csv(path, low_memory=False)
     if "Metadata_Well" not in df.columns:
-        raise ValueError(f"Source profile missing Metadata_Well: {profile_path}")
+        raise ValueError(f"Source profile missing Metadata_Well: {path}")
     if df["Metadata_Well"].duplicated().any():
         raise ValueError(
-            f"Source profile has duplicate wells; exporter expects one row per well: {profile_path}"
+            f"Source profile has duplicate wells; exporter expects one row per well: {path}"
         )
     return df
 
@@ -184,7 +176,7 @@ def export_plate(
 ) -> Path:
     """Export one benchmark-compatible plate profile CSV."""
     source_df = load_source_profile(source_profiles_root, batch, plate)
-    metadata_cols = get_profile_metadata_columns(source_df)
+    metadata_cols = metadata_columns(source_df)
     metadata_df = source_df[metadata_cols].copy().reset_index(drop=True)
 
     feature_dir = resolve_feature_dir(feature_root, plate)
@@ -218,13 +210,9 @@ def export_plate(
 
     features_df = pd.DataFrame(
         np.vstack(exported_features),
-        columns=feature_columns(embedding_width),
+        columns=numbered_feature_columns(embedding_width),
     )
     output_df = pd.concat([metadata_df, features_df], axis=1)
     output_df = negcon_center_profiles(output_df)
 
-    output_path = output_profile_path(output_profiles_root, batch, plate)
-    output_dir = output_path.parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_df.to_csv(output_path, index=False, compression="gzip")
-    return output_path
+    return write_profile(output_df, profile_path(output_profiles_root, batch, plate))

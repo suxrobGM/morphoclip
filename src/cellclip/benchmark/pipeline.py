@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from benchmark.export_utils import output_profile_path
+from benchmark.profiles import profile_path
 from cellclip.benchmark.export import (
     export_plate,
     load_yaml_section,
@@ -118,7 +118,7 @@ def resolve_plate_paths(
                 image_dir=image_dir,
                 feature_dir=features_root / barcode,
                 tensor_dir=tensors_root / barcode,
-                output_path=output_profile_path(output_profiles_root, batch, barcode),
+                output_path=profile_path(output_profiles_root, batch, barcode),
             )
         )
 

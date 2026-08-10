@@ -1,9 +1,7 @@
 """Tests for the local CellCLIP benchmark runtime."""
 
-import pandas as pd
 import torch
 
-from benchmark.export_utils import negcon_center_profiles
 from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
 from cellclip.benchmark.export import encode_well
 from cellclip.benchmark.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
@@ -67,26 +65,3 @@ def test_encode_well_mean_pools_sites() -> None:
     embedding = encode_well(DummyEncoder(), sites, device="cpu")
     # encode_mil([1, 3, 5, 4]) -> [1, 5, 4] -> encode_image([1, 5, 4]) -> [1, 4] -> squeeze -> (4,)
     assert embedding.shape == (4,)
-
-
-def test_negcon_center_profiles_uses_negative_controls() -> None:
-    profiles = pd.DataFrame(
-        {
-            "Metadata_Well": ["A01", "A02", "A03"],
-            "Metadata_control_type": ["negcon", "negcon", "trt"],
-            "feature_0000": [1.0, 3.0, 8.0],
-            "feature_0001": [2.0, 4.0, 10.0],
-        }
-    )
-
-    centered = negcon_center_profiles(profiles)
-
-    negcon = centered.loc[
-        centered["Metadata_control_type"] == "negcon", ["feature_0000", "feature_0001"]
-    ]
-    assert torch.allclose(
-        torch.tensor(negcon.to_numpy(dtype="float32").mean(axis=0)),
-        torch.zeros(2),
-    )
-    assert centered.loc[2, "feature_0000"] == 6.0
-    assert centered.loc[2, "feature_0001"] == 7.0

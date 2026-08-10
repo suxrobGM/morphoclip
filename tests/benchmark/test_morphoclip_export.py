@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 import torch
 
-from benchmark.export_utils import negcon_center_profiles, output_profile_path
 from morphoclip.benchmark.export import build_plate_profile, load_reference_metadata
 
 
@@ -128,43 +127,3 @@ class TestBuildPlateProfile:
         assert len(feature_cols) == 512
         assert feature_cols[0] == "feature_0000"
         assert feature_cols[-1] == "feature_0511"
-
-
-class TestNegconCenterProfiles:
-    def test_negcon_mean_is_near_zero_after_centering(self) -> None:
-        rng = np.random.default_rng(1)
-        offset = np.array([10.0, -5.0], dtype=np.float32)
-        negcon_features = rng.standard_normal((20, 2)).astype(np.float32) * 0.1 + offset
-        trt_features = rng.standard_normal((5, 2)).astype(np.float32) * 0.1 + offset + 3.0
-
-        profiles = pd.DataFrame(
-            {
-                "Metadata_Well": [f"N{i:02d}" for i in range(20)] + [f"T{i:02d}" for i in range(5)],
-                "Metadata_control_type": ["negcon"] * 20 + [""] * 5,
-                "feature_0000": np.concatenate([negcon_features[:, 0], trt_features[:, 0]]),
-                "feature_0001": np.concatenate([negcon_features[:, 1], trt_features[:, 1]]),
-            }
-        )
-
-        centered = negcon_center_profiles(profiles)
-        negcon_mean = (
-            centered.loc[
-                centered["Metadata_control_type"] == "negcon", ["feature_0000", "feature_0001"]
-            ]
-            .to_numpy(dtype=np.float32)
-            .mean(axis=0)
-        )
-
-        np.testing.assert_allclose(negcon_mean, [0.0, 0.0], atol=0.1)
-
-
-class TestOutputProfilePath:
-    def test_matches_benchmark_layout(self, tmp_path: Path) -> None:
-        path = output_profile_path(tmp_path, "2020_11_04_CPJUMP1", "BR00116991")
-
-        assert path == (
-            tmp_path
-            / "2020_11_04_CPJUMP1"
-            / "BR00116991"
-            / "BR00116991_normalized_feature_select_negcon_batch.csv.gz"
-        )

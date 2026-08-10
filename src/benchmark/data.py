@@ -6,28 +6,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from benchmark.profiles import PROFILE_SUFFIX, feature_columns, metadata_frame
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-
-def get_metadata_columns(df: pd.DataFrame) -> list[str]:
-    """Return list of metadata columns (prefixed with 'Metadata_')."""
-    return [c for c in df.columns if c.startswith("Metadata_")]
-
-
-def get_feature_columns(df: pd.DataFrame) -> list[str]:
-    """Return list of feature columns (not prefixed with 'Metadata')."""
-    return [c for c in df.columns if not c.startswith("Metadata")]
-
-
-def get_metadata(df: pd.DataFrame) -> pd.DataFrame:
-    """Return dataframe containing only metadata columns."""
-    return df[get_metadata_columns(df)]
-
-
-def get_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Return dataframe containing only feature columns."""
-    return df[get_feature_columns(df)]
 
 
 def normalize_subset_label(subset: str) -> str:
@@ -125,7 +107,7 @@ class ProfileLoader:
         self,
         batch: str,
         plate: str,
-        file_pattern: str = "normalized_feature_select_negcon_batch.csv.gz",
+        file_pattern: str = PROFILE_SUFFIX,
     ) -> pd.DataFrame:
         """Load profiles for a single plate.
 
@@ -187,9 +169,9 @@ def compute_consensus(
     Returns:
         DataFrame with one consensus profile per group.
     """
-    metadata_df = get_metadata(df).drop_duplicates(subset=[group_col])
+    metadata_df = metadata_frame(df).drop_duplicates(subset=[group_col])
     assert metadata_df is not None, "metadata_df should not be None"
-    feature_cols = [group_col, *get_feature_columns(df)]
+    feature_cols = [group_col, *feature_columns(df)]
 
     if agg_func == "median":
         consensus_df = df[feature_cols].groupby(group_col).median().reset_index()
