@@ -24,7 +24,7 @@ def test_encode_well_matches_trainer_pool_then_encode_path() -> None:
     with torch.no_grad():
         expected = model.encode_image(model.encode_mil(sites.unsqueeze(0))).squeeze(0).numpy()
 
-    actual = encode_well(model, sites, device="cpu", site_batch_size=1)
+    actual = encode_well(model, sites, device="cpu")
 
     assert isinstance(actual, np.ndarray)
     assert actual.shape == expected.shape

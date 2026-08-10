@@ -105,7 +105,6 @@ def export(
     checkpoint_filename: Annotated[str | None, typer.Option()] = None,
     download_dir: Annotated[str | None, typer.Option()] = None,
     device: Annotated[str | None, typer.Option()] = None,
-    site_batch_size: Annotated[int | None, typer.Option()] = None,
     model_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
     input_dim: Annotated[int | None, typer.Option()] = None,
     loss_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
@@ -135,7 +134,6 @@ def export(
         checkpoint_filename=checkpoint_filename,
         download_dir=download_dir,
         device=device,
-        site_batch_size=site_batch_size,
         input_dim=input_dim,
         model_type=model_type,
         loss_type=loss_type,
@@ -183,7 +181,6 @@ def export(
             output_profiles_root=settings.output_profiles,
             batch=resolved_batch,
             plate=plate,
-            site_batch_size=settings.site_batch_size,
         )
         exported_paths.append(output_path)
         print(f"Saved: {output_path}")
@@ -219,7 +216,6 @@ def pipeline(
     checkpoint_repo_id: Annotated[str | None, typer.Option()] = None,
     checkpoint_filename: Annotated[str | None, typer.Option()] = None,
     download_dir: Annotated[str | None, typer.Option()] = None,
-    site_batch_size: Annotated[int | None, typer.Option()] = None,
     model_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
     input_dim: Annotated[int | None, typer.Option()] = None,
     loss_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
@@ -258,7 +254,6 @@ def pipeline(
         checkpoint_filename=checkpoint_filename,
         download_dir=download_dir,
         device=device,
-        site_batch_size=site_batch_size,
         input_dim=input_dim,
         model_type=model_type,
         loss_type=loss_type,
@@ -373,7 +368,6 @@ def pipeline(
                 cellclip_device=settings.device,
                 source_profiles_root=settings.source_profiles,
                 batch=resolved_batch,
-                site_batch_size=settings.site_batch_size,
                 input_dim=settings.input_dim,
                 force_export=force_export,
                 keep_features=keep_features,

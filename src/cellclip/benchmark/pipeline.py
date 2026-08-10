@@ -239,7 +239,6 @@ def run_plate_pipeline(
     cellclip_device: str,
     source_profiles_root: Path,
     batch: str,
-    site_batch_size: int,
     input_dim: int,
     force_export: bool,
     keep_features: bool,
@@ -302,7 +301,6 @@ def run_plate_pipeline(
         output_profiles_root=plate.output_path.parents[2],
         batch=batch,
         plate=plate.barcode,
-        site_batch_size=site_batch_size,
     )
 
     deleted_features = 0

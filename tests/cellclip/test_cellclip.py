@@ -64,7 +64,7 @@ def test_encode_well_mean_pools_sites() -> None:
             return batch.mean(dim=1)
 
     sites = torch.randn(3, 5, 4)
-    embedding = encode_well(DummyEncoder(), sites, device="cpu", site_batch_size=2)
+    embedding = encode_well(DummyEncoder(), sites, device="cpu")
     # encode_mil([1, 3, 5, 4]) -> [1, 5, 4] -> encode_image([1, 5, 4]) -> [1, 4] -> squeeze -> (4,)
     assert embedding.shape == (4,)
 

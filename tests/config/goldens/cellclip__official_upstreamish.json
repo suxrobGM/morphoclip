@@ -78,7 +78,6 @@
   },
   "tensorboard": {
     "enabled": true,
-    "flush_every_steps": 50,
     "histogram_every_epochs": 5
   }
 }

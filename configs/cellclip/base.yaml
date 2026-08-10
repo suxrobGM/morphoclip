@@ -62,7 +62,6 @@ runtime:
 
 tensorboard:
   histogram_every_epochs: 5
-  flush_every_steps: 50
 
 distributed:
   enabled: false

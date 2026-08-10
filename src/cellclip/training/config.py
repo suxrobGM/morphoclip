@@ -99,7 +99,6 @@ class CellCLIPTensorBoardConfig:
 
     enabled: bool = True
     histogram_every_epochs: int = 5
-    flush_every_steps: int = 50
 
 
 @dataclass(slots=True)

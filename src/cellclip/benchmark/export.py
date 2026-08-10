@@ -164,10 +164,8 @@ def encode_well(
     model: torch.nn.Module,
     sites: torch.Tensor,
     device: str,
-    site_batch_size: int,
 ) -> np.ndarray:
     """Encode one well using the trainer-faithful MIL pooling path."""
-    del site_batch_size
     encoder = cast(CellCLIPVisualEncoder, model)
     pooled_sites = encoder.encode_mil(sites.unsqueeze(0).to(device))
     well_embedding = encoder.encode_image(pooled_sites).squeeze(0).detach().cpu().float()
@@ -183,7 +181,6 @@ def export_plate(
     output_profiles_root: Path,
     batch: str,
     plate: str,
-    site_batch_size: int,
 ) -> Path:
     """Export one benchmark-compatible plate profile CSV."""
     source_df = load_source_profile(source_profiles_root, batch, plate)
@@ -204,7 +201,7 @@ def export_plate(
             continue
 
         sites = load_well_sites(site_paths)
-        encoded = encode_well(model, sites, device, site_batch_size)
+        encoded = encode_well(model, sites, device)
         if embedding_width is None:
             embedding_width = int(encoded.shape[0])
         exported_features.append(encoded)

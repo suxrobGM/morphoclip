@@ -22,4 +22,3 @@ cellclip_export:
   checkpoint_filename: "model.safetensors"
   input_dim: 1536                         # CellCLIP input dimension
   device: "auto"                          # Torch device
-  site_batch_size: 16                     # Sites per forward pass
