@@ -104,7 +104,6 @@ def evaluate_genetic(
                     "replicability_fr",
                     result=result,
                     group_cols=[REPLICATE_FEATURE],
-                    null_size=null_size,
                     metadata={
                         "Description": description_2,
                         "Modality": modality_2_perturbation,
@@ -162,7 +161,6 @@ def evaluate_genetic(
                     "matching_fr",
                     result=result,
                     group_cols=["Metadata_matching_target"],
-                    null_size=null_size,
                     metadata={
                         "Description": description_2,
                         "Modality": modality_2_perturbation,
@@ -265,7 +263,6 @@ def _evaluate_cross_modality(
         "gene_compound_matching_fr",
         result=result,
         group_cols=["Metadata_matching_target"],
-        null_size=null_size,
         metadata={
             "Description": description_cross,
             "Modality1": modality_1_perturbation,

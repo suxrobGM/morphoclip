@@ -188,17 +188,10 @@ def run_with_unpaired_guard(
 def compute_map_and_fr(
     result: pd.DataFrame,
     group_cols: list[str],
-    null_size: int,
     threshold: float = 0.05,
 ) -> tuple[pd.DataFrame, float]:
     """Compute mAP table and fraction retrieved in stable copairs mode."""
-    map_df = compute_map(
-        result=result,
-        group_cols=group_cols,
-        threshold=threshold,
-        null_size=null_size,
-        copairs_mode="stable",
-    )
+    map_df = compute_map(result=result, group_cols=group_cols, threshold=threshold)
     if len(map_df) == 0:
         return map_df, 0.0
     return map_df, compute_fraction_retrieved(map_df)

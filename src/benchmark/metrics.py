@@ -9,11 +9,9 @@ import numpy as np
 import pandas as pd
 
 from benchmark import copairs_backend, stable_map
-from benchmark.copairs_backend import CopairsMode
 from benchmark.data import get_features, get_metadata
 
 __all__ = [
-    "CopairsMode",
     "compute_fraction_retrieved",
     "compute_map",
     "evaluate_cross_modality_matching",
@@ -34,7 +32,6 @@ def run_map_pipeline(
     batch_size: int = 20000,
     use_abs: bool = False,
     multilabel_col: str | None = None,
-    copairs_mode: CopairsMode = "experimental",
 ) -> pd.DataFrame:
     """Run the full mAP computation pipeline.
 
@@ -49,57 +46,22 @@ def run_map_pipeline(
         batch_size: Batch size for similarity computation.
         use_abs: Use absolute similarity (for anti-correlation matching).
         multilabel_col: Column with multi-label values.
-        copairs_mode: "experimental" for new copairs API or "stable" for old API.
-            Backward-compatible aliases: "modern" -> "experimental",
-            "legacy" -> "stable".
 
     Returns:
         DataFrame with per-sample average precision statistics.
     """
-    distance = "abs_cosine" if use_abs else "cosine"
     meta = meta.reset_index(drop=True).copy()
-
-    mode = copairs_backend._normalize_copairs_mode(copairs_mode)
-    if mode == "stable":
-        return stable_map._run_legacy_pipeline(
-            meta,
-            features,
-            pos_sameby,
-            pos_diffby,
-            neg_sameby,
-            neg_diffby,
-            null_size,
-            batch_size,
-            use_abs,
-            multilabel_col,
-        )
-
-    modern = copairs_backend._get_modern_modules()
-
-    if multilabel_col and multilabel_col in pos_sameby:
-        return modern["average_precision_multilabel"](
-            meta=meta,
-            feats=features,
-            pos_sameby=pos_sameby,
-            pos_diffby=pos_diffby,
-            neg_sameby=neg_sameby,
-            neg_diffby=neg_diffby,
-            multilabel_col=multilabel_col,
-            batch_size=batch_size,
-            distance=distance,
-            progress_bar=False,
-        )
-
-    return modern["average_precision_single"](
-        meta=meta,
-        feats=features,
-        pos_sameby=pos_sameby,
-        pos_diffby=pos_diffby,
-        neg_sameby=neg_sameby,
-        neg_diffby=neg_diffby,
-        batch_size=batch_size,
-        distance=distance,
-        progress_bar=False,
+    return stable_map._run_legacy_pipeline(
+        meta,
+        features,
+        pos_sameby,
+        pos_diffby,
+        neg_sameby,
+        neg_diffby,
+        null_size,
+        batch_size,
+        use_abs,
+        multilabel_col,
     )
 
 
@@ -107,8 +69,6 @@ def compute_map(
     result: pd.DataFrame,
     group_cols: list[str],
     threshold: float = 0.05,
-    null_size: int = 100000,
-    copairs_mode: CopairsMode = "experimental",
 ) -> pd.DataFrame:
     """Aggregate per-sample AP to mean Average Precision per group.
 
@@ -116,36 +76,21 @@ def compute_map(
         result: DataFrame with per-sample average precision values.
         group_cols: Columns to group by for aggregation.
         threshold: Q-value threshold for significance.
-        copairs_mode: "experimental" for new copairs API or "stable" for old API.
-            Backward-compatible aliases: "modern" -> "experimental",
-            "legacy" -> "stable".
 
     Returns:
         DataFrame with mAP per group.
     """
-    mode = copairs_backend._normalize_copairs_mode(copairs_mode)
-    if mode == "stable":
-        legacy = copairs_backend._get_legacy_modules()
-        map_df = legacy["aggregate"](result, group_cols, threshold=threshold).rename(
-            columns={"average_precision": "mean_average_precision"}
-        )
-        if "above_q_threshold" not in map_df.columns:
-            if "above_corrected_p_threshold" in map_df.columns:
-                map_df = map_df.rename(columns={"above_corrected_p_threshold": "above_q_threshold"})
-            elif "below_corrected_p" in map_df.columns:
-                map_df = map_df.rename(columns={"below_corrected_p": "above_q_threshold"})
-        return map_df
-
-    modern = copairs_backend._get_modern_modules()
-    map_df = modern["mean_average_precision"](
-        ap_scores=result,
-        sameby=group_cols,
-        null_size=null_size,
-        threshold=threshold,
-        seed=0,
-        progress_bar=False,
+    legacy = copairs_backend._get_legacy_modules()
+    map_df = legacy["aggregate"](result, group_cols, threshold=threshold).rename(
+        columns={"average_precision": "mean_average_precision"}
     )
-    return map_df.rename(columns={"below_corrected_p": "above_q_threshold"})
+    # Three copairs versions spell the significance column three ways.
+    if "above_q_threshold" not in map_df.columns:
+        if "above_corrected_p_threshold" in map_df.columns:
+            map_df = map_df.rename(columns={"above_corrected_p_threshold": "above_q_threshold"})
+        elif "below_corrected_p" in map_df.columns:
+            map_df = map_df.rename(columns={"below_corrected_p": "above_q_threshold"})
+    return map_df
 
 
 def compute_fraction_retrieved(map_df: pd.DataFrame) -> float:
@@ -167,7 +112,6 @@ def evaluate_replicability(
     negcon_col: str = "Metadata_negcon",
     null_size: int = 100000,
     batch_size: int = 20000,
-    copairs_mode: CopairsMode = "experimental",
 ) -> pd.DataFrame:
     """Evaluate replicability mAP for profiles.
 
@@ -201,7 +145,6 @@ def evaluate_replicability(
         neg_diffby,
         null_size=null_size,
         batch_size=batch_size,
-        copairs_mode=copairs_mode,
     )
 
     if negcon_col not in result.columns:
@@ -222,7 +165,6 @@ def evaluate_matching(
     multilabel: bool = True,
     null_size: int = 100000,
     batch_size: int = 20000,
-    copairs_mode: CopairsMode = "experimental",
 ) -> pd.DataFrame:
     """Evaluate target matching mAP for consensus profiles.
 
@@ -258,7 +200,6 @@ def evaluate_matching(
         batch_size=batch_size,
         use_abs=use_abs,
         multilabel_col=target_col if multilabel else None,
-        copairs_mode=copairs_mode,
     )
 
 
@@ -268,7 +209,6 @@ def evaluate_cross_modality_matching(
     modality_col: str = "Metadata_modality",
     null_size: int = 100000,
     batch_size: int = 20000,
-    copairs_mode: CopairsMode = "experimental",
 ) -> pd.DataFrame:
     """Evaluate cross-modality matching (e.g., compound-gene).
 
@@ -303,5 +243,4 @@ def evaluate_cross_modality_matching(
         batch_size=batch_size,
         use_abs=True,
         multilabel_col=target_col,
-        copairs_mode=copairs_mode,
     )

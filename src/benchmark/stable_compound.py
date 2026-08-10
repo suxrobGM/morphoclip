@@ -104,7 +104,6 @@ def evaluate_compound(
         "replicability_fr",
         result=result,
         group_cols=[REPLICATE_FEATURE],
-        null_size=null_size,
         metadata={
             "Description": description,
             "Modality": modality_1_perturbation,
@@ -155,7 +154,6 @@ def evaluate_compound(
             "matching_fr",
             result=result,
             group_cols=["Metadata_matching_target"],
-            null_size=null_size,
             metadata={
                 "Description": description,
                 "Modality": modality_1_perturbation,

@@ -47,7 +47,6 @@ class StableResults:
         *,
         result: pd.DataFrame,
         group_cols: list[str],
-        null_size: int,
         metadata: dict[str, Any],
     ) -> None:
         """Compute mAP/FR for *result* and append a row to each accumulator.
@@ -57,7 +56,7 @@ class StableResults:
         """
         from benchmark.stable_helpers import compute_map_and_fr
 
-        map_df, fr = compute_map_and_fr(result, group_cols, null_size)
+        map_df, fr = compute_map_and_fr(result, group_cols)
         self._append_rows(map_attr, fr_attr, map_df=map_df, fr=fr, metadata=metadata)
 
     def _append_rows(

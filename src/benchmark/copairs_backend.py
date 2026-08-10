@@ -1,24 +1,9 @@
-"""Copairs backend selection and lazy module loading for benchmark metrics.
+"""Lazy loading of the pinned copairs API used by the benchmark metrics.
 
-:func:`_get_legacy_modules` / :func:`_get_modern_modules` import the optional
-copairs API lazily (inside the function bodies), so importing this module never
-requires copairs installed. Callers reach these through a module reference so
-tests can monkeypatch the loaders.
+:func:`_get_legacy_modules` imports copairs inside the function body, so
+importing this module never requires copairs installed. Callers reach it through
+a module reference so tests can monkeypatch the loader.
 """
-
-from typing import Literal
-
-# Canonical modes:
-# - stable: old copairs API (paper-compatible behavior)
-# - experimental: new copairs API
-# Backward-compatible aliases:
-# - legacy -> stable
-# - modern -> experimental
-CopairsMode = Literal["stable", "experimental", "legacy", "modern"]
-
-EXPERIMENTAL_COPAIRS_ERROR = (
-    "Experimental copairs mode requires the new copairs API. Install a recent copairs release."
-)
 
 STABLE_COPAIRS_ERROR = (
     "Stable copairs mode requires the old copairs API. "
@@ -39,38 +24,6 @@ def _is_multiprocessing_permission_error(exc: Exception) -> bool:
 
     message = str(exc).lower()
     return "semlock" in message and "permission denied" in message
-
-
-def _normalize_copairs_mode(copairs_mode: CopairsMode) -> Literal["stable", "experimental"]:
-    """Normalize copairs mode and keep backward compatibility."""
-    if copairs_mode in ("stable", "legacy"):
-        return "stable"
-    if copairs_mode in ("experimental", "modern"):
-        return "experimental"
-    raise ValueError(
-        f"Unsupported copairs_mode='{copairs_mode}'. "
-        "Use one of: stable, experimental (aliases: legacy, modern)."
-    )
-
-
-def _get_modern_modules():
-    """Import modern copairs modules required for experimental mode."""
-    try:
-        from copairs.map import mean_average_precision
-        from copairs.map.average_precision import (
-            average_precision as average_precision_single,
-        )
-        from copairs.map.multilabel import (
-            average_precision as average_precision_multilabel,
-        )
-    except Exception as exc:  # pragma: no cover - depends on installed copairs version
-        raise RuntimeError(EXPERIMENTAL_COPAIRS_ERROR) from exc
-
-    return {
-        "mean_average_precision": mean_average_precision,
-        "average_precision_single": average_precision_single,
-        "average_precision_multilabel": average_precision_multilabel,
-    }
 
 
 def _get_legacy_modules():
