@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from morphoclip.data.metadata import MetadataIndex
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_METADATA_DIR = Path(__file__).parent / "fixtures" / "cpjump1" / "metadata"
 DOWNLOADED_METADATA_DIR = PROJECT_ROOT / "data" / "metadata"
@@ -25,3 +27,14 @@ def _no_network(monkeypatch: pytest.MonkeyPatch) -> None:
 def metadata_dir() -> Path:
     """Committed CPJUMP1 platemap tree. See tests/fixtures/README.md."""
     return FIXTURE_METADATA_DIR
+
+
+@pytest.fixture(scope="session")
+def metadata_index(metadata_dir: Path) -> MetadataIndex:
+    """The fixture platemaps, parsed once.
+
+    Session-scoped because it is read-only: nothing on ``MetadataIndex`` mutates
+    it, and ``lookup`` hands back a frozen ``PerturbationInfo``. Do not add a
+    mutator without narrowing this scope.
+    """
+    return MetadataIndex.from_directory(metadata_dir, batch=BATCH)

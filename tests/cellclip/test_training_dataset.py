@@ -11,12 +11,9 @@ from cellclip.training.config import CellCLIPDatasetConfig, CellCLIPModelConfig
 from cellclip.training.dataset import build_tokenized_collate_fn, prepare_datasets
 from morphoclip.data.metadata import MetadataIndex
 from morphoclip.data.perturbation import PerturbationType
-from tests.cellclip.conftest import (
-    HIDDEN_DIM,
-    NUM_CHANNELS,
-    DummyTokenizer,
-    write_feature,
-)
+from tests.support.constants import HIDDEN_DIM, NUM_CHANNELS
+from tests.support.features import write_well_features
+from tests.support.stubs import DummyTokenizer
 
 
 @pytest.fixture
@@ -46,7 +43,7 @@ def test_build_tokenized_collate_fn_adds_bert_tokens(
     tmp_path: Path,
     metadata_index: MetadataIndex,
 ) -> None:
-    write_feature(tmp_path, "BR00116991", "A01", sites=2)
+    write_well_features(tmp_path, "BR00116991", "A01", sites=2, dim=HIDDEN_DIM)
     from morphoclip.data.dataset import MorphoCLIPDataset
 
     ds = MorphoCLIPDataset(
@@ -79,10 +76,10 @@ def test_prepare_datasets_uses_official_subsets(
         "OFFICIAL_SPLIT_METADATA_PATH",
         official_split_metadata_csv,
     )
-    write_feature(tmp_path, "BR00117000", "A04", sites=2)
-    write_feature(tmp_path, "BR00117020", "A01", sites=1)
-    write_feature(tmp_path, "BR00116991", "A01", sites=2)
-    write_feature(tmp_path, "BR00117017", "A01", sites=1)
+    write_well_features(tmp_path, "BR00117000", "A04", sites=2, dim=HIDDEN_DIM)
+    write_well_features(tmp_path, "BR00117020", "A01", sites=1, dim=HIDDEN_DIM)
+    write_well_features(tmp_path, "BR00116991", "A01", sites=2, dim=HIDDEN_DIM)
+    write_well_features(tmp_path, "BR00117017", "A01", sites=1, dim=HIDDEN_DIM)
 
     dataset_cfg = CellCLIPDatasetConfig(
         dataset_config_path="configs/dataset.yml",
@@ -125,9 +122,9 @@ def test_prepare_datasets_unique_perturbations_preserve_timepoint_distinct_wells
     tmp_path: Path,
     metadata_index: MetadataIndex,
 ) -> None:
-    write_feature(tmp_path, "BR00116991", "A01", sites=2)
-    write_feature(tmp_path, "BR00117017", "A01", sites=1)
-    write_feature(tmp_path, "BR00117000", "A04", sites=1)
+    write_well_features(tmp_path, "BR00116991", "A01", sites=2, dim=HIDDEN_DIM)
+    write_well_features(tmp_path, "BR00117017", "A01", sites=1, dim=HIDDEN_DIM)
+    write_well_features(tmp_path, "BR00117000", "A04", sites=1, dim=HIDDEN_DIM)
     split_manifest = tmp_path / "split_manifest.csv"
     split_manifest.write_text(
         "\n".join(
@@ -177,8 +174,8 @@ def test_prepare_datasets_supports_split_specific_site_caps(
     tmp_path: Path,
     metadata_index: MetadataIndex,
 ) -> None:
-    write_feature(tmp_path, "BR00116991", "A01", sites=3)
-    write_feature(tmp_path, "BR00116991", "A03", sites=3)
+    write_well_features(tmp_path, "BR00116991", "A01", sites=3, dim=HIDDEN_DIM)
+    write_well_features(tmp_path, "BR00116991", "A03", sites=3, dim=HIDDEN_DIM)
     split_manifest = tmp_path / "split_manifest.csv"
     split_manifest.write_text(
         "\n".join(

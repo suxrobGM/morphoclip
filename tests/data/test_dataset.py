@@ -23,12 +23,6 @@ NUM_CHANNELS = 5
 
 
 @pytest.fixture
-def metadata_index(metadata_dir: Path) -> MetadataIndex:
-    """Build MetadataIndex from real metadata."""
-    return MetadataIndex.from_directory(metadata_dir, batch=BATCH)
-
-
-@pytest.fixture
 def fake_features(tmp_path: Path) -> Path:
     """Create synthetic feature .pt files mimicking extracted features.
 

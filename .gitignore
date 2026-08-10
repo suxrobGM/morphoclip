@@ -57,7 +57,9 @@ build/
 # Logs / coverage
 *.log
 .coverage
+.coverage.*
 coverage.xml
+coverage.json
 htmlcov/
 
 .claude/settings.local.json

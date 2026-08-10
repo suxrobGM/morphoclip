@@ -8,7 +8,7 @@ import torch
 from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
 from cellclip.training.config import CellCLIPModelConfig
 from cellclip.training.model import CellCLIP
-from tests.cellclip.conftest import FakeTextModel
+from tests.support.stubs import FakeTextModel
 
 
 def test_training_checkpoint_is_visual_loader_compatible(

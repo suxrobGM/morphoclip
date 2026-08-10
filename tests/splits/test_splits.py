@@ -19,12 +19,6 @@ HIDDEN_DIM = 384
 NUM_CHANNELS = 5
 
 
-@pytest.fixture
-def metadata_index(metadata_dir: Path) -> MetadataIndex:
-    """Build MetadataIndex from real metadata."""
-    return MetadataIndex.from_directory(metadata_dir, batch=BATCH)
-
-
 class TestCreateSplits:
     @staticmethod
     def _index_by_plate_well(ds: MorphoCLIPDataset) -> dict[tuple[str, str], int]:

@@ -56,6 +56,13 @@ def make_feature_root(
     return root
 
 
+def write_well_features(
+    root: Path, plate: str, well: str, *, sites: int = 1, dim: int = EMBED_DIM
+) -> Path:
+    """One well of :func:`make_feature_root`, for tests that add wells one at a time."""
+    return make_feature_root(root, {plate: [well]}, sites=sites, dim=dim)
+
+
 def write_dataset_yml(path: Path, *, metadata_dir: Path, batch: str = BATCH) -> Path:
     """Write a ``configs/dataset.yml``-shaped file for ``MetadataIndex.from_config``."""
     path.parent.mkdir(parents=True, exist_ok=True)

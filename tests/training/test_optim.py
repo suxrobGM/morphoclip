@@ -28,7 +28,7 @@ from morphoclip.training.optim import (
     unwrap,
     unwrap_state_dict,
 )
-from tests.cellclip.conftest import FakeTextModel
+from tests.support.stubs import FakeTextModel
 
 
 def _morphoclip_modules() -> tuple[nn.Module, nn.Module]:

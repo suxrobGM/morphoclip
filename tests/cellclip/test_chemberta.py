@@ -10,11 +10,9 @@ from cellclip.training.config import CellCLIPModelConfig, load_training_config
 from cellclip.training.dataset import build_tokenized_collate_fn
 from cellclip.training.model import CellCLIPChemBERTa, CellCLIPChemBERTaFiLM
 from morphoclip.data.metadata import MetadataIndex
-from tests.cellclip.conftest import (
-    DummyTokenizer,
-    FakeTextModel,
-    write_feature,
-)
+from tests.support.constants import HIDDEN_DIM
+from tests.support.features import write_well_features
+from tests.support.stubs import DummyTokenizer, FakeTextModel
 
 
 class FakeChemBERTaModel(torch.nn.Module):
@@ -41,7 +39,7 @@ def test_build_tokenized_collate_fn_adds_smiles_tokens_for_chemberta_variant(
     tmp_path: Path,
     metadata_index: MetadataIndex,
 ) -> None:
-    write_feature(tmp_path, "BR00116991", "A01", sites=2)
+    write_well_features(tmp_path, "BR00116991", "A01", sites=2, dim=HIDDEN_DIM)
     from morphoclip.data.dataset import MorphoCLIPDataset
 
     ds = MorphoCLIPDataset(
@@ -69,7 +67,7 @@ def test_build_tokenized_collate_fn_can_keep_smiles_in_prompt_with_chemberta(
     tmp_path: Path,
     metadata_index: MetadataIndex,
 ) -> None:
-    write_feature(tmp_path, "BR00116991", "A01", sites=2)
+    write_well_features(tmp_path, "BR00116991", "A01", sites=2, dim=HIDDEN_DIM)
     from morphoclip.data.dataset import MorphoCLIPDataset
 
     ds = MorphoCLIPDataset(
