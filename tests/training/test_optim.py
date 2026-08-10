@@ -155,9 +155,3 @@ class TestUnwrap:
         wrapper.module = inner
         assert unwrap(wrapper) is inner
         assert set(unwrap_state_dict(wrapper)) == set(inner.state_dict())
-
-    def test_unwrapped_keys_carry_no_module_prefix(self) -> None:
-        inner = nn.Linear(2, 2)
-        wrapper = nn.Module()
-        wrapper.module = inner
-        assert not any(key.startswith("module.") for key in unwrap_state_dict(wrapper))

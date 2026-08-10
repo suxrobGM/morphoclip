@@ -1,357 +1,160 @@
 """Tests for the split strategies in morphoclip.splits.
 
-Uses the committed CPJUMP1 metadata fixture and synthesized .pt feature files.
+Uses the committed CPJUMP1 metadata fixture plus synthesized .pt features, with
+the two reference-metadata files the strategies read redirected at stand-ins.
 """
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-import torch
 
-import morphoclip.splits.contexts as split_contexts_module
+import morphoclip.splits.contexts as split_contexts
 from morphoclip.data.dataset import MorphoCLIPDataset
 from morphoclip.data.metadata import MetadataIndex
 from morphoclip.splits.api import build_split_groups, create_splits
 from morphoclip.splits.manifest import build_split_manifest
+from tests.support.constants import HIDDEN_DIM
+from tests.support.features import BATCH, make_feature_root
 
-BATCH = "2020_11_04_CPJUMP1"
-HIDDEN_DIM = 384
-NUM_CHANNELS = 5
+OFFICIAL_CSV_ROWS = (
+    "Metadata_Plate,Metadata_Well,Metadata_broad_sample,Metadata_target,"
+    "Metadata_cell_line,Metadata_experiment_type,Metadata_timepoint,"
+    "Metadata_timepoint_code,Metadata_target_is_across,Metadata_target_radix",
+    "BR00117000,A04,BRDN0000259015,OPRL1,U2OS,CRISPR,144,high,TRUE,1",
+    "BR00117000,A11,BRDN0000259016,OPRL1,U2OS,CRISPR,144,high,TRUE,1",
+    "BR00116991,A01,BRD-A86665761-001-01-1,CACNB4,A549,Compound,24,low,TRUE,2",
+    "BR00117017,A01,BRD-A86665761-001-01-1,CACNB4,A549,Compound,48,high,TRUE,2",
+    "BR00117020,A01,ccsbBroad304_00900,KCNN1,A549,ORF,48,low,TRUE,3",
+    "BR00117003,A01,BRDN0001480888,HIF1A,A549,CRISPR,144,high,TRUE,4",
+)
+
+REPRESENTATION_WELLS = (
+    ("BR00117003", "A01"),
+    ("BR00117020", "A01"),
+    ("BR00116991", "A01"),
+    ("BR00117017", "A01"),
+)
+GENE_COMPOUND_WELLS = (("BR00117000", "A04"), ("BR00117000", "A11"), *REPRESENTATION_WELLS)
+
+# (plate, well, cell type). Wells A01 of 91/92/95 share one broad_sample, so the
+# same treatment appears twice in the A549 slice and once in the U2OS slice.
+CELLCLIP_PLATES = (
+    ("BR00116991", "A01", "A549"),
+    ("BR00116992", "A01", "A549"),
+    ("BR00116993", "A03", "A549"),
+    ("BR00116994", "A04", "A549"),
+    ("BR00116995", "A01", "U2OS"),
+)
 
 
-class TestCreateSplits:
-    @staticmethod
-    def _index_by_plate_well(ds: MorphoCLIPDataset) -> dict[tuple[str, str], int]:
-        return {(plate, well): i for i, (plate, well, _) in enumerate(ds.index_entries)}
+def _dataset(
+    tmp_path: Path, metadata: MetadataIndex, wells: Sequence[tuple[str, str]]
+) -> MorphoCLIPDataset:
+    plates: dict[str, list[str]] = {}
+    for plate, well in wells:
+        plates.setdefault(plate, []).append(well)
+    make_feature_root(tmp_path, plates, dim=HIDDEN_DIM)
+    return MorphoCLIPDataset(feature_dir=tmp_path, metadata=metadata, plates=list(plates))
 
-    def _make_multi_well_dataset(
-        self, tmp_path: Path, metadata_index: MetadataIndex
-    ) -> MorphoCLIPDataset:
-        """Create a dataset with enough wells for meaningful splits."""
-        plate_dir = tmp_path / "BR00116991"
-        plate_dir.mkdir(exist_ok=True)
-        # Create features for 10 wells across first two rows
-        for col in range(1, 11):
-            feat = torch.randn(NUM_CHANNELS, HIDDEN_DIM)
-            torch.save(feat, plate_dir / f"r01c{col:02d}f01.pt")
 
-        return MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00116991"],
-        )
+def _index_map(dataset: MorphoCLIPDataset) -> dict[tuple[str, str], int]:
+    return {(plate, well): i for i, (plate, well, _) in enumerate(dataset.index_entries)}
 
-    @staticmethod
-    def _write_well_feature(feature_root: Path, plate: str, well: str, site: int = 1) -> None:
-        row = ord(well[0].upper()) - ord("A") + 1
-        col = int(well[1:])
-        plate_dir = feature_root / plate
-        plate_dir.mkdir(exist_ok=True)
-        feat = torch.randn(NUM_CHANNELS, HIDDEN_DIM)
-        torch.save(feat, plate_dir / f"r{row:02d}c{col:02d}f{site:02d}.pt")
 
-    @pytest.fixture
-    def official_split_metadata_csv(self, tmp_path: Path) -> Path:
-        path = tmp_path / "cpjump1_metadata.csv"
-        path.write_text(
-            "\n".join(
-                [
-                    (
-                        "Metadata_Plate,Metadata_Well,Metadata_broad_sample,Metadata_target,"
-                        "Metadata_cell_line,Metadata_experiment_type,Metadata_timepoint,"
-                        "Metadata_timepoint_code,Metadata_target_is_across,Metadata_target_radix"
-                    ),
-                    "BR00117000,A04,BRDN0000259015,OPRL1,U2OS,CRISPR,144,high,TRUE,1",
-                    "BR00117000,A11,BRDN0000259016,OPRL1,U2OS,CRISPR,144,high,TRUE,1",
-                    "BR00116991,A01,BRD-A86665761-001-01-1,CACNB4,A549,Compound,24,low,TRUE,2",
-                    "BR00117017,A01,BRD-A86665761-001-01-1,CACNB4,A549,Compound,48,high,TRUE,2",
-                    "BR00117020,A01,ccsbBroad304_00900,KCNN1,A549,ORF,48,low,TRUE,3",
-                    "BR00117003,A01,BRDN0001480888,HIF1A,A549,CRISPR,144,high,TRUE,4",
-                ]
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        return path
+@pytest.fixture
+def official_split_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the official CPJUMP1 split CSV at a six-well stand-in."""
+    path = tmp_path / "cpjump1_metadata.csv"
+    path.write_text("\n".join(OFFICIAL_CSV_ROWS) + "\n", encoding="utf-8")
+    monkeypatch.setattr(split_contexts, "OFFICIAL_SPLIT_METADATA_PATH", path)
 
-    def test_invalid_strategy(self, tmp_path: Path, metadata_index: MetadataIndex) -> None:
-        ds = self._make_multi_well_dataset(tmp_path, metadata_index)
-        with pytest.raises(ValueError, match="Unknown split strategy"):
-            create_splits(ds, "invalid")
 
-    def test_deterministic(self, tmp_path: Path, metadata_index: MetadataIndex) -> None:
-        for plate, well in [
-            ("BR00117003", "A01"),
-            ("BR00117020", "A01"),
-            ("BR00116991", "A01"),
-            ("BR00117017", "A01"),
-        ]:
-            self._write_well_feature(tmp_path, plate, well)
+@pytest.fixture
+def representation_dataset(
+    tmp_path: Path, metadata_index: MetadataIndex, official_split_metadata: None
+) -> MorphoCLIPDataset:
+    return _dataset(tmp_path, metadata_index, REPRESENTATION_WELLS)
 
-        ds = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00117003", "BR00117020", "BR00116991", "BR00117017"],
-        )
-        train1, val1, test1 = create_splits(ds, "cpjump1_official_representation")
-        train2, val2, test2 = create_splits(ds, "cpjump1_official_representation")
-        assert list(train1.indices) == list(train2.indices)
-        assert list(val1.indices) == list(val2.indices)
-        assert list(test1.indices) == list(test2.indices)
 
-    def test_cpjump1_official_representation_split_assigns_expected_subsets(
-        self,
-        tmp_path: Path,
-        metadata_index: MetadataIndex,
-        official_split_metadata_csv: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(
-            split_contexts_module,
-            "OFFICIAL_SPLIT_METADATA_PATH",
-            official_split_metadata_csv,
-        )
-        for plate, well in [
-            ("BR00117003", "A01"),
-            ("BR00117020", "A01"),
-            ("BR00116991", "A01"),
-            ("BR00117017", "A01"),
-        ]:
-            self._write_well_feature(tmp_path, plate, well)
+@pytest.fixture
+def cellclip_experiment_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the benchmark experiment TSV at the plates the cellclip split slices on."""
+    path = tmp_path / "experiment-metadata.tsv"
+    header = "Batch\tPlate_Map_Name\tAssay_Plate_Barcode\tPerturbation\tCell_type\tTime"
+    rows = [
+        f"{BATCH}\tcompound\t{plate}\tcompound\t{cell_type}\t24"
+        for plate, _well, cell_type in CELLCLIP_PLATES
+    ]
+    path.write_text("\n".join([header, *rows]) + "\n", encoding="utf-8")
+    monkeypatch.setattr(split_contexts, "METADATA_PATH", path)
 
-        ds = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00117003", "BR00117020", "BR00116991", "BR00117017"],
-        )
-        index_map = self._index_by_plate_well(ds)
 
-        train, val, test = create_splits(ds, "cpjump1_official_representation")
+def test_unknown_strategy_is_rejected(representation_dataset: MorphoCLIPDataset) -> None:
+    with pytest.raises(ValueError, match="Unknown split strategy"):
+        create_splits(representation_dataset, "invalid")
 
-        assert set(train.indices) == {
-            index_map[("BR00117003", "A01")],
-            index_map[("BR00117020", "A01")],
-        }
-        assert set(val.indices) == {index_map[("BR00116991", "A01")]}
-        assert set(test.indices) == {index_map[("BR00117017", "A01")]}
 
-    def test_cpjump1_official_representation_groups_include_subset_bucket(
-        self,
-        tmp_path: Path,
-        metadata_index: MetadataIndex,
-        official_split_metadata_csv: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(
-            split_contexts_module,
-            "OFFICIAL_SPLIT_METADATA_PATH",
-            official_split_metadata_csv,
-        )
-        for plate, well in [
-            ("BR00117003", "A01"),
-            ("BR00117020", "A01"),
-            ("BR00116991", "A01"),
-            ("BR00117017", "A01"),
-        ]:
-            self._write_well_feature(tmp_path, plate, well)
+def test_official_representation_splits_by_modality_and_timepoint(
+    representation_dataset: MorphoCLIPDataset, metadata_index: MetadataIndex
+) -> None:
+    index = _index_map(representation_dataset)
+    train, validate, test = create_splits(representation_dataset, "cpjump1_official_representation")
 
-        ds = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00117003", "BR00117020", "BR00116991", "BR00117017"],
-        )
-        groups = build_split_groups(ds, "cpjump1_official_representation")
-        assert any(key.startswith("train::") for key in groups)
-        assert any(key.startswith("validate::") for key in groups)
-        assert any(key.startswith("test::") for key in groups)
+    assert set(train.indices) == {index[("BR00117003", "A01")], index[("BR00117020", "A01")]}
+    assert set(validate.indices) == {index[("BR00116991", "A01")]}
+    assert set(test.indices) == {index[("BR00117017", "A01")]}
 
-    def test_cpjump1_official_gene_compound_split_keeps_targets_together(
-        self,
-        tmp_path: Path,
-        metadata_index: MetadataIndex,
-        official_split_metadata_csv: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(
-            split_contexts_module,
-            "OFFICIAL_SPLIT_METADATA_PATH",
-            official_split_metadata_csv,
-        )
-        for plate, well in [
-            ("BR00117000", "A04"),
-            ("BR00117000", "A11"),
-            ("BR00116991", "A01"),
-            ("BR00117017", "A01"),
-            ("BR00117020", "A01"),
-            ("BR00117003", "A01"),
-        ]:
-            self._write_well_feature(tmp_path, plate, well)
+    broad_sample = metadata_index.lookup("BR00117017", "A01").broad_sample
+    groups = build_split_groups(representation_dataset, "cpjump1_official_representation")
+    assert groups[f"test::A549::Compound::high::{broad_sample}"] == [index[("BR00117017", "A01")]]
 
-        ds = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00117000", "BR00116991", "BR00117017", "BR00117020", "BR00117003"],
-        )
-        index_map = self._index_by_plate_well(ds)
 
-        train, val, test = create_splits(ds, "cpjump1_official_gene_compound")
+def test_official_gene_compound_keeps_each_target_in_one_subset(
+    tmp_path: Path, metadata_index: MetadataIndex, official_split_metadata: None
+) -> None:
+    dataset = _dataset(tmp_path, metadata_index, GENE_COMPOUND_WELLS)
+    index = _index_map(dataset)
+    oprl1 = sorted([index[("BR00117000", "A04")], index[("BR00117000", "A11")]])
+    cacnb4 = sorted([index[("BR00116991", "A01")], index[("BR00117017", "A01")]])
 
-        assert set(train.indices) == {
-            index_map[("BR00117000", "A04")],
-            index_map[("BR00117000", "A11")],
-            index_map[("BR00116991", "A01")],
-            index_map[("BR00117017", "A01")],
-        }
-        assert set(val.indices) == {index_map[("BR00117020", "A01")]}
-        assert set(test.indices) == {index_map[("BR00117003", "A01")]}
+    train, validate, test = create_splits(dataset, "cpjump1_official_gene_compound")
 
-    def test_cpjump1_official_gene_compound_groups_by_target(
-        self,
-        tmp_path: Path,
-        metadata_index: MetadataIndex,
-        official_split_metadata_csv: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(
-            split_contexts_module,
-            "OFFICIAL_SPLIT_METADATA_PATH",
-            official_split_metadata_csv,
-        )
-        for plate, well in [
-            ("BR00117000", "A04"),
-            ("BR00117000", "A11"),
-            ("BR00116991", "A01"),
-            ("BR00117017", "A01"),
-        ]:
-            self._write_well_feature(tmp_path, plate, well)
+    assert set(train.indices) == set(oprl1) | set(cacnb4)
+    assert set(validate.indices) == {index[("BR00117020", "A01")]}
+    assert set(test.indices) == {index[("BR00117003", "A01")]}
 
-        ds = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00117000", "BR00116991", "BR00117017"],
-        )
-        groups = build_split_groups(ds, "cpjump1_official_gene_compound")
+    groups = build_split_groups(dataset, "cpjump1_official_gene_compound")
+    assert groups["OPRL1"] == oprl1
+    assert groups["CACNB4"] == cacnb4
 
-        assert set(groups["OPRL1"]) == {0, 1}
-        assert set(groups["CACNB4"]) == {2, 3}
 
-    def test_cellclip_cpjump_style_split_groups_broad_samples_within_slice(
-        self,
-        tmp_path: Path,
-        metadata_index: MetadataIndex,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        experiment_metadata_tsv = tmp_path / "experiment-metadata.tsv"
-        experiment_metadata_tsv.write_text(
-            "\n".join(
-                [
-                    "Batch\tPlate_Map_Name\tAssay_Plate_Barcode\tPerturbation\tCell_type\tTime",
-                    "2020_11_04_CPJUMP1\tcompound\tBR00116991\tcompound\tA549\t24",
-                    "2020_11_04_CPJUMP1\tcompound\tBR00116992\tcompound\tA549\t24",
-                    "2020_11_04_CPJUMP1\tcompound\tBR00116993\tcompound\tA549\t24",
-                    "2020_11_04_CPJUMP1\tcompound\tBR00116994\tcompound\tA549\t24",
-                ]
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(split_contexts_module, "METADATA_PATH", experiment_metadata_tsv)
+def test_cellclip_cpjump_style_slices_by_plate_context_and_keeps_replicates_together(
+    tmp_path: Path, metadata_index: MetadataIndex, cellclip_experiment_metadata: None
+) -> None:
+    dataset = _dataset(tmp_path, metadata_index, [(p, w) for p, w, _ in CELLCLIP_PLATES])
+    index = _index_map(dataset)
+    replicates = sorted([index[("BR00116991", "A01")], index[("BR00116992", "A01")]])
+    shared = metadata_index.lookup("BR00116991", "A01").broad_sample
 
-        for plate, well in [
-            ("BR00116991", "A01"),
-            ("BR00116992", "A01"),
-            ("BR00116993", "A03"),
-            ("BR00116994", "A04"),
-        ]:
-            self._write_well_feature(tmp_path, plate, well)
+    groups = build_split_groups(dataset, "cellclip_cpjump_style")
+    assert groups[f"A549::compound::24::{shared}"] == replicates
+    assert groups[f"U2OS::compound::24::{shared}"] == [index[("BR00116995", "A01")]]
 
-        ds = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00116991", "BR00116992", "BR00116993", "BR00116994"],
-        )
-        index_map = self._index_by_plate_well(ds)
+    train, validate, test = create_splits(dataset, "cellclip_cpjump_style")
+    assert list(validate.indices) == []
+    assert len(train.indices) + len(test.indices) == len(dataset)
+    # 3 A549 treatments, 75% of them train: the shared one sorts last, into test.
+    assert set(replicates) <= set(test.indices)
 
-        train, val, test = create_splits(ds, "cellclip_cpjump_style")
 
-        assert len(val.indices) == 0
-        assert len(train.indices) + len(test.indices) == len(ds)
-        assert len(train.indices) > 0
-        assert len(test.indices) > 0
-        a01_indices = {
-            index_map[("BR00116991", "A01")],
-            index_map[("BR00116992", "A01")],
-        }
-        assert a01_indices.issubset(set(train.indices)) or a01_indices.issubset(set(test.indices))
+def test_split_manifest_carries_one_row_per_well_with_its_context(
+    representation_dataset: MorphoCLIPDataset,
+) -> None:
+    manifest = build_split_manifest(representation_dataset, "cpjump1_official_representation")
 
-    def test_cellclip_cpjump_style_groups_by_slice_and_broad_sample(
-        self,
-        tmp_path: Path,
-        metadata_index: MetadataIndex,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        experiment_metadata_tsv = tmp_path / "experiment-metadata.tsv"
-        experiment_metadata_tsv.write_text(
-            "\n".join(
-                [
-                    "Batch\tPlate_Map_Name\tAssay_Plate_Barcode\tPerturbation\tCell_type\tTime",
-                    "2020_11_04_CPJUMP1\tcompound\tBR00116991\tcompound\tA549\t24",
-                    "2020_11_04_CPJUMP1\tcompound\tBR00116992\tcompound\tA549\t24",
-                    "2020_11_04_CPJUMP1\tcompound\tBR00116995\tcompound\tU2OS\t24",
-                ]
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(split_contexts_module, "METADATA_PATH", experiment_metadata_tsv)
-
-        for plate, well in [
-            ("BR00116991", "A01"),
-            ("BR00116992", "A01"),
-            ("BR00116995", "A01"),
-        ]:
-            self._write_well_feature(tmp_path, plate, well)
-
-        ds = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00116991", "BR00116992", "BR00116995"],
-        )
-        groups = build_split_groups(ds, "cellclip_cpjump_style")
-
-        assert groups["A549::compound::24::BRD-A86665761-001-01-1"] == [0, 1]
-        assert groups["U2OS::compound::24::BRD-A86665761-001-01-1"] == [2]
-
-    def test_build_split_manifest_uses_plate_well_keys(
-        self,
-        tmp_path: Path,
-        metadata_index: MetadataIndex,
-        official_split_metadata_csv: Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setattr(
-            split_contexts_module,
-            "OFFICIAL_SPLIT_METADATA_PATH",
-            official_split_metadata_csv,
-        )
-        for plate, well in [
-            ("BR00117003", "A01"),
-            ("BR00117020", "A01"),
-            ("BR00116991", "A01"),
-            ("BR00117017", "A01"),
-        ]:
-            self._write_well_feature(tmp_path, plate, well)
-
-        ds = MorphoCLIPDataset(
-            feature_dir=tmp_path,
-            metadata=metadata_index,
-            plates=["BR00117003", "BR00117020", "BR00116991", "BR00117017"],
-        )
-
-        manifest = build_split_manifest(ds, "cpjump1_official_representation")
-
-        assert manifest[["Metadata_Plate", "Metadata_Well"]].duplicated().sum() == 0
-        assert set(manifest["subset"]) == {"train", "validate", "test"}
-        test_row = manifest.query("Metadata_Plate=='BR00117017' and Metadata_Well=='A01'")
-        assert test_row.iloc[0]["subset"] == "test"
-        assert test_row.iloc[0]["Metadata_timepoint_code"] == "high"
+    assert manifest[["Metadata_Plate", "Metadata_Well"]].duplicated().sum() == 0
+    assert set(manifest["subset"]) == {"train", "validate", "test"}
+    row = manifest.query("Metadata_Plate=='BR00117017' and Metadata_Well=='A01'").iloc[0]
+    assert row["subset"] == "test"
+    assert row["Metadata_timepoint_code"] == "high"

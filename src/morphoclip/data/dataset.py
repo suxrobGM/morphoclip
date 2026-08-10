@@ -185,10 +185,16 @@ class MorphoCLIPDataset(Dataset[MorphoCLIPSample]):
         logger.info("Preload complete: %d files, %.1f GB", len(paths), size_gb)
 
     def _load_tensor(self, path: Path) -> torch.Tensor:
-        """Load a tensor from cache or disk."""
-        if self._cache:
-            return self._cache[path]
-        return torch.load(path, weights_only=True)
+        """Load a tensor from the preload cache, falling back to disk.
+
+        Checked per path, not "is the cache non-empty": training preloads only
+        the train and validation indices, so a test-split well is absent from a
+        populated cache and must still load.
+        """
+        cached = self._cache.get(path)
+        if cached is None:
+            return torch.load(path, weights_only=True)
+        return cached
 
     def __len__(self) -> int:
         return len(self._index)

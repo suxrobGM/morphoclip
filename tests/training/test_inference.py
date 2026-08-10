@@ -19,18 +19,16 @@ from morphoclip.training.inference import encode_wells
 DEVICE = torch.device("cpu")
 
 
-class RecordingEncoder(nn.Module):
-    """Returns one row per well, and remembers the dtype it was called in."""
+class CountingEncoder(nn.Module):
+    """Returns one row per well, holding that well's site count."""
 
     def __init__(self, dim: int = 4) -> None:
         super().__init__()
         self.dim = dim
-        self.autocast_was_enabled: list[bool] = []
 
     def forward(self, features: torch.Tensor, site_mask: torch.Tensor) -> torch.Tensor:
-        self.autocast_was_enabled.append(torch.is_autocast_enabled("cpu"))
-        counts = site_mask.sum(dim=1).float().unsqueeze(1)
-        return counts.expand(-1, self.dim).clone()
+        del features
+        return site_mask.sum(dim=1).float().unsqueeze(1).expand(-1, self.dim).clone()
 
 
 class DoublingProjection(nn.Module):
@@ -63,7 +61,7 @@ def make_text_cache(broad_samples: list[str], dim: int = 4) -> dict:
 class TestImageOnly:
     def test_rows_line_up_with_wells_across_batches(self) -> None:
         loader = [make_batch(["A01", "A02"]), make_batch(["A03"], plate="P2")]
-        encoded = encode_wells(RecordingEncoder(), loader, device=DEVICE)
+        encoded = encode_wells(CountingEncoder(), loader, device=DEVICE)
 
         assert encoded.image.shape == (3, 4)
         assert encoded.wells == ["A01", "A02", "A03"]
@@ -75,22 +73,19 @@ class TestImageOnly:
         ]
 
     def test_no_text_projection_means_no_text(self) -> None:
-        encoded = encode_wells(RecordingEncoder(), [make_batch(["A01"])], device=DEVICE)
+        encoded = encode_wells(CountingEncoder(), [make_batch(["A01"])], device=DEVICE)
         assert encoded.text is None
         with pytest.raises(ValueError, match="without a text projection"):
             encoded.require_text()
 
     def test_an_empty_loader_raises_rather_than_returning_nothing(self) -> None:
         with pytest.raises(ValueError, match="No wells to encode"):
-            encode_wells(RecordingEncoder(), [], device=DEVICE)
+            encode_wells(CountingEncoder(), [], device=DEVICE)
 
     def test_batches_emptied_by_filtering_are_skipped_not_concatenated(self) -> None:
         loader = [make_batch(["A01"]), make_batch(["A02"])]
         encoded = encode_wells(
-            RecordingEncoder(),
-            loader,
-            device=DEVICE,
-            text_cache=make_text_cache(["BRD-A02"]),
+            CountingEncoder(), loader, device=DEVICE, text_cache=make_text_cache(["BRD-A02"])
         )
         assert encoded.wells == ["A02"]
         assert encoded.skipped == 1
@@ -99,15 +94,14 @@ class TestImageOnly:
 class TestTextCache:
     def test_no_cache_means_no_filtering(self) -> None:
         """Profile export passes no cache, and must keep every well including controls."""
-        encoded = encode_wells(RecordingEncoder(), [make_batch(["A01", "A02"])], device=DEVICE)
+        encoded = encode_wells(CountingEncoder(), [make_batch(["A01", "A02"])], device=DEVICE)
         assert encoded.wells == ["A01", "A02"]
         assert encoded.skipped == 0
 
     def test_uncached_wells_are_dropped_and_counted(self) -> None:
-        loader = [make_batch(["A01", "A02", "A03"])]
         encoded = encode_wells(
-            RecordingEncoder(),
-            loader,
+            CountingEncoder(),
+            [make_batch(["A01", "A02", "A03"])],
             device=DEVICE,
             text_projection=DoublingProjection(),
             text_cache=make_text_cache(["BRD-A01", "BRD-A03"]),
@@ -119,7 +113,7 @@ class TestTextCache:
     def test_text_rows_follow_the_surviving_wells(self) -> None:
         cache = make_text_cache(["BRD-A01", "BRD-A02"])
         encoded = encode_wells(
-            RecordingEncoder(),
+            CountingEncoder(),
             [make_batch(["A02"])],
             device=DEVICE,
             text_projection=DoublingProjection(),
@@ -129,22 +123,17 @@ class TestTextCache:
         assert torch.equal(encoded.require_text()[0], expected)
 
 
-class TestAutocast:
-    def test_amp_is_off_unless_asked_for(self) -> None:
-        """The default protects exported profiles from silently becoming fp16."""
-        encoder = RecordingEncoder()
-        encode_wells(encoder, [make_batch(["A01"])], device=DEVICE)
-        assert encoder.autocast_was_enabled == [False]
+def test_the_amp_flag_reaches_autocast_and_defaults_to_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CPU always takes the nullcontext branch, so intercept the call instead."""
+    requested: list[bool] = []
 
-    def test_the_amp_flag_reaches_autocast(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """CPU always takes the nullcontext branch, so intercept the call instead."""
-        requested: list[bool] = []
+    def record(_device: torch.device, enabled: bool):
+        requested.append(enabled)
+        return nullcontext()
 
-        def record(_device: torch.device, enabled: bool):
-            requested.append(enabled)
-            return nullcontext()
-
-        monkeypatch.setattr("morphoclip.training.inference.autocast_context", record)
-        encode_wells(RecordingEncoder(), [make_batch(["A01"])], device=DEVICE)
-        encode_wells(RecordingEncoder(), [make_batch(["A01"])], device=DEVICE, amp=True)
-        assert requested == [False, True]
+    monkeypatch.setattr("morphoclip.training.inference.autocast_context", record)
+    encode_wells(CountingEncoder(), [make_batch(["A01"])], device=DEVICE)
+    encode_wells(CountingEncoder(), [make_batch(["A01"])], device=DEVICE, amp=True)
+    assert requested == [False, True]

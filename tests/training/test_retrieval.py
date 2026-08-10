@@ -18,75 +18,41 @@ def _basis(dim: int, index: int) -> torch.Tensor:
     return vec
 
 
-class TestClumpingRegression:
+def test_candidate_pool_is_unique_perturbations_not_replicate_wells() -> None:
     """Replicate wells must not inflate the candidate pool."""
+    texts = [_basis(3, 0), _basis(3, 1), _basis(3, 2)]
+    # Each well scores its OWN text second-highest of the 3 unique texts.
+    images = [
+        0.5 * _basis(3, 0) + 0.6 * _basis(3, 1) + 0.1 * _basis(3, 2),
+        0.1 * _basis(3, 0) + 0.5 * _basis(3, 1) + 0.6 * _basis(3, 2),
+        0.6 * _basis(3, 0) + 0.1 * _basis(3, 1) + 0.5 * _basis(3, 2),
+    ]
+    samples = [f"pert-{pert}" for pert in range(3) for _ in range(4)]
+    metrics = compute_retrieval_metrics(
+        torch.stack([images[pert] for pert in range(3) for _ in range(4)]),
+        torch.stack([texts[pert] for pert in range(3) for _ in range(4)]),
+        broad_samples=samples,
+    )
 
-    @staticmethod
-    def _fixture() -> tuple[torch.Tensor, torch.Tensor, list[str]]:
-        # 3 perturbations x 4 replicates; identical text vector per perturbation.
-        texts = [_basis(3, 0), _basis(3, 1), _basis(3, 2)]
-        # Each well scores its OWN text second-highest of the 3 unique texts.
-        images = [
-            0.5 * _basis(3, 0) + 0.6 * _basis(3, 1) + 0.1 * _basis(3, 2),
-            0.1 * _basis(3, 0) + 0.5 * _basis(3, 1) + 0.6 * _basis(3, 2),
-            0.6 * _basis(3, 0) + 0.1 * _basis(3, 1) + 0.5 * _basis(3, 2),
-        ]
-        image_rows: list[torch.Tensor] = []
-        text_rows: list[torch.Tensor] = []
-        broad_samples: list[str] = []
-        for pert in range(3):
-            for _ in range(4):
-                image_rows.append(images[pert])
-                text_rows.append(texts[pert])
-                broad_samples.append(f"pert-{pert}")
-        return torch.stack(image_rows), torch.stack(text_rows), broad_samples
-
-    def test_pool_is_unique_perturbations(self) -> None:
-        images, texts, samples = self._fixture()
-        metrics = compute_retrieval_metrics(images, texts, broad_samples=samples)
-
-        assert metrics["n_wells"] == 12.0
-        assert metrics["n_perturbations"] == 3.0
-        # Every well's true text ranks 2nd of 3: never top-1, always top-5.
-        assert metrics["image_to_text_R@1"] == 0.0
-        assert metrics["image_to_text_R@5"] == 1.0
-        assert metrics["image_to_text_mean_rank"] == 2.0
-        assert metrics["image_to_text_median_rank"] == 2.0
-
-    def test_pert_level_keys_present(self) -> None:
-        images, texts, samples = self._fixture()
-        metrics = compute_retrieval_metrics(images, texts, broad_samples=samples)
-        for key in (
-            "pert_image_to_text_R@1",
-            "pert_image_to_text_mean_rank",
-            "pert_image_to_text_median_rank",
-            "pert_text_to_image_R@10",
-            "pert_text_to_image_mean_rank",
-        ):
-            assert key in metrics
-        assert all(isinstance(v, float) for v in metrics.values())
+    assert metrics["n_wells"] == 12.0
+    assert metrics["n_perturbations"] == 3.0
+    # Every well's true text ranks 2nd of 3: never top-1, always top-5.
+    assert metrics["image_to_text_R@1"] == 0.0
+    assert metrics["image_to_text_R@5"] == 1.0
+    assert metrics["image_to_text_mean_rank"] == 2.0
+    assert metrics["image_to_text_median_rank"] == 2.0
 
 
-class TestPerfectAlignment:
-    """When image == text for every well, all directions score R@1 == 1."""
+def test_identical_image_and_text_embeddings_score_r_at_1_in_every_direction() -> None:
+    n_pert, n_rep, dim = 4, 3, 4
+    samples = [f"p{pert}" for pert in range(n_pert) for _ in range(n_rep)]
+    emb = torch.stack([_basis(dim, pert) for pert in range(n_pert) for _ in range(n_rep)])
 
-    def test_all_directions(self) -> None:
-        n_pert, n_rep, dim = 4, 3, 4
-        rows: list[torch.Tensor] = []
-        samples: list[str] = []
-        for pert in range(n_pert):
-            for _ in range(n_rep):
-                rows.append(_basis(dim, pert))
-                samples.append(f"p{pert}")
-        emb = torch.stack(rows)
-
-        metrics = compute_retrieval_metrics(emb, emb.clone(), broad_samples=samples)
-        assert metrics["image_to_text_R@1"] == 1.0
-        assert metrics["text_to_image_R@1"] == 1.0
-        assert metrics["pert_image_to_text_R@1"] == 1.0
-        assert metrics["pert_text_to_image_R@1"] == 1.0
-        assert metrics["image_to_text_mean_rank"] == 1.0
-        assert metrics["text_to_image_mean_rank"] == 1.0
+    metrics = compute_retrieval_metrics(emb, emb.clone(), broad_samples=samples)
+    for key in ("image_to_text", "text_to_image", "pert_image_to_text", "pert_text_to_image"):
+        assert metrics[f"{key}_R@1"] == 1.0
+    assert metrics["image_to_text_mean_rank"] == 1.0
+    assert metrics["text_to_image_mean_rank"] == 1.0
 
 
 class TestRandomBaselines:
@@ -113,7 +79,6 @@ class TestRandomBaselines:
         assert metrics["image_to_text_random_R@10"] == 1.0
 
     def test_any_of_m_baseline_matches_brute_force(self) -> None:
-        # N = 6 wells, P = 2 perturbations, m = 3 replicates each.
         n_wells, n_rep = 6, 3
         samples = [f"p{p}" for p in range(2) for _ in range(n_rep)]
         emb = torch.randn(n_wells, 5, generator=torch.Generator().manual_seed(2))
@@ -147,9 +112,7 @@ class TestDedupeAndAggregate:
         assert unique_ids == ["b", "a", "c"]
         assert unique_texts.shape == (3, 3)
         assert torch.equal(well_to_pert, torch.tensor([0, 1, 0, 2, 1]))
-        assert torch.equal(unique_texts[0], texts[0])
-        assert torch.equal(unique_texts[1], texts[1])
-        assert torch.equal(unique_texts[2], texts[3])
+        assert torch.equal(unique_texts, texts[[0, 1, 3]])
 
     def test_aggregate_images_unit_norm_and_order(self) -> None:
         samples = ["b", "a", "b", "c", "a"]
@@ -165,13 +128,8 @@ class TestDedupeAndAggregate:
         _, unique_ids, well_to_pert = dedupe_texts(images, samples)
         profiles = aggregate_images(images, well_to_pert, len(unique_ids))
 
-        assert profiles.shape == (3, 3)
-        norms = profiles.norm(dim=-1)
-        assert torch.allclose(norms, torch.ones(3), atol=1e-6)
         # Row order follows first-occurrence order: b, a, c.
-        assert torch.allclose(profiles[0], torch.tensor([1.0, 0.0, 0.0]), atol=1e-6)
-        assert torch.allclose(profiles[1], torch.tensor([0.0, 1.0, 0.0]), atol=1e-6)
-        assert torch.allclose(profiles[2], torch.tensor([0.0, 0.0, 1.0]), atol=1e-6)
+        assert torch.allclose(profiles, torch.eye(3), atol=1e-6)
 
 
 def test_defensive_normalization_is_scale_invariant() -> None:

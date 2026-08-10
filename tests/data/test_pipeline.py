@@ -1,45 +1,33 @@
-"""Tests for morphoclip.data.pipeline and morphoclip.data.progress modules."""
+"""Tests for morphoclip.data.pipeline and morphoclip.data.progress."""
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from morphoclip.data.config import CPJumpConfig
 from morphoclip.data.pipeline import PlateExtractionPipeline
-from morphoclip.data.progress import (
-    PlateStatus,
-    _utcnow,
-)
+from morphoclip.data.progress import PlateStatus, _utcnow, compute_config_hash
+
+PLATE = "BR00116991__2020-11-05T19_51_35-Measurement1"
+OTHER_PLATE = "BR00116992__2020-11-05T21_31_31-Measurement1"
+
+# int(_MAX_SITES_PER_PLATE * _COMPLETENESS_THRESHOLD) in morphoclip.data.progress:
+# the file count at which a plate directory is taken for finished.
+COMPLETE_SITES = 2764
 
 
-def _minimal_config(
-    tmp_path: Path | None = None,
-    plates: list[str] | None = None,
-) -> CPJumpConfig:
-    """Build a cpjump config whose local paths point into a temp directory."""
-    base = str(tmp_path) if tmp_path else "data"
-    return CPJumpConfig(
-        batch="2020_11_04_CPJUMP1",
-        plates=plates
-        or [
-            "BR00116991__2020-11-05T19_51_35-Measurement1",
-            "BR00116992__2020-11-05T21_31_31-Measurement1",
-        ],
-        local={
-            "raw_images": f"{base}/raw",
-            "features": f"{base}/features",
-            "tensors": f"{base}/tensors",
-            "metadata": f"{base}/metadata",
-        },
-        extraction={"device": "cpu", "batch_size": 4},
-        fetch={"rclone_remote": ":s3:"},
-    )
-
-
-@pytest.fixture
-def config(tmp_path: Path) -> CPJumpConfig:
-    return _minimal_config(tmp_path)
+def _record(status: str, *, sites: int = 0, error: str | None = None) -> dict[str, Any]:
+    return {
+        "status": status,
+        "barcode": "BR00116991",
+        "started_at": _utcnow(),
+        "completed_at": None,
+        "sites_extracted": sites,
+        "error": error,
+    }
 
 
 @pytest.fixture
@@ -47,350 +35,171 @@ def progress_path(tmp_path: Path) -> Path:
     return tmp_path / "progress.json"
 
 
-class TestProgressIO:
-    def test_fresh_start(self, config: dict, progress_path: Path) -> None:
-        """Pipeline creates fresh progress when no file exists."""
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        assert not progress_path.exists()
-        pipeline._save_progress()
-        assert progress_path.exists()
+@pytest.fixture
+def make_pipeline(tmp_path: Path, progress_path: Path) -> Callable[..., PlateExtractionPipeline]:
+    """Build a dry-run pipeline over two plates, rooted in a temp directory.
 
-        data = json.loads(progress_path.read_text())
-        assert data["schema_version"] == 1
-        assert data["metadata_downloaded"] is False
+    Pass ``progress={plate: record}`` to lay down a progress file first, since
+    the pipeline reads it on construction.
+    """
 
-    def test_load_existing_progress(self, config: dict, progress_path: Path) -> None:
-        """Pipeline loads and preserves existing progress."""
-        progress_data = {
-            "schema_version": 1,
-            "created_at": "2026-03-08T00:00:00+00:00",
-            "updated_at": "2026-03-08T00:00:00+00:00",
-            "config_hash": "",
-            "metadata_downloaded": True,
-            "plates": {
-                "BR00116991__2020-11-05T19_51_35-Measurement1": {
-                    "status": "completed",
-                    "barcode": "BR00116991",
-                    "started_at": "2026-03-08T00:00:00+00:00",
-                    "completed_at": "2026-03-08T00:05:00+00:00",
-                    "sites_extracted": 3456,
-                    "error": None,
-                },
+    def build(*, progress: dict[str, Any] | None = None, **kwargs: Any) -> PlateExtractionPipeline:
+        if progress is not None:
+            progress_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "created_at": _utcnow(),
+                        "updated_at": _utcnow(),
+                        "config_hash": "",
+                        "metadata_downloaded": False,
+                        "plates": progress,
+                    }
+                ),
+                encoding="utf-8",
+            )
+        config = CPJumpConfig(
+            batch="2020_11_04_CPJUMP1",
+            plates=[PLATE, OTHER_PLATE],
+            local={
+                "raw_images": f"{tmp_path}/raw",
+                "features": f"{tmp_path}/features",
+                "tensors": f"{tmp_path}/tensors",
+                "metadata": f"{tmp_path}/metadata",
             },
+            extraction={"device": "cpu", "batch_size": 4},
+            fetch={"rclone_remote": ":s3:"},
+        )
+        return PlateExtractionPipeline(
+            config=config,
+            progress_path=progress_path,
+            backend="awscli",
+            dry_run=True,
+            **kwargs,
+        )
+
+    return build
+
+
+@pytest.fixture
+def pipeline(make_pipeline: Callable[..., PlateExtractionPipeline]) -> PlateExtractionPipeline:
+    return make_pipeline()
+
+
+def _feature_dir(tmp_path: Path, sites: int | None) -> Path:
+    """A feature directory holding *sites* empty ``.pt`` files, or missing entirely."""
+    feature_dir = tmp_path / "features" / "BR00116991"
+    if sites is None:
+        return feature_dir
+    feature_dir.mkdir(parents=True)
+    for i in range(sites):
+        (feature_dir / f"site_{i:05d}.pt").touch()
+    return feature_dir
+
+
+def test_a_fresh_save_writes_the_schema_and_leaves_no_temp_file(
+    pipeline: PlateExtractionPipeline, progress_path: Path
+) -> None:
+    assert not progress_path.exists()
+
+    pipeline._save_progress()
+
+    assert list(progress_path.parent.glob("*.tmp")) == []
+    saved = json.loads(progress_path.read_text(encoding="utf-8"))
+    assert saved["schema_version"] == 1
+    assert saved["metadata_downloaded"] is False
+    assert saved["config_hash"] == compute_config_hash([PLATE, OTHER_PLATE])
+
+
+def test_a_corrupt_progress_file_is_backed_up_and_the_run_starts_fresh(
+    make_pipeline: Callable[..., PlateExtractionPipeline], progress_path: Path
+) -> None:
+    progress_path.write_text("not json{{{", encoding="utf-8")
+
+    pipeline = make_pipeline()
+
+    assert pipeline._progress.metadata_downloaded is False
+    assert pipeline._progress.plates == {}
+    assert len(list(progress_path.parent.glob("*.corrupt.*"))) == 1
+
+
+def test_plates_left_mid_run_are_reset_to_pending_on_load(
+    make_pipeline: Callable[..., PlateExtractionPipeline],
+) -> None:
+    plates = make_pipeline(
+        progress={
+            PLATE: _record(PlateStatus.FETCHING, error="boom"),
+            OTHER_PLATE: _record(PlateStatus.EXTRACTING),
         }
-        progress_path.write_text(json.dumps(progress_data))
+    )._progress.plates
 
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        assert pipeline._progress.metadata_downloaded is True
-        plate_rec = pipeline._progress.plates["BR00116991__2020-11-05T19_51_35-Measurement1"]
-        assert plate_rec["status"] == "completed"
-        assert plate_rec["sites_extracted"] == 3456
-
-    def test_corrupt_progress_recovery(self, config: dict, progress_path: Path) -> None:
-        """Pipeline recovers from corrupt progress file."""
-        progress_path.write_text("not json{{{")
-
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        # Should start fresh
-        assert pipeline._progress.metadata_downloaded is False
-        assert pipeline._progress.plates == {}
-
-        # Corrupt file should be backed up
-        backups = list(progress_path.parent.glob("*.corrupt.*"))
-        assert len(backups) == 1
-
-    def test_crashed_plates_reset_on_load(self, config: dict, progress_path: Path) -> None:
-        """Plates in FETCHING/EXTRACTING status get reset to PENDING on load."""
-        progress_data = {
-            "schema_version": 1,
-            "created_at": _utcnow(),
-            "updated_at": _utcnow(),
-            "config_hash": "",
-            "metadata_downloaded": False,
-            "plates": {
-                "BR00116991__2020-11-05T19_51_35-Measurement1": {
-                    "status": "fetching",
-                    "barcode": "BR00116991",
-                    "started_at": _utcnow(),
-                    "completed_at": None,
-                    "sites_extracted": 0,
-                    "error": None,
-                },
-                "BR00116992__2020-11-05T21_31_31-Measurement1": {
-                    "status": "extracting",
-                    "barcode": "BR00116992",
-                    "started_at": _utcnow(),
-                    "completed_at": None,
-                    "sites_extracted": 0,
-                    "error": None,
-                },
-            },
-        }
-        progress_path.write_text(json.dumps(progress_data))
-
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        for plate_name in progress_data["plates"]:
-            assert pipeline._progress.plates[plate_name]["status"] == PlateStatus.PENDING
-
-    def test_atomic_save(self, config: dict, progress_path: Path) -> None:
-        """Progress save should not leave .tmp files around."""
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        pipeline._save_progress()
-
-        tmp_files = list(progress_path.parent.glob("*.tmp"))
-        assert len(tmp_files) == 0
-        assert progress_path.exists()
+    assert [plates[name]["status"] for name in (PLATE, OTHER_PLATE)] == [PlateStatus.PENDING] * 2
+    assert plates[PLATE]["error"] is None
 
 
-class TestCheckOutputComplete:
-    def test_no_feature_dir(self, config: dict, progress_path: Path, tmp_path: Path) -> None:
-        """Returns False when feature dir doesn't exist."""
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        feature_dir = tmp_path / "features" / "BR00116991"
-        tensor_dir = tmp_path / "tensors" / "BR00116991"
-        assert not pipeline._check_output_complete(
-            "BR00116991__2020-11-05T19_51_35-Measurement1",
-            feature_dir,
-            tensor_dir,
-        )
-
-    def test_empty_feature_dir(self, config: dict, progress_path: Path, tmp_path: Path) -> None:
-        """Returns False when feature dir exists but is empty."""
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        feature_dir = tmp_path / "features" / "BR00116991"
-        feature_dir.mkdir(parents=True)
-        tensor_dir = tmp_path / "tensors" / "BR00116991"
-        assert not pipeline._check_output_complete(
-            "BR00116991__2020-11-05T19_51_35-Measurement1",
-            feature_dir,
-            tensor_dir,
-        )
-
-    def test_completed_with_known_count(
-        self, config: dict, progress_path: Path, tmp_path: Path
-    ) -> None:
-        """Returns True when progress says completed and file count matches."""
-        plate_name = "BR00116991__2020-11-05T19_51_35-Measurement1"
-        site_count = 3000  # Must exceed 80% of 3456 (=2764) threshold
-
-        # Set up progress with a known count
-        progress_data = {
-            "schema_version": 1,
-            "created_at": _utcnow(),
-            "updated_at": _utcnow(),
-            "config_hash": "",
-            "metadata_downloaded": False,
-            "plates": {
-                plate_name: {
-                    "status": "completed",
-                    "barcode": "BR00116991",
-                    "started_at": _utcnow(),
-                    "completed_at": _utcnow(),
-                    "sites_extracted": site_count,
-                    "error": None,
-                },
-            },
-        }
-        progress_path.write_text(json.dumps(progress_data))
-
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-
-        # Create feature files matching the count
-        feature_dir = tmp_path / "features" / "BR00116991"
-        feature_dir.mkdir(parents=True)
-        for i in range(site_count):
-            (feature_dir / f"site_{i:04d}.pt").touch()
-
-        tensor_dir = tmp_path / "tensors" / "BR00116991"
-        assert pipeline._check_output_complete(plate_name, feature_dir, tensor_dir)
-
-    def test_heuristic_above_threshold(
-        self, config: dict, progress_path: Path, tmp_path: Path
-    ) -> None:
-        """Returns True when no progress record but file count > 80% of max."""
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-
-        feature_dir = tmp_path / "features" / "BR00116991"
-        feature_dir.mkdir(parents=True)
-        # Create 2800 files (> 80% of 3456)
-        for i in range(2800):
-            (feature_dir / f"site_{i:04d}.pt").touch()
-
-        tensor_dir = tmp_path / "tensors" / "BR00116991"
-        assert pipeline._check_output_complete(
-            "BR00116991__2020-11-05T19_51_35-Measurement1",
-            feature_dir,
-            tensor_dir,
-        )
-
-    def test_heuristic_below_threshold(
-        self, config: dict, progress_path: Path, tmp_path: Path
-    ) -> None:
-        """Returns False when file count < 80% of max and no progress record."""
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-
-        feature_dir = tmp_path / "features" / "BR00116991"
-        feature_dir.mkdir(parents=True)
-        # Create only 100 files (way below threshold)
-        for i in range(100):
-            (feature_dir / f"site_{i:04d}.pt").touch()
-
-        tensor_dir = tmp_path / "tensors" / "BR00116991"
-        assert not pipeline._check_output_complete(
-            "BR00116991__2020-11-05T19_51_35-Measurement1",
-            feature_dir,
-            tensor_dir,
-        )
+@pytest.mark.parametrize(
+    ("sites", "complete"),
+    [(None, False), (0, False), (COMPLETE_SITES - 1, False), (COMPLETE_SITES, True)],
+)
+def test_without_a_record_completeness_is_a_file_count_heuristic(
+    pipeline: PlateExtractionPipeline, tmp_path: Path, sites: int | None, complete: bool
+) -> None:
+    feature_dir = _feature_dir(tmp_path, sites)
+    assert pipeline._check_output_complete(PLATE, feature_dir, tmp_path / "tensors") is complete
 
 
-class TestResolvePlates:
-    def test_all_plates(self, config: dict, progress_path: Path) -> None:
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        result = pipeline._resolve_plates(None)
-        assert len(result) == 2
+@pytest.mark.parametrize(
+    ("recorded", "on_disk", "complete"),
+    [
+        (COMPLETE_SITES, COMPLETE_SITES, True),
+        (COMPLETE_SITES, 100, False),
+        (100, 100, False),
+    ],
+)
+def test_a_completed_record_is_believed_only_above_the_threshold(
+    make_pipeline: Callable[..., PlateExtractionPipeline],
+    tmp_path: Path,
+    recorded: int,
+    on_disk: int,
+    complete: bool,
+) -> None:
+    """A record claiming a short plate is stale, not a smaller completeness bar."""
+    feature_dir = _feature_dir(tmp_path, on_disk)
+    pipeline = make_pipeline(progress={PLATE: _record(PlateStatus.COMPLETED, sites=recorded)})
 
-    def test_filter_by_barcode(self, config: dict, progress_path: Path) -> None:
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        result = pipeline._resolve_plates(["BR00116991"])
-        assert len(result) == 1
-        assert "BR00116991" in result[0]
-
-    def test_filter_by_full_name(self, config: dict, progress_path: Path) -> None:
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        full_name = "BR00116991__2020-11-05T19_51_35-Measurement1"
-        result = pipeline._resolve_plates([full_name])
-        assert result == [full_name]
-
-    def test_unknown_plate_skipped(self, config: dict, progress_path: Path) -> None:
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        result = pipeline._resolve_plates(["NONEXISTENT"])
-        assert result == []
+    assert pipeline._check_output_complete(PLATE, feature_dir, tmp_path / "tensors") is complete
 
 
-class TestRetryFailed:
-    def test_retry_resets_failed_plates(self, config: dict, progress_path: Path) -> None:
-        plate_name = "BR00116991__2020-11-05T19_51_35-Measurement1"
-        progress_data = {
-            "schema_version": 1,
-            "created_at": _utcnow(),
-            "updated_at": _utcnow(),
-            "config_hash": "",
-            "metadata_downloaded": False,
-            "plates": {
-                plate_name: {
-                    "status": "failed",
-                    "barcode": "BR00116991",
-                    "started_at": _utcnow(),
-                    "completed_at": _utcnow(),
-                    "sites_extracted": 0,
-                    "error": "CalledProcessError: exit code 1",
-                },
-            },
-        }
-        progress_path.write_text(json.dumps(progress_data))
-
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-            retry_failed=True,
-        )
-        # Before reset, status should still be FAILED
-        assert pipeline._progress.plates[plate_name]["status"] == PlateStatus.FAILED
-
-        # Call _reset_failed_plates directly to verify reset logic
-        reset_count = pipeline._reset_failed_plates([plate_name])
-        assert reset_count == 1
-        assert pipeline._progress.plates[plate_name]["status"] == PlateStatus.PENDING
-        assert pipeline._progress.plates[plate_name]["error"] is None
+@pytest.mark.parametrize(
+    ("requested", "expected"),
+    [
+        (None, [PLATE, OTHER_PLATE]),
+        ([], [PLATE, OTHER_PLATE]),
+        (["BR00116991"], [PLATE]),
+        ([PLATE], [PLATE]),
+        (["NONEXISTENT"], []),
+    ],
+)
+def test_plates_resolve_from_a_barcode_or_a_full_name_and_unknowns_are_dropped(
+    pipeline: PlateExtractionPipeline, requested: list[str] | None, expected: list[str]
+) -> None:
+    assert pipeline._resolve_plates(requested) == expected
 
 
-class TestConfigHash:
-    def test_hash_changes_with_plates(self, progress_path: Path, tmp_path: Path) -> None:
-        config1 = _minimal_config(tmp_path, plates=["plate_a"])
-        config2 = _minimal_config(tmp_path, plates=["plate_b"])
+def test_retrying_resets_failed_plates_and_clears_their_error(
+    make_pipeline: Callable[..., PlateExtractionPipeline],
+) -> None:
+    failed = _record(PlateStatus.FAILED, error="CalledProcessError: exit code 1")
+    pipeline = make_pipeline(progress={PLATE: failed}, retry_failed=True)
+    assert pipeline._progress.plates[PLATE]["status"] == PlateStatus.FAILED
 
-        p1 = PlateExtractionPipeline(
-            config=config1,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        p2 = PlateExtractionPipeline(
-            config=config2,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        assert p1._compute_config_hash() != p2._compute_config_hash()
+    assert pipeline._reset_failed_plates([PLATE, OTHER_PLATE]) == 1
+
+    assert pipeline._progress.plates[PLATE]["status"] == PlateStatus.PENDING
+    assert pipeline._progress.plates[PLATE]["error"] is None
+    assert pipeline._progress.plates[OTHER_PLATE]["status"] == PlateStatus.PENDING
+
+
+def test_the_config_hash_ignores_plate_order_but_not_plate_identity() -> None:
+    assert compute_config_hash([PLATE, OTHER_PLATE]) == compute_config_hash([OTHER_PLATE, PLATE])
+    assert compute_config_hash([PLATE]) != compute_config_hash([OTHER_PLATE])

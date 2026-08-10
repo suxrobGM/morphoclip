@@ -1,7 +1,7 @@
 """Budget the import graph so a stray top-level import cannot creep back.
 
 Emptying the package __init__ files took `import morphoclip.training.config`
-from 3,918 modules to about 130. That is easy to undo by accident: one
+from 3,918 modules to about 200. That is easy to undo by accident: one
 convenience re-export in an __init__, or one torch import moved to module scope,
 puts it back. Each check runs in a subprocess so sys.modules starts clean.
 """
@@ -24,32 +24,24 @@ def _probe(code: str) -> str:
 
 
 @pytest.mark.parametrize(
-    ("module", "budget"),
+    ("module", "budget", "forbidden"),
     [
         # Pure dataclasses and YAML. Used to pull TensorBoard, transformers and pandas.
-        ("morphoclip.training.config", 400),
-        # Pandas only. Used to pull benchmark.metrics through the package __init__.
-        ("benchmark.data", 900),
+        ("morphoclip.training.config", 400, "torch"),
+        # Pandas only. profile_ops exists so result accumulation is importable
+        # without copairs, which benchmark.metrics needs.
+        ("benchmark.data", 900, "benchmark.metrics"),
     ],
 )
-def test_module_import_stays_within_budget(module: str, budget: int) -> None:
-    loaded = int(_probe(f"import sys, {module}; print(len(sys.modules))"))
-    assert loaded < budget, (
-        f"importing {module} loaded {loaded} modules (budget {budget}). "
+def test_module_import_stays_lean(module: str, budget: int, forbidden: str) -> None:
+    count, pulled = _probe(
+        f"import sys, {module}; print(len(sys.modules), {forbidden!r} in sys.modules)"
+    ).split()
+    assert int(count) < budget, (
+        f"importing {module} loaded {count} modules (budget {budget}). "
         "Something gained a heavy top-level import."
     )
-
-
-def test_the_training_config_does_not_import_torch() -> None:
-    """`benchmark` gets the same guarantee from the whole-package test below."""
-    loaded = _probe("import sys, morphoclip.training.config; print('torch' in sys.modules)")
-    assert loaded == "False", "morphoclip.training.config pulled in torch"
-
-
-def test_benchmark_data_does_not_pull_the_metrics_stack() -> None:
-    """profile_ops exists so result accumulation is importable without copairs."""
-    loaded = _probe("import sys, benchmark.data; print('benchmark.metrics' in sys.modules)")
-    assert loaded == "False"
+    assert pulled == "False", f"{module} pulled in {forbidden}"
 
 
 @pytest.mark.parametrize("forbidden", ["torch", "morphoclip"])

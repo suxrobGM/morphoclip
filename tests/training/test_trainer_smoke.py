@@ -72,11 +72,10 @@ def training_config(tmp_path: Path, metadata_dir: Path) -> MorphoCLIPTrainingCon
     )
 
 
-def test_training_writes_a_checkpoint_and_finite_metrics(
+def test_training_writes_finite_metrics_and_a_resumable_checkpoint(
     training_config: MorphoCLIPTrainingConfig, tmp_path: Path
 ) -> None:
-    run_dir = tmp_path / "runs" / "smoke"
-    summary = train_morphoclip(training_config, run_dir=run_dir)
+    summary = train_morphoclip(training_config, run_dir=tmp_path / "runs" / "smoke")
 
     assert set(summary) >= {
         "run_dir",
@@ -89,21 +88,14 @@ def test_training_writes_a_checkpoint_and_finite_metrics(
     assert summary["train_wells"] > 0
     assert summary["val_wells"] > 0
     assert Path(summary["best_checkpoint"]).exists()
-    assert Path(summary["last_checkpoint"]).exists()
 
     history = pd.read_csv(summary["metrics_path"])
     assert not history.empty, "trainer wrote no epoch history"
     assert math.isfinite(history["train_loss"].iloc[0])
     assert math.isfinite(history["eval_loss"].iloc[0])
 
-
-def test_checkpoint_carries_everything_resume_needs(
-    training_config: MorphoCLIPTrainingConfig, tmp_path: Path
-) -> None:
-    """The checkpoint payload is the contract between a run and its resume."""
-    summary = train_morphoclip(training_config, run_dir=tmp_path / "runs" / "keys")
+    # The checkpoint payload is the contract between a run and its resume.
     checkpoint = torch.load(summary["last_checkpoint"], map_location="cpu", weights_only=False)
-
     assert set(checkpoint) >= {
         "image_encoder",
         "text_projection",
@@ -113,7 +105,6 @@ def test_checkpoint_carries_everything_resume_needs(
         "epoch",
         "config",
     }
-    # The embedded config must survive the round trip that resume depends on.
     assert training_config_from_dict(checkpoint["config"]).model.output_dim == 8
 
 

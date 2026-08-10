@@ -1,8 +1,7 @@
 """Structural tests for the Typer app.
 
-`cli/` is the layer a file move breaks first, and the whole tree was untested.
-Walking it and asking every command for its help is the cheapest net there is:
-it catches a moved module, a broken Annotated option type, a renamed sub-app,
+Walking the tree and asking every command for its help is the cheapest net there
+is: it catches a moved module, a broken Annotated option type, a renamed sub-app,
 and an optional-extra import that leaked out of a command body.
 """
 
@@ -30,10 +29,11 @@ def command_paths(group: typer.Typer, prefix: tuple[str, ...] = ()) -> Iterator[
 
 
 ALL_COMMANDS = sorted(command_paths(app))
+HELP_PATHS = [(), *ALL_COMMANDS]
 
 
 def test_command_tree_is_stable() -> None:
-    """The full command surface, so a rename or a dropped registration is visible."""
+    """The parametrize below reads the tree back off the app, so only this pins it."""
     assert [" ".join(path) for path in ALL_COMMANDS] == [
         "benchmark",
         "cellclip export",
@@ -55,12 +55,7 @@ def test_command_tree_is_stable() -> None:
     ]
 
 
-def test_root_help() -> None:
-    result = runner.invoke(app, ["--help"])
-    assert result.exit_code == 0, result.output
-
-
-@pytest.mark.parametrize("path", ALL_COMMANDS, ids=" ".join)
-def test_command_help_exits_zero(path: tuple[str, ...]) -> None:
+@pytest.mark.parametrize("path", HELP_PATHS, ids=[" ".join(p) or "root" for p in HELP_PATHS])
+def test_help_exits_zero(path: tuple[str, ...]) -> None:
     result = runner.invoke(app, [*path, "--help"])
     assert result.exit_code == 0, result.output
