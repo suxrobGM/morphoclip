@@ -19,7 +19,6 @@ from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
 from cellclip.benchmark.export import export_plate, load_yaml_section, select_target_plates
 from cellclip.benchmark.pipeline import (
     PlateResult,
-    load_dataset_config,
     render_result_table,
     render_startup,
     resolve_dataset_path,
@@ -31,7 +30,8 @@ from cellclip.benchmark.settings import resolve_export_settings
 from cellclip.training.config import load_training_config
 from cellclip.training.engine import train_cellclip
 from cellclip.training.reporting import render_train_config, render_train_summary
-from morphoclip.data.feature_extractor import DEFAULT_MODEL, infer_feature_width, load_dinov3
+from morphoclip.data.config import load_dataset_config
+from morphoclip.data.feature_extractor import infer_feature_width, load_dinov3
 
 app = typer.Typer(no_args_is_help=True, help="CellCLIP baseline: train and export profiles.")
 console = Console()
@@ -232,7 +232,7 @@ def pipeline(
     export_config = load_yaml_section(benchmark_config, "cellclip_export")
 
     resolved_batch = (
-        batch or export_config.get("batch") or bm_config.get("batch") or ds_config.get("batch")
+        batch or export_config.get("batch") or bm_config.get("batch") or ds_config.batch
     )
     if not resolved_batch:
         raise ValueError("Batch must be provided via --batch or the benchmark/dataset config.")
@@ -242,7 +242,7 @@ def pipeline(
         benchmark_config=bm_config,
         export_config=export_config,
         context="pipeline",
-        default_device=ds_config.get("extraction", {}).get("device", "cuda"),
+        default_device=ds_config.extraction.device,
         experiment_metadata_path=experiment_metadata_path,
         source_profiles_root=source_profiles_root,
         feature_root=feature_root,
@@ -260,26 +260,16 @@ def pipeline(
     )
 
     compressed = resolve_dataset_path(
-        compressed_root
-        or ds_config.get("local", {}).get("compressed_images")
-        or ds_config.get("compression", {})
-        .get("default", {})
-        .get("output_root", "data/raw_compressed"),
-        project_root,
+        compressed_root or ds_config.local.compressed_images, project_root
     )
-    tensors = resolve_dataset_path(
-        tensors_root or ds_config.get("local", {}).get("tensors", "data/tensors"),
-        project_root,
-    )
+    tensors = resolve_dataset_path(tensors_root or ds_config.local.tensors, project_root)
 
     resolved_model_name = model_name or export_config.get("model_name")
-    extraction_batch_size = int(batch_size or ds_config.get("extraction", {}).get("batch_size", 32))
+    extraction_batch_size = int(batch_size or ds_config.extraction.batch_size)
     save_tensors = not no_tensors
     if resolved_model_name is None:
         resolved_model_name = (
-            CELLCLIP_DEFAULT_MODEL
-            if settings.input_dim == 1536
-            else ds_config.get("extraction", {}).get("model", DEFAULT_MODEL)
+            CELLCLIP_DEFAULT_MODEL if settings.input_dim == 1536 else ds_config.extraction.model
         )
 
     if plates:

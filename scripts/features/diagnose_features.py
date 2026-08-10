@@ -26,9 +26,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import typer
-import yaml
 from rich.console import Console
 
+from morphoclip.data.config import load_dataset_config
 from morphoclip.data.image_loader import CHANNEL_NAMES, FLUORESCENCE_CHANNELS
 
 console = Console()
@@ -394,11 +394,7 @@ def main(
     output_dir: Annotated[Path | None, typer.Option(help="Override output directory.")] = None,
 ) -> None:
     """Diagnose DINOv3 feature extraction quality."""
-    with open(config) as f:
-        cfg = yaml.safe_load(f)["cpjump"]
-
-    local = cfg.get("local", {})
-    features_root = Path(local.get("features", "data/features"))
+    features_root = load_dataset_config(config).local.features
 
     plates = [plate] if plate else [d.name for d in sorted(features_root.iterdir()) if d.is_dir()]
 

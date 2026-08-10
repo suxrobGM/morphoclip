@@ -7,7 +7,6 @@ from typing import Annotated
 
 import torch
 import typer
-import yaml
 from dotenv import load_dotenv
 from huggingface_hub import HfApi
 from rich.console import Console
@@ -21,6 +20,7 @@ from rich.progress import (
 )
 
 from morphoclip.cli.data import Backend
+from morphoclip.data.config import load_dataset_config
 from morphoclip.data.feature_extractor import (
     extract_plate_features,
     repack_feature_file,
@@ -80,27 +80,16 @@ def extract(
     """Extract DINOv3 features from downloaded CPJUMP1 plates."""
     load_dotenv()
 
-    with open(config) as f:
-        cfg = yaml.safe_load(f)["cpjump"]
+    cfg = load_dataset_config(config)
 
-    extraction = cfg.get("extraction", {})
-    local = cfg.get("local", {})
-    resolved_model = model_name or extraction.get(
-        "model", "facebook/dinov3-vitl16-pretrain-lvd1689m"
-    )
-    resolved_device = device or extraction.get("device", "auto")
-    resolved_batch_size = batch_size or extraction.get("batch_size", 32)
+    resolved_model = model_name or cfg.extraction.model
+    resolved_device = device or cfg.extraction.device
+    resolved_batch_size = batch_size or cfg.extraction.batch_size
+    resolved_compressed_root = compressed_root or cfg.local.compressed_images
+    resolved_features_root = features_root or cfg.local.features
+    resolved_tensors_root = tensors_root or cfg.local.tensors
 
-    resolved_compressed_root = compressed_root or Path(
-        local.get(
-            "compressed_images",
-            cfg.get("compression", {}).get("default", {}).get("output_root", "data/raw_compressed"),
-        )
-    )
-    resolved_features_root = features_root or Path(local.get("features", "data/features"))
-    resolved_tensors_root = tensors_root or Path(local.get("tensors", "data/tensors"))
-
-    plates = cfg.get("plates", [])
+    plates = cfg.plates
     if plate:
         plates = [p for p in plates if extract_plate_barcode(p) == plate or p == plate]
         if not plates:
@@ -112,7 +101,7 @@ def extract(
     console.print(f"  Batch size: {resolved_batch_size}")
     console.print(f"  Plates:     {len(plates)}")
 
-    batch = cfg.get("batch", "")
+    batch = cfg.batch
     for plate_name in plates:
         barcode = extract_plate_barcode(plate_name)
 
@@ -215,20 +204,15 @@ def pipeline(
     """
     load_dotenv()
 
-    with open(config) as f:
-        cfg = yaml.safe_load(f)["cpjump"]
-
+    cfg = load_dataset_config(config)
     if model_name is not None:
-        cfg.setdefault("extraction", {})["model"] = model_name
+        cfg.extraction.model = model_name
     if features_root is not None:
-        cfg.setdefault("local", {})["features"] = str(features_root)
+        cfg.local.features = features_root
     if tensors_root is not None:
-        cfg.setdefault("local", {})["tensors"] = str(tensors_root)
+        cfg.local.tensors = tensors_root
 
-    fetch_cfg = cfg.get("fetch", {})
-    backend_name = choose_backend(
-        str(backend.value if backend else fetch_cfg.get("backend", "auto"))
-    )
+    backend_name = choose_backend(str(backend.value if backend else cfg.fetch.backend))
 
     log_path = log_file or Path(f"data/pipeline_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}.log")
     setup_pipeline_logging(log_path)

@@ -8,14 +8,12 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-import yaml
 from rich.console import Console
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from morphoclip.data.config import load_dataset_config
 from morphoclip.utils.s3 import (
-    DEFAULT_RCLONE_REMOTE,
-    build_s3_uri,
     choose_backend,
     sync_s3_path,
 )
@@ -123,26 +121,17 @@ def fetch(
     dry_run: Annotated[bool, typer.Option(help="Log actions without transferring.")] = False,
 ) -> None:
     """Fetch the CPJUMP1 dataset from S3 (AWS CLI or rclone)."""
-    with open(config) as f:
-        cpjump = yaml.safe_load(f)["cpjump"]
+    cpjump = load_dataset_config(config)
+    batch = cpjump.batch
+    plates = cpjump.plates
+    raw_root = cpjump.local.raw_images
+    metadata_root = cpjump.local.metadata
+    no_sign_request = cpjump.fetch.aws_no_sign_request
+    rclone_remote = cpjump.fetch.rclone_remote
 
-    endpoint = cpjump["endpoint"]
-    batch = cpjump["batch"]
-    plates = cpjump["plates"]
-
-    local = cpjump.get("local", {})
-    raw_root = Path(local.get("raw_images", "data/raw"))
-    metadata_root = Path(local.get("metadata", "data/metadata"))
-
-    fetch_cfg = cpjump.get("fetch", {})
-    no_sign_request = bool(fetch_cfg.get("aws_no_sign_request", True))
-    rclone_remote = str(fetch_cfg.get("rclone_remote", DEFAULT_RCLONE_REMOTE))
-
-    backend_name = choose_backend(
-        str(backend.value if backend else fetch_cfg.get("backend", "auto"))
-    )
+    backend_name = choose_backend(str(backend.value if backend else cpjump.fetch.backend))
     on_existing = str(
-        on_existing_plate.value if on_existing_plate else fetch_cfg.get("on_existing_plate", "ask")
+        on_existing_plate.value if on_existing_plate else cpjump.fetch.on_existing_plate
     )
 
     console.rule("[bold blue]CPJUMP1 Dataset Fetch")
@@ -150,7 +139,7 @@ def fetch(
 
     console.print("\n[bold]Downloading plate maps...[/bold]")
     sync_s3_path(
-        build_s3_uri(endpoint, cpjump["metadata"], batch),
+        cpjump.s3_uri(cpjump.metadata),
         metadata_root / "platemaps" / batch,
         backend=backend_name,
         no_sign_request=no_sign_request,
@@ -160,7 +149,7 @@ def fetch(
 
     console.print("\n[bold]Downloading external metadata...[/bold]")
     sync_s3_path(
-        build_s3_uri(endpoint, cpjump["external_metadata"], batch),
+        cpjump.s3_uri(cpjump.external_metadata),
         metadata_root / "external_metadata",
         backend=backend_name,
         no_sign_request=no_sign_request,
@@ -172,7 +161,7 @@ def fetch(
         console.print("\n[bold green]Metadata download complete (images skipped).[/bold green]")
         return
 
-    images_uri = build_s3_uri(endpoint, cpjump["images"], batch)
+    images_uri = cpjump.s3_uri(cpjump.images)
     downloaded = 0
     for plate in plates:
         dl = _process_plate(

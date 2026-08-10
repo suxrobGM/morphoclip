@@ -2,10 +2,10 @@
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 
+from morphoclip.data.config import CPJumpConfig
 from morphoclip.data.pipeline import PlateExtractionPipeline
 from morphoclip.data.progress import (
     PlateStatus,
@@ -16,45 +16,29 @@ from morphoclip.data.progress import (
 def _minimal_config(
     tmp_path: Path | None = None,
     plates: list[str] | None = None,
-) -> dict[str, Any]:
-    """Build a minimal cpjump config dict for testing.
-
-    When *tmp_path* is provided, local paths point into the temp directory
-    to avoid interference from real project data.
-    """
+) -> CPJumpConfig:
+    """Build a cpjump config whose local paths point into a temp directory."""
     base = str(tmp_path) if tmp_path else "data"
-    return {
-        "endpoint": "s3://cellpainting-gallery/cpg0000-jump-pilot/source_4",
-        "batch": "2020_11_04_CPJUMP1",
-        "images": "images/{batch}/images",
-        "metadata": "workspace/metadata/platemaps/{batch}",
-        "external_metadata": "workspace/metadata/external_metadata",
-        "plates": plates
+    return CPJumpConfig(
+        batch="2020_11_04_CPJUMP1",
+        plates=plates
         or [
             "BR00116991__2020-11-05T19_51_35-Measurement1",
             "BR00116992__2020-11-05T21_31_31-Measurement1",
         ],
-        "local": {
+        local={
             "raw_images": f"{base}/raw",
             "features": f"{base}/features",
             "tensors": f"{base}/tensors",
             "metadata": f"{base}/metadata",
         },
-        "extraction": {
-            "model": "facebook/dinov3-vitl16-pretrain-lvd1689m",
-            "device": "cpu",
-            "batch_size": 4,
-        },
-        "fetch": {
-            "backend": "auto",
-            "aws_no_sign_request": True,
-            "rclone_remote": ":s3:",
-        },
-    }
+        extraction={"device": "cpu", "batch_size": 4},
+        fetch={"rclone_remote": ":s3:"},
+    )
 
 
 @pytest.fixture
-def config(tmp_path: Path) -> dict[str, Any]:
+def config(tmp_path: Path) -> CPJumpConfig:
     return _minimal_config(tmp_path)
 
 

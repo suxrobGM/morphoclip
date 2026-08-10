@@ -21,6 +21,7 @@ import torch
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
 
+from morphoclip.data.config import CPJumpConfig
 from morphoclip.data.feature_extractor import (
     extract_plate_features_with_model,
     feature_filename,
@@ -44,7 +45,7 @@ from morphoclip.data.progress import (
     load_progress,
     save_progress,
 )
-from morphoclip.utils.s3 import build_s3_uri, sync_s3_path
+from morphoclip.utils.s3 import sync_s3_path
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -110,7 +111,7 @@ class PlateExtractionPipeline:
     def __init__(
         self,
         *,
-        config: dict[str, Any],
+        config: CPJumpConfig,
         progress_path: Path,
         backend: str,
         save_tensors: bool = False,
@@ -126,28 +127,20 @@ class PlateExtractionPipeline:
         self._dry_run = dry_run
         self._retry_failed = retry_failed
 
-        local = config.get("local", {})
-        self._raw_root = Path(local.get("raw_images", "data/raw"))
-        self._features_root = Path(local.get("features", "data/features"))
-        self._tensors_root = Path(local.get("tensors", "data/tensors"))
-        self._metadata_root = Path(local.get("metadata", "data/metadata"))
+        self._raw_root = config.local.raw_images
+        self._features_root = config.local.features
+        self._tensors_root = config.local.tensors
+        self._metadata_root = config.local.metadata
 
-        self._batch = config.get("batch", "")
-        self._endpoint = config["endpoint"]
-        self._plates: list[str] = config.get("plates", [])
+        self._batch = config.batch
+        self._plates = config.plates
 
-        fetch_cfg = config.get("fetch", {})
-        self._no_sign_request = bool(fetch_cfg.get("aws_no_sign_request", True))
-        self._rclone_remote = str(
-            fetch_cfg.get(
-                "rclone_remote", ":s3,provider=AWS,region=us-east-1,no_check_bucket=true:"
-            )
-        )
+        self._no_sign_request = config.fetch.aws_no_sign_request
+        self._rclone_remote = config.fetch.rclone_remote
 
-        extraction = config.get("extraction", {})
-        self._model_name = extraction.get("model", "facebook/dinov3-vitl16-pretrain-lvd1689m")
-        self._device = extraction.get("device", "auto")
-        self._batch_size = extraction.get("batch_size", 48)
+        self._model_name = config.extraction.model
+        self._device = config.extraction.device
+        self._batch_size = config.extraction.batch_size
 
         self._progress = load_progress(progress_path, compute_config_hash(self._plates))
 
@@ -379,12 +372,10 @@ class PlateExtractionPipeline:
             return
 
         console.print("\n[bold]Downloading metadata...[/bold]")
-        platemaps_uri = build_s3_uri(self._endpoint, self._config["metadata"], self._batch)
+        platemaps_uri = self._config.s3_uri(self._config.metadata)
         self._sync(platemaps_uri, self._metadata_root / "platemaps" / self._batch)
 
-        ext_metadata_uri = build_s3_uri(
-            self._endpoint, self._config["external_metadata"], self._batch
-        )
+        ext_metadata_uri = self._config.s3_uri(self._config.external_metadata)
         self._sync(ext_metadata_uri, self._metadata_root / "external_metadata")
 
         self._progress.metadata_downloaded = True
@@ -398,7 +389,7 @@ class PlateExtractionPipeline:
             console.print(f"  Raw images already present ({existing_tiffs} TIFFs)")
             return
 
-        images_uri = build_s3_uri(self._endpoint, self._config["images"], self._batch)
+        images_uri = self._config.s3_uri(self._config.images)
         plate_uri = f"{images_uri}/{plate_name}/Images"
 
         console.print("  Fetching from S3...")

@@ -8,8 +8,6 @@ import csv
 import logging
 from pathlib import Path
 
-import yaml
-
 from morphoclip.data.perturbation import PerturbationInfo, PerturbationType
 
 logger = logging.getLogger(__name__)
@@ -134,9 +132,10 @@ class MetadataIndex:
     @classmethod
     def from_config(cls, config_path: Path) -> MetadataIndex:
         """Build index from ``configs/dataset.yml``."""
-        with open(config_path) as f:
-            config = yaml.safe_load(f)["cpjump"]
-        return cls.from_directory(Path(config["local"]["metadata"]), config["batch"])
+        from morphoclip.data.config import load_dataset_config
+
+        config = load_dataset_config(config_path)
+        return cls.from_directory(config.local.metadata, config.batch)
 
     @classmethod
     def from_directory(cls, metadata_dir: Path, batch: str | None = None) -> MetadataIndex:

@@ -108,14 +108,10 @@ def _load_index(
     if metadata_dir is not None:
         return MetadataIndex.from_directory(metadata_dir, batch=batch)
 
-    import yaml
+    from morphoclip.data.config import load_dataset_config
 
-    with open(config_path, encoding="utf-8") as f:
-        config = yaml.safe_load(f)["cpjump"]
-
-    config_metadata_dir = Path(config["local"]["metadata"])
-    config_batch = batch or config.get("batch")
-    return MetadataIndex.from_directory(config_metadata_dir, batch=config_batch)
+    config = load_dataset_config(config_path)
+    return MetadataIndex.from_directory(config.local.metadata, batch=batch or config.batch)
 
 
 def _render_text_output(

@@ -24,6 +24,7 @@ from rich.console import Console
 from morphoclip.data import dataset as dataset_module
 from morphoclip.data import metadata as metadata_module
 from morphoclip.data import perturbation
+from morphoclip.data.config import load_dataset_config
 from morphoclip.data.perturbation import PerturbationType
 from morphoclip.splits import api as splits_api
 from morphoclip.splits import contexts as split_contexts
@@ -46,19 +47,6 @@ class SplitStrategy(StrEnum):
     cpjump1_official_representation = "cpjump1_official_representation"
     cpjump1_official_gene_compound = "cpjump1_official_gene_compound"
     cellclip_cpjump_style = "cellclip_cpjump_style"
-
-
-def _load_config(config_path: Path) -> dict[str, Any]:
-    try:
-        import yaml
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(
-            "Reading configs/dataset.yml requires PyYAML. "
-            "Run via `uv run poe inspect-dataset ...` or install the dependencies first."
-        ) from exc
-
-    with open(config_path, encoding="utf-8") as f:
-        return yaml.safe_load(f)["cpjump"]
 
 
 def _normalize_plates(raw_plates: list[str], extract_plate_barcode: Any) -> list[str]:
@@ -467,19 +455,18 @@ def main(
 
     pert_types_set = set(pert_types) if pert_types is not None else None
 
-    cfg = _load_config(config)
-    local_config = cfg.get("local", {})
-    default_feature_dir = Path(local_config["features" if mode == "features" else "tensors"])
+    cfg = load_dataset_config(config)
+    default_feature_dir = cfg.local.features if mode == "features" else cfg.local.tensors
     feature_dir = feature_dir or default_feature_dir
-    metadata_dir = metadata_dir or Path(local_config["metadata"])
-    batch_value = batch or cfg.get("batch")
+    metadata_dir = metadata_dir or cfg.local.metadata
+    batch_value = batch or cfg.batch
 
     if plates is not None:
         resolved_plates = _normalize_plates(plates, extract_plate_barcode)
     else:
         resolved_plates = _auto_detect_plates(feature_dir)
         if not resolved_plates and not feature_dir.exists():
-            resolved_plates = _normalize_plates(cfg.get("plates", []), extract_plate_barcode)
+            resolved_plates = _normalize_plates(cfg.plates, extract_plate_barcode)
 
     payload: dict[str, Any] = {
         "class_schema": {
@@ -536,7 +523,7 @@ def main(
         inspection_dataset = dataset
         if len(dataset) == 0 and (split_strategy is not None or list_groups is not None):
             if not resolved_plates:
-                resolved_plates = _normalize_plates(cfg.get("plates", []), extract_plate_barcode)
+                resolved_plates = _normalize_plates(cfg.plates, extract_plate_barcode)
             if not resolved_plates:
                 resolved_plates = metadata.plates()
 

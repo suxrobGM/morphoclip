@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -11,7 +10,6 @@ from rich.table import Table
 from benchmark.profiles import profile_path
 from cellclip.benchmark.export import (
     export_plate,
-    load_yaml_section,
     resolve_path,
 )
 from morphoclip.data.feature_extractor import (
@@ -51,14 +49,6 @@ class PlateResult:
     features_reused: bool = False
     features_deleted: int = 0
     tensors_deleted: int = 0
-
-
-def load_dataset_config(path: Path) -> dict[str, Any]:
-    """Load the dataset config section used by the extractor."""
-    data = load_yaml_section(path, "cpjump")
-    if not data:
-        raise ValueError(f"Dataset config missing 'cpjump' section: {path}")
-    return data
 
 
 def resolve_dataset_path(path_value: str | Path, project_root: Path) -> Path:
