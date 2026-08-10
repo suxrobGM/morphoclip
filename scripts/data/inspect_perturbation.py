@@ -6,10 +6,7 @@ Examples:
     python scripts/inspect_perturbation.py --example-type compound --json
 """
 
-import importlib.util
 import json
-import sys
-import types
 from dataclasses import fields
 from enum import StrEnum
 from pathlib import Path
@@ -18,38 +15,11 @@ from typing import Annotated, Any
 import typer
 from rich.console import Console
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SRC_ROOT = PROJECT_ROOT / "src"
-DATA_ROOT = SRC_ROOT / "morphoclip" / "data"
-
-
-def _load_module(module_name: str, module_path: Path) -> Any:
-    spec = importlib.util.spec_from_file_location(module_name, module_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Unable to load module {module_name} from {module_path}")
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def _ensure_namespace_packages() -> None:
-    morphoclip_pkg = sys.modules.setdefault("morphoclip", types.ModuleType("morphoclip"))
-    if not hasattr(morphoclip_pkg, "__path__"):
-        morphoclip_pkg.__path__ = [str(SRC_ROOT / "morphoclip")]
-
-    data_pkg = sys.modules.setdefault("morphoclip.data", types.ModuleType("morphoclip.data"))
-    if not hasattr(data_pkg, "__path__"):
-        data_pkg.__path__ = [str(DATA_ROOT)]
-
-
-_ensure_namespace_packages()
-perturbation_module = _load_module("morphoclip.data.perturbation", DATA_ROOT / "perturbation.py")
-
-PerturbationInfo = perturbation_module.PerturbationInfo
-PerturbationType = perturbation_module.PerturbationType
-generate_text = perturbation_module.generate_text
+from morphoclip.data.perturbation import (
+    PerturbationInfo,
+    PerturbationType,
+    generate_text,
+)
 
 console = Console()
 
@@ -133,25 +103,12 @@ def _load_index(
     metadata_dir: Path | None,
     batch: str | None,
 ) -> Any:
-    try:
-        metadata_module = _load_module("morphoclip.data.metadata", DATA_ROOT / "metadata.py")
-        MetadataIndex = metadata_module.MetadataIndex
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(
-            "Metadata lookup requires the project dependencies. "
-            "Run the script via `uv run poe inspect-perturbation ...` or install deps first."
-        ) from exc
+    from morphoclip.data.metadata import MetadataIndex
 
     if metadata_dir is not None:
         return MetadataIndex.from_directory(metadata_dir, batch=batch)
 
-    try:
-        import yaml
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(
-            "Reading configs/dataset.yml requires PyYAML. "
-            "Run the script via `uv run poe inspect-perturbation ...` or install deps first."
-        ) from exc
+    import yaml
 
     with open(config_path, encoding="utf-8") as f:
         config = yaml.safe_load(f)["cpjump"]
