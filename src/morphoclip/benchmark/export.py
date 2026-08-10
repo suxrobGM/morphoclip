@@ -21,6 +21,7 @@ from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.inference import (
     build_eval_dataloader,
     build_eval_dataset,
+    encode_wells,
     load_models_from_checkpoint,
 )
 from morphoclip.utils.device import resolve_device
@@ -180,14 +181,17 @@ def build_plate_profile(
     return pd.concat([metadata_out, features_df], axis=1)
 
 
-@torch.no_grad()
 def _encode_plate_wells(
     models: ExportModels,
     plate: str,
     *,
     batch_size: int | None,
 ) -> tuple[np.ndarray, list[str]]:
-    """Encode every well cached for ``plate`` through the image encoder."""
+    """Encode every well cached for ``plate`` through the image encoder.
+
+    Runs in fp32: these embeddings are written to disk and every benchmark
+    number downstream is computed from them.
+    """
     image_encoder, config, device = models
 
     dataset = build_eval_dataset(config, plates=[plate], exclude_controls=False)
@@ -197,16 +201,8 @@ def _encode_plate_wells(
         )
     loader = build_eval_dataloader(dataset, config, device, batch_size=batch_size)
 
-    all_embeddings: list[torch.Tensor] = []
-    all_wells: list[str] = []
-    for batch in loader:
-        features = batch["features"].to(device, non_blocking=True)
-        site_mask = batch["site_mask"].to(device, non_blocking=True)
-        embeddings = image_encoder(features, site_mask)
-        all_embeddings.append(embeddings.cpu())
-        all_wells.extend(batch["wells"])
-
-    return torch.cat(all_embeddings, dim=0).numpy(), all_wells
+    encoded = encode_wells(image_encoder, loader, device=device)
+    return encoded.image.numpy(), encoded.wells
 
 
 def export_plate_profiles(

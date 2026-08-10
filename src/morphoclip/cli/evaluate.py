@@ -13,11 +13,11 @@ from rich.table import Table
 from morphoclip.cli.logging import setup_logging
 from morphoclip.data.splits import create_splits
 from morphoclip.training.config import load_training_config
-from morphoclip.training.evaluate import evaluate_epoch, lookup_text_embeddings
+from morphoclip.training.evaluate import evaluate_epoch
 from morphoclip.training.inference import (
     build_eval_dataloader,
     build_eval_dataset,
-    filter_batch_to_cached,
+    encode_wells,
     load_models_from_checkpoint,
 )
 from morphoclip.training.metrics import (
@@ -26,7 +26,7 @@ from morphoclip.training.metrics import (
     compute_uniformity,
 )
 from morphoclip.utils.caching import load_cached_text_features
-from morphoclip.utils.device import autocast_context, resolve_device
+from morphoclip.utils.device import resolve_device
 
 console = Console()
 
@@ -53,36 +53,28 @@ def _build_eval_loader(config, device, *, split):
 
 def _compute_embedding_diagnostics(
     image_encoder, text_projection, text_cache, loader, *, device, amp
-):
+) -> dict[str, float]:
     """Compute alignment, uniformity, and intra-batch similarity."""
-    image_embs, text_embs = [], []
-    skipped = 0
-    with torch.no_grad():
-        for batch in loader:
-            cached, n_skipped = filter_batch_to_cached(batch, text_cache)
-            skipped += n_skipped
-            if not cached["pert_info"]:
-                continue
-            features = cached["features"].to(device, non_blocking=True)
-            site_mask = cached["site_mask"].to(device, non_blocking=True)
-            with autocast_context(device, amp):
-                img = image_encoder(features, site_mask)
-                raw_text = lookup_text_embeddings(cached["pert_info"], text_cache, device)
-                txt = text_projection(raw_text)
-            image_embs.append(img.cpu())
-            text_embs.append(txt.cpu())
-    if skipped:
+    encoded = encode_wells(
+        image_encoder,
+        loader,
+        device=device,
+        text_projection=text_projection,
+        text_cache=text_cache,
+        amp=amp,
+    )
+    if encoded.skipped:
         console.print(
-            f"[yellow]Diagnostics skipped {skipped} wells missing from text cache[/yellow]"
+            f"[yellow]Diagnostics skipped {encoded.skipped} wells missing from text cache[/yellow]"
         )
 
-    all_image, all_text = torch.cat(image_embs), torch.cat(text_embs)
+    image, text = encoded.image, encoded.require_text()
     return {
-        "alignment": compute_alignment(all_image, all_text),
-        "image_uniformity": compute_uniformity(all_image),
-        "text_uniformity": compute_uniformity(all_text),
-        "image_intra_batch_sim": compute_intra_batch_similarity(all_image),
-        "text_intra_batch_sim": compute_intra_batch_similarity(all_text),
+        "alignment": compute_alignment(image, text),
+        "image_uniformity": compute_uniformity(image),
+        "text_uniformity": compute_uniformity(text),
+        "image_intra_batch_sim": compute_intra_batch_similarity(image),
+        "text_intra_batch_sim": compute_intra_batch_similarity(text),
     }
 
 

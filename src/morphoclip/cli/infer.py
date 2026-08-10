@@ -15,14 +15,12 @@ from rich.console import Console
 from rich.table import Table
 
 from morphoclip.cli.logging import setup_logging
-from morphoclip.data.perturbation import PerturbationInfo
 from morphoclip.training.config import load_training_config
-from morphoclip.training.evaluate import lookup_text_embeddings
 from morphoclip.training.inference import (
     build_eval_dataloader,
     build_eval_dataset,
     discover_plates,
-    filter_batch_to_cached,
+    encode_wells,
     load_models_from_checkpoint,
 )
 from morphoclip.utils.caching import load_cached_text_features
@@ -34,40 +32,6 @@ console = Console()
 class InferMode(StrEnum):
     match = "match"
     embed = "embed"
-
-
-def _encode_all_wells(image_encoder, text_projection, text_cache, loader, *, device, amp):
-    """Encode all wells and their text through the model."""
-    image_embs, text_embs = [], []
-    all_plates, all_wells, all_pert_infos = [], [], []
-    skipped = 0
-
-    with torch.no_grad():
-        for batch in loader:
-            cached, n_skipped = filter_batch_to_cached(batch, text_cache)
-            skipped += n_skipped
-            pert_infos: list[PerturbationInfo] = cached["pert_info"]
-            if not pert_infos:
-                continue
-
-            features = cached["features"].to(device, non_blocking=True)
-            site_mask = cached["site_mask"].to(device, non_blocking=True)
-
-            with autocast_context(device, amp):
-                img = image_encoder(features, site_mask)
-                raw_text = lookup_text_embeddings(pert_infos, text_cache, device)
-                txt = text_projection(raw_text)
-
-            image_embs.append(img.cpu())
-            text_embs.append(txt.cpu())
-            all_plates.extend(cached["plates"])
-            all_wells.extend(cached["wells"])
-            all_pert_infos.extend(pert_infos)
-
-    if skipped:
-        console.print(f"[yellow]Skipped {skipped} wells with no text cache entry[/yellow]")
-
-    return torch.cat(image_embs), torch.cat(text_embs), all_plates, all_wells, all_pert_infos
 
 
 def _build_unique_text_embeddings(text_projection, text_cache, *, device, amp):
@@ -209,14 +173,18 @@ def infer(
     console.print(f"Plates: {len(resolved_plates)} | Wells: {len(dataset):,}\n")
 
     console.print("[bold]Encoding wells...[/bold]")
-    image_embs, text_embs, all_plates, all_wells, all_pert_infos = _encode_all_wells(
+    encoded = encode_wells(
         image_encoder,
-        text_projection,
-        text_cache,
         loader,
         device=device,
+        text_projection=text_projection,
+        text_cache=text_cache,
         amp=cfg.runtime.amp,
     )
+    if encoded.skipped:
+        console.print(f"[yellow]Skipped {encoded.skipped} wells with no text cache entry[/yellow]")
+    image_embs = encoded.image
+    all_plates, all_wells, all_pert_infos = encoded.plates, encoded.wells, encoded.pert_infos
     console.print(f"Encoded {image_embs.shape[0]} wells -> {image_embs.shape[1]}-d\n")
 
     resolved_output_dir = output_dir or checkpoint.parent.parent / f"infer_{mode.value}"
@@ -243,7 +211,7 @@ def infer(
     elif mode is InferMode.embed:
         _run_embed(
             image_embs,
-            text_embs,
+            encoded.require_text(),
             all_plates,
             all_wells,
             all_pert_infos,
