@@ -92,27 +92,6 @@ def load_fraction_retrieved(run_dir: str | Path, spec: TaskSpec) -> pd.DataFrame
     return df.loc[:, [*spec.key_columns, "fr"]].copy()
 
 
-def normalize_run_specs(
-    *,
-    run_specs: list[RunSpec] | None = None,
-    baseline_dir: str | Path | None = None,
-    candidate_dir: str | Path | None = None,
-    baseline_label: str = "Baseline",
-    candidate_label: str = "CellCLIP",
-) -> list[RunSpec]:
-    """Normalize comparison inputs to a list of named runs."""
-    if run_specs:
-        return [RunSpec(label=spec.label, run_dir=Path(spec.run_dir)) for spec in run_specs]
-
-    if baseline_dir is None or candidate_dir is None:
-        raise ValueError("Either run_specs or baseline_dir/candidate_dir must be provided")
-
-    return [
-        RunSpec(label=baseline_label, run_dir=Path(baseline_dir)),
-        RunSpec(label=candidate_label, run_dir=Path(candidate_dir)),
-    ]
-
-
 def collect_fraction_retrieved(
     run_specs: list[RunSpec],
     task_name: str,
@@ -383,21 +362,11 @@ def plot_benchmark_comparison(
 
 def generate_benchmark_comparison(
     *,
-    run_specs: list[RunSpec] | None = None,
-    baseline_dir: str | Path | None = None,
-    candidate_dir: str | Path | None = None,
+    run_specs: list[RunSpec],
     output_dir: str | Path,
-    baseline_label: str = "Baseline",
-    candidate_label: str = "CellCLIP",
 ) -> tuple[dict[str, pd.DataFrame], dict[str, Path], dict[str, Path]]:
     """Generate merged comparison tables and plots for two or more benchmark runs."""
-    normalized_runs = normalize_run_specs(
-        run_specs=run_specs,
-        baseline_dir=baseline_dir,
-        candidate_dir=candidate_dir,
-        baseline_label=baseline_label,
-        candidate_label=candidate_label,
-    )
+    normalized_runs = [RunSpec(label=spec.label, run_dir=Path(spec.run_dir)) for spec in run_specs]
     if len(normalized_runs) < 2:
         raise ValueError("At least two benchmark runs are required for comparison")
 

@@ -8,9 +8,7 @@ live in ``benchmark.splits`` and are not handled here.
 import hashlib
 import logging
 from collections import defaultdict
-from pathlib import Path
 
-import pandas as pd
 from torch.utils.data import Subset
 
 from morphoclip.data.dataset import MorphoCLIPDataset, MorphoCLIPSample
@@ -78,107 +76,6 @@ def _build_pert_type_subsets(
     )
 
     return subsets
-
-
-def _build_pert_type_groups(
-    dataset: MorphoCLIPDataset,
-) -> dict[str, list[int]]:
-    """Build grouping keys for the pert_type strategy.
-
-    Returns:
-        Mapping ``"pert_type::broad_sample" -> dataset indices``.
-    """
-    grouped: dict[str, list[int]] = defaultdict(list)
-    for i, (plate, well, _) in enumerate(dataset.index_entries):
-        barcode = extract_plate_barcode(plate)
-        info = dataset.metadata.lookup(barcode, well)
-        if is_control_or_empty(info):
-            continue
-        group_key = f"{info.pert_type.value}::{info.broad_sample}"
-        grouped[group_key].append(i)
-    return dict(grouped)
-
-
-def build_split_groups(
-    dataset: MorphoCLIPDataset,
-    strategy: str = "pert_type",
-) -> dict[str, list[int]]:
-    """Build grouping keys used by split strategies.
-
-    Args:
-        dataset: Dataset whose ``index_entries`` define the split units.
-        strategy: ``"pert_type"`` (other strategies in ``benchmark.splits``).
-
-    Returns:
-        Mapping ``group_key -> dataset indices``.
-    """
-    if strategy == "pert_type":
-        return _build_pert_type_groups(dataset)
-    raise ValueError(
-        f"Unknown split strategy {strategy!r}. Benchmark strategies are in benchmark.splits."
-    )
-
-
-def build_split_manifest(
-    dataset: MorphoCLIPDataset,
-    strategy: str = "pert_type",
-    *,
-    val_fraction: float = 0.1,
-    seed: int = 42,
-) -> pd.DataFrame:
-    """Return a split manifest keyed by ``Metadata_Plate`` + ``Metadata_Well``."""
-    train_idx, val_idx, test_idx = _resolve_split_indices(
-        dataset,
-        strategy=strategy,
-        val_fraction=val_fraction,
-        seed=seed,
-    )
-    subset_by_idx = dict.fromkeys(train_idx, "train")
-    subset_by_idx.update(dict.fromkeys(val_idx, "validate"))
-    subset_by_idx.update(dict.fromkeys(test_idx, "test"))
-
-    records: list[dict[str, str | int]] = []
-    for idx, (plate, well, _) in enumerate(dataset.index_entries):
-        subset = subset_by_idx.get(idx)
-        if subset is None:
-            continue
-
-        barcode = extract_plate_barcode(plate)
-        info = dataset.metadata.lookup(barcode, well)
-        records.append(
-            {
-                "split_strategy": strategy,
-                "subset": subset,
-                "Metadata_Plate": barcode,
-                "Metadata_Well": well,
-                "Metadata_broad_sample": info.broad_sample,
-                "Metadata_pert_type": info.pert_type.value,
-                "Metadata_target": info.gene or info.target_list,
-            }
-        )
-
-    return pd.DataFrame.from_records(records)
-
-
-def save_split_manifest(
-    dataset: MorphoCLIPDataset,
-    output_path: str | Path,
-    strategy: str = "pert_type",
-    *,
-    val_fraction: float = 0.1,
-    seed: int = 42,
-) -> pd.DataFrame:
-    """Build and save a split manifest CSV."""
-    manifest = build_split_manifest(
-        dataset,
-        strategy=strategy,
-        val_fraction=val_fraction,
-        seed=seed,
-    )
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest.to_csv(output_path, index=False)
-    return manifest
 
 
 def _resolve_split_indices(

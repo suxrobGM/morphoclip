@@ -146,33 +146,6 @@ class ProfileLoader:
         dfs = [pd.read_csv(f, low_memory=False) for f in files]
         return pd.concat(dfs, ignore_index=True)
 
-    def load_plates(
-        self,
-        batch: str,
-        plates: Sequence[str],
-        file_pattern: str = "normalized_feature_select_negcon_batch.csv.gz",
-        modality: str | None = None,
-    ) -> pd.DataFrame:
-        """Load and concatenate profiles from multiple plates.
-
-        Args:
-            batch: Batch identifier.
-            plates: List of plate barcodes.
-            file_pattern: Glob pattern for profile files.
-            modality: Optional modality label to assign.
-
-        Returns:
-            Concatenated DataFrame with all plate profiles.
-        """
-        dfs = []
-        for plate in plates:
-            df = self.load_plate(batch, plate, file_pattern)
-            if modality:
-                df["Metadata_modality"] = modality
-            dfs.append(df)
-
-        return pd.concat(dfs, ignore_index=True)
-
 
 def remove_empty_wells(df: pd.DataFrame, sample_col: str = "Metadata_broad_sample") -> pd.DataFrame:
     """Remove wells with missing sample identifier."""
