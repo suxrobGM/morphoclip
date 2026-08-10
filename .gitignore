@@ -57,9 +57,8 @@ build/
 # Logs / coverage
 *.log
 .coverage
+coverage.xml
 htmlcov/
-
-.DS_Store
 
 .claude/settings.local.json
 output/
