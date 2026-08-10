@@ -38,9 +38,6 @@ CH_LABELS: list[str] = [CHANNEL_NAMES[ch] for ch in FLUORESCENCE_CHANNELS]
 CH_SHORT: list[str] = ["Mito", "Actin", "Golgi/PM", "ER", "DNA"]
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
-
-
 def load_features(
     feature_dir: Path,
     *,
@@ -71,9 +68,6 @@ def cosine_sim(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     a_n = a / a.norm(dim=-1, keepdim=True).clamp(min=1e-8)
     b_n = b / b.norm(dim=-1, keepdim=True).clamp(min=1e-8)
     return (a_n * b_n).sum(dim=-1)
-
-
-# ── metric computation ───────────────────────────────────────────────────────
 
 
 def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
@@ -235,9 +229,6 @@ def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
 
     m["verdicts"] = verdicts
     return m
-
-
-# ── plot generation ──────────────────────────────────────────────────────────
 
 
 def plot_similarity_heatmap(metrics: dict, output_dir: Path) -> Path:
