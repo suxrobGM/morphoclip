@@ -46,11 +46,6 @@ console = Console()
 CONFIG_PATH = Path("configs/dataset.yml")
 
 
-# --------------------------------------------------------------------------- #
-# extract
-# --------------------------------------------------------------------------- #
-
-
 def _clear_pt_files(directory: Path) -> int:
     """Remove saved ``.pt`` files from a directory if it exists."""
     if not directory.exists():
@@ -217,11 +212,6 @@ def extract(
     console.print("\n[bold green]Done.")
 
 
-# --------------------------------------------------------------------------- #
-# pipeline
-# --------------------------------------------------------------------------- #
-
-
 @app.command()
 def pipeline(
     config: Annotated[Path, typer.Option(help="Dataset config YAML.")] = CONFIG_PATH,
@@ -294,11 +284,6 @@ def pipeline(
     extraction_pipeline.run(device=device, batch_size=batch_size, plates=plates)
 
 
-# --------------------------------------------------------------------------- #
-# upload
-# --------------------------------------------------------------------------- #
-
-
 @app.command()
 def upload(
     features_dir: Annotated[Path, typer.Option(help="Directory of .tar.gz plate archives.")] = Path(
@@ -349,11 +334,6 @@ def upload(
 
     console.print("\n[bold green]Upload complete.[/bold green]")
     console.print(f"https://huggingface.co/datasets/{repo_id}")
-
-
-# --------------------------------------------------------------------------- #
-# download
-# --------------------------------------------------------------------------- #
 
 
 @app.command()
@@ -427,11 +407,6 @@ def download(
 
     console.print("\n[bold green]Download complete.[/bold green]")
     console.print(f"Features extracted to: {output_dir}")
-
-
-# --------------------------------------------------------------------------- #
-# repack
-# --------------------------------------------------------------------------- #
 
 
 @app.command()

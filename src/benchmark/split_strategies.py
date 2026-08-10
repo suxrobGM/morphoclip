@@ -99,9 +99,6 @@ def _annotated_plate_wells(dataset: MorphoCLIPDataset):
     return wells
 
 
-# --- cpjump1_official_representation ---
-
-
 def _classify_representation(context: OfficialSplitContext) -> str:
     """Classify a well into train/validate/test for official representation."""
     experiment_type = context.experiment_type.lower()
@@ -141,9 +138,6 @@ def build_official_representation_groups(dataset: MorphoCLIPDataset) -> dict[str
         )
         grouped[group_key].append(i)
     return dict(grouped)
-
-
-# --- cpjump1_official_gene_compound ---
 
 
 def build_official_gene_compound_subsets(dataset: MorphoCLIPDataset) -> dict[str, list[int]]:
@@ -200,9 +194,6 @@ def build_official_gene_compound_groups(dataset: MorphoCLIPDataset) -> dict[str,
             continue
         grouped[context.target].append(i)
     return dict(grouped)
-
-
-# --- cellclip_cpjump_style ---
 
 
 def build_cellclip_cpjump_subsets(dataset: MorphoCLIPDataset) -> dict[str, list[int]]:

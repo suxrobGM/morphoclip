@@ -100,7 +100,6 @@ def _train_loop(
         console.rule("[bold blue]MorphoCLIP Training")
         log_device_banner(console, device, use_ddp=use_ddp, world_size=world_size)
 
-    # --- Data ---
     if is_main:
         console.print("\n[bold]Loading data...[/bold]")
     train_loader, val_loader, train_count, val_count, train_sampler = build_train_data(
@@ -115,7 +114,6 @@ def _train_loop(
     if is_main:
         console.print(f"  Text cache: {text_cache['embeddings'].shape[0]:,} perturbations")
 
-    # --- Models ---
     if is_main:
         console.print("\n[bold]Building models...[/bold]")
     image_encoder, text_projection, logit_scale = build_and_wrap_models(
@@ -124,7 +122,6 @@ def _train_loop(
     if is_main:
         log_config_summary(console, config, image_encoder, text_projection)
 
-    # --- Optimizer & scheduler ---
     optimizer, scheduler, grad_scaler, total_steps = build_optimization(
         image_encoder,
         text_projection,
@@ -134,7 +131,6 @@ def _train_loop(
         num_batches=len(train_loader),
     )
 
-    # --- Training state ---
     run_dir.mkdir(parents=True, exist_ok=True)
     rank = dist_state.rank if dist_state else 0
     logger = TrainingLogger(run_dir, rank=rank)
@@ -244,7 +240,6 @@ def _train_loop(
             global_step = result.global_step
             progress.remove_task(batch_task)
 
-            # --- Epoch summary ---
             train_loss = float(sum(result.epoch_losses) / max(1, len(result.epoch_losses)))
             train_metrics: dict[str, float | int] = {
                 "epoch": epoch,
@@ -253,7 +248,6 @@ def _train_loop(
                 "epoch_seconds": float(time.time() - epoch_start),
             }
 
-            # --- Evaluation (every epoch, main process only) ---
             eval_metrics: dict[str, float] | None = None
             if is_main:
                 eval_metrics = evaluate_epoch(
@@ -322,7 +316,6 @@ def _train_loop(
                     )
                 break
 
-    # --- Save history ---
     if is_main:
         pd.DataFrame(history).to_csv(run_dir / "metrics.csv", index=False)
     logger.close()

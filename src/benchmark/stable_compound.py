@@ -114,7 +114,6 @@ def evaluate_compound(
         },
     )
 
-    # --- Compound matching ---
     modality_1_df = remove_negcon_wells(modality_1_df)
     modality_1_consensus_df = compute_consensus(modality_1_df, REPLICATE_FEATURE)
 

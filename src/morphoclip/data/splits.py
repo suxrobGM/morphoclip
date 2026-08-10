@@ -22,9 +22,6 @@ from morphoclip.data.perturbation import (
 logger = logging.getLogger(__name__)
 
 
-# --- pert_type strategy (local metadata only) ---
-
-
 def _build_pert_type_subsets(
     dataset: MorphoCLIPDataset,
     *,
@@ -100,9 +97,6 @@ def _build_pert_type_groups(
         group_key = f"{info.pert_type.value}::{info.broad_sample}"
         grouped[group_key].append(i)
     return dict(grouped)
-
-
-# --- Public API ---
 
 
 def build_split_groups(

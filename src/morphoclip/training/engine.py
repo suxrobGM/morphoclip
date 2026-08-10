@@ -177,9 +177,6 @@ def load_checkpoint(
     return ckpt["epoch"], ckpt["steps"], ckpt["best_eval_loss"]
 
 
-# --- Per-step helpers ---
-
-
 def scale_param(logit_scale: nn.Module) -> nn.Parameter:
     """Get the raw scale parameter, unwrapping DDP if needed."""
     inner = cast(LogitScaleModule, _unwrap(logit_scale))

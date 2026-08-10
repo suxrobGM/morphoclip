@@ -49,11 +49,6 @@ DATASET_CONFIG_PATH = Path("configs/dataset.yml")
 CELLCLIP_DEFAULT_MODEL = "facebook/dinov2-giant"
 
 
-# --------------------------------------------------------------------------- #
-# train
-# --------------------------------------------------------------------------- #
-
-
 def _resolve_run_dir(config, *, run_name: str | None, output_dir: Path | None) -> Path:
     base_output = output_dir or (Path.cwd() / config.runtime.output_root)
     resolved_name = run_name or config.runtime.run_name
@@ -95,11 +90,6 @@ def train(
     render_train_config(cfg, config_path=config, run_dir=run_dir)
     result = train_cellclip(cfg, run_dir=run_dir)
     render_train_summary(result)
-
-
-# --------------------------------------------------------------------------- #
-# export
-# --------------------------------------------------------------------------- #
 
 
 @app.command()
@@ -208,11 +198,6 @@ def export(
     print("=" * 60)
     print(f"Export complete: {len(exported_paths)} plate profile files")
     print("=" * 60)
-
-
-# --------------------------------------------------------------------------- #
-# pipeline
-# --------------------------------------------------------------------------- #
 
 
 @app.command()

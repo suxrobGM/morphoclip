@@ -38,11 +38,6 @@ class OnExisting(StrEnum):
     redownload = "redownload"
 
 
-# --------------------------------------------------------------------------- #
-# fetch
-# --------------------------------------------------------------------------- #
-
-
 def _count_tiffs(image_dir: Path) -> int:
     """Count TIFF files in a directory."""
     return len(list(image_dir.glob("*.tif"))) + len(list(image_dir.glob("*.tiff")))
@@ -194,10 +189,6 @@ def fetch(
 
     console.print(f"\n[bold green]Done.[/bold green] Downloaded: {downloaded}/{len(plates)} plates")
 
-
-# --------------------------------------------------------------------------- #
-# check-plates
-# --------------------------------------------------------------------------- #
 
 S3_BASE = "s3://cellpainting-gallery/cpg0000-jump-pilot/source_4/images/2020_11_04_CPJUMP1/images/"
 """Base S3 URI for the CPJUMP1 images. Plates are subdirectories under this path."""

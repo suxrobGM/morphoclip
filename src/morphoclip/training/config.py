@@ -9,14 +9,12 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-# --- Model constants ---
 # Properties of the pre-extracted feature cache, not tunable choices.
 EMBED_DIM = 1024  # DINOv3 ViT-L/16 CLS token dimension
 TEXT_INPUT_DIM = 768  # BioClinical ModernBERT hidden dimension
 INPUT_CHANNELS = 5  # Fluorescence channels (Mito, Actin, Golgi, ER, DNA)
 PROJ_HIDDEN_DIM = 512  # ProjectionHead hidden dimension
 
-# --- Optimizer constants ---
 # Never tuned in practice; fixed to sane defaults.
 ADAMW_BETAS = (0.9, 0.999)
 ADAMW_EPS = 1.0e-8
@@ -124,9 +122,6 @@ class MorphoCLIPTrainingConfig:
     def to_dict(self) -> dict[str, Any]:
         """Serialize config to a YAML-friendly dict."""
         return asdict(self)
-
-
-# --- YAML loading with ``extends`` inheritance ---
 
 
 def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

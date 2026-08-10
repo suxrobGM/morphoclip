@@ -19,10 +19,6 @@ import torch
 import torch.distributed as dist
 from torch import nn
 
-# ------------------------------------------------------------------
-# Distributed state
-# ------------------------------------------------------------------
-
 
 @dataclass(slots=True, frozen=True)
 class DistributedState:
@@ -99,11 +95,6 @@ def cleanup_distributed() -> None:
 def is_distributed() -> bool:
     """Return ``True`` if a distributed process group is active."""
     return dist.is_initialized()
-
-
-# ------------------------------------------------------------------
-# Communication helpers
-# ------------------------------------------------------------------
 
 
 def all_reduce_scalar(value: float, *, op: str = "mean") -> float:
@@ -221,11 +212,6 @@ def gather_string_lists(
     for g in gathered:
         result.extend(g)
     return result
-
-
-# ------------------------------------------------------------------
-# LogitScaleModule — wraps the learnable temperature for DDP
-# ------------------------------------------------------------------
 
 
 class LogitScaleModule(nn.Module):
