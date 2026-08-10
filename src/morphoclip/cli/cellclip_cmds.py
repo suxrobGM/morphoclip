@@ -33,6 +33,12 @@ from morphoclip.data.config import load_dataset_config
 from morphoclip.data.feature_extractor import infer_feature_width, load_dinov3
 from morphoclip.utils.console import console
 
+# Bare pass-through options, repeated across the export and pipeline commands.
+# Plain assignment, not `type X = ...`: Typer cannot resolve a PEP 695 alias.
+OptStr = Annotated[str | None, typer.Option()]
+OptInt = Annotated[int | None, typer.Option()]
+OptFlag = Annotated[bool, typer.Option()]
+
 app = typer.Typer(no_args_is_help=True, help="CellCLIP baseline: train and export profiles.")
 
 DEFAULT_TRAIN_CONFIG = Path("configs/cellclip/cellclip_jumpcp.yaml")
@@ -87,25 +93,25 @@ def train(
 @app.command()
 def export(
     config: Annotated[Path, typer.Option(help="Benchmark config YAML.")] = BENCHMARK_CONFIG_PATH,
-    experiment_metadata_path: Annotated[str | None, typer.Option()] = None,
-    source_profiles_root: Annotated[str | None, typer.Option()] = None,
-    feature_root: Annotated[str | None, typer.Option()] = None,
-    output_profiles_root: Annotated[str | None, typer.Option()] = None,
-    batch: Annotated[str | None, typer.Option()] = None,
+    experiment_metadata_path: OptStr = None,
+    source_profiles_root: OptStr = None,
+    feature_root: OptStr = None,
+    output_profiles_root: OptStr = None,
+    batch: OptStr = None,
     plates: Annotated[
         list[str] | None, typer.Option(help="Restrict to specific plates (repeatable).")
     ] = None,
-    cell_filter: Annotated[str | None, typer.Option()] = None,
+    cell_filter: OptStr = None,
     timelines: Annotated[
         list[str] | None, typer.Option(help="Timeline labels to export: short and/or long.")
     ] = None,
-    ckpt_path: Annotated[str | None, typer.Option()] = None,
-    checkpoint_repo_id: Annotated[str | None, typer.Option()] = None,
-    checkpoint_filename: Annotated[str | None, typer.Option()] = None,
-    download_dir: Annotated[str | None, typer.Option()] = None,
-    device: Annotated[str | None, typer.Option()] = None,
+    ckpt_path: OptStr = None,
+    checkpoint_repo_id: OptStr = None,
+    checkpoint_filename: OptStr = None,
+    download_dir: OptStr = None,
+    device: OptStr = None,
     model_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
-    input_dim: Annotated[int | None, typer.Option()] = None,
+    input_dim: OptInt = None,
     loss_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
 ) -> None:
     """Export benchmark-ready CPJUMP1 profiles using a pretrained CellCLIP model."""
@@ -193,36 +199,36 @@ def export(
 def pipeline(
     dataset_config: Annotated[Path, typer.Option()] = DATASET_CONFIG_PATH,
     benchmark_config: Annotated[Path, typer.Option()] = BENCHMARK_CONFIG_PATH,
-    experiment_metadata_path: Annotated[str | None, typer.Option()] = None,
-    source_profiles_root: Annotated[str | None, typer.Option()] = None,
-    compressed_root: Annotated[str | None, typer.Option()] = None,
-    feature_root: Annotated[str | None, typer.Option()] = None,
-    output_profiles_root: Annotated[str | None, typer.Option()] = None,
-    tensors_root: Annotated[str | None, typer.Option()] = None,
-    batch: Annotated[str | None, typer.Option()] = None,
+    experiment_metadata_path: OptStr = None,
+    source_profiles_root: OptStr = None,
+    compressed_root: OptStr = None,
+    feature_root: OptStr = None,
+    output_profiles_root: OptStr = None,
+    tensors_root: OptStr = None,
+    batch: OptStr = None,
     plates: Annotated[
         list[str] | None, typer.Option(help="Restrict to specific plates (repeatable).")
     ] = None,
-    cell_filter: Annotated[str | None, typer.Option()] = None,
+    cell_filter: OptStr = None,
     timelines: Annotated[
         list[str] | None, typer.Option(help="Timeline labels to export: short and/or long.")
     ] = None,
-    model_name: Annotated[str | None, typer.Option()] = None,
-    device: Annotated[str | None, typer.Option()] = None,
-    batch_size: Annotated[int | None, typer.Option()] = None,
-    no_tensors: Annotated[bool, typer.Option()] = False,
-    ckpt_path: Annotated[str | None, typer.Option()] = None,
-    checkpoint_repo_id: Annotated[str | None, typer.Option()] = None,
-    checkpoint_filename: Annotated[str | None, typer.Option()] = None,
-    download_dir: Annotated[str | None, typer.Option()] = None,
+    model_name: OptStr = None,
+    device: OptStr = None,
+    batch_size: OptInt = None,
+    no_tensors: OptFlag = False,
+    ckpt_path: OptStr = None,
+    checkpoint_repo_id: OptStr = None,
+    checkpoint_filename: OptStr = None,
+    download_dir: OptStr = None,
     model_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
-    input_dim: Annotated[int | None, typer.Option()] = None,
+    input_dim: OptInt = None,
     loss_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
-    force_export: Annotated[bool, typer.Option()] = False,
-    keep_features: Annotated[bool, typer.Option()] = False,
-    keep_tensors: Annotated[bool, typer.Option()] = False,
-    prune_empty_dirs: Annotated[bool, typer.Option()] = False,
-    stop_on_error: Annotated[bool, typer.Option()] = False,
+    force_export: OptFlag = False,
+    keep_features: OptFlag = False,
+    keep_tensors: OptFlag = False,
+    prune_empty_dirs: OptFlag = False,
+    stop_on_error: OptFlag = False,
 ) -> None:
     """Run extraction, CellCLIP export, and cache cleanup one plate at a time."""
     project_root = Path.cwd()

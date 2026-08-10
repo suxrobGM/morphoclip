@@ -12,6 +12,7 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn
 from rich.table import Table
 
 from morphoclip.data.config import load_dataset_config
+from morphoclip.data.tiffs import count_tiffs
 from morphoclip.utils.console import console
 from morphoclip.utils.s3 import choose_backend, sync_s3_path
 
@@ -30,11 +31,6 @@ class OnExisting(StrEnum):
     ask = "ask"
     skip = "skip"
     redownload = "redownload"
-
-
-def _count_tiffs(image_dir: Path) -> int:
-    """Count TIFF files in a directory."""
-    return len(list(image_dir.glob("*.tif"))) + len(list(image_dir.glob("*.tiff")))
 
 
 def _prompt_existing(label: str, dest: Path, action_yes: str, mode: str) -> str:
@@ -76,7 +72,7 @@ def _process_plate(
     """Handle download for one plate. Returns True if downloaded."""
     should_download = True
     if image_dest.exists():
-        existing_tiffs = _count_tiffs(image_dest)
+        existing_tiffs = count_tiffs(image_dest)
         if existing_tiffs > 0:
             action = _prompt_existing(
                 f"Plate {plate} ({existing_tiffs} TIFFs)",

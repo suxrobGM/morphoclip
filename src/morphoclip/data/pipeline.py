@@ -43,24 +43,11 @@ from morphoclip.data.progress import (
     load_progress,
     save_progress,
 )
+from morphoclip.data.tiffs import count_tiffs, delete_tiffs
 from morphoclip.utils.console import console, make_progress
 from morphoclip.utils.s3 import sync_s3_path
 
 logger = logging.getLogger(__name__)
-
-
-def _count_tiffs(image_dir: Path) -> int:
-    """Count TIFF files in a directory."""
-    return len(list(image_dir.glob("*.tif"))) + len(list(image_dir.glob("*.tiff")))
-
-
-def _delete_tiffs(image_dir: Path, *, dry_run: bool = False) -> int:
-    """Delete original TIFF images. Returns deleted file count."""
-    tif_paths = sorted(image_dir.glob("*.tif")) + sorted(image_dir.glob("*.tiff"))
-    if not dry_run:
-        for p in tif_paths:
-            p.unlink(missing_ok=True)
-    return len(tif_paths)
 
 
 class PlateExtractionPipeline:
@@ -355,7 +342,7 @@ class PlateExtractionPipeline:
 
     def _fetch_plate(self, plate_name: str, image_dir: Path) -> None:
         """Download plate images from S3."""
-        existing_tiffs = _count_tiffs(image_dir) if image_dir.exists() else 0
+        existing_tiffs = count_tiffs(image_dir)
         if existing_tiffs > 0:
             console.print(f"  Raw images already present ({existing_tiffs} TIFFs)")
             return
@@ -366,7 +353,7 @@ class PlateExtractionPipeline:
         console.print("  Fetching from S3...")
         self._sync(plate_uri, image_dir)
 
-        tiff_count = _count_tiffs(image_dir)
+        tiff_count = count_tiffs(image_dir)
         console.print(f"  Downloaded {tiff_count} TIFFs")
         logger.info("Fetched plate %s: %d TIFFs", plate_name, tiff_count)
 
@@ -416,11 +403,11 @@ class PlateExtractionPipeline:
             if not image_dir.exists():
                 return
 
-            tiff_count = _count_tiffs(image_dir)
+            tiff_count = count_tiffs(image_dir)
             if tiff_count == 0:
                 return
 
-            deleted = _delete_tiffs(image_dir, dry_run=self._dry_run)
+            deleted = delete_tiffs(image_dir, dry_run=self._dry_run)
             if deleted:
                 console.print(f"  Cleaned up {deleted} TIFFs")
                 logger.info("Cleanup: deleted %d TIFFs from %s", deleted, image_dir)
