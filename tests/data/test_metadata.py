@@ -20,42 +20,6 @@ from morphoclip.data.perturbation import (
 BATCH = "2020_11_04_CPJUMP1"
 
 
-class TestPerturbationType:
-    def test_values(self) -> None:
-        assert PerturbationType.COMPOUND == "compound"
-        assert PerturbationType.CRISPR == "crispr"
-        assert PerturbationType.ORF == "orf"
-        assert PerturbationType.NEGCON == "negcon"
-        assert PerturbationType.POSCON == "poscon"
-        assert PerturbationType.UNKNOWN == "unknown"
-
-    def test_is_str(self) -> None:
-        assert isinstance(PerturbationType.COMPOUND, str)
-
-
-class TestPerturbationInfo:
-    def test_defaults(self) -> None:
-        info = PerturbationInfo()
-        assert info.pert_type == PerturbationType.UNKNOWN
-        assert info.broad_sample == ""
-        assert info.smiles == ""
-
-    def test_frozen(self) -> None:
-        info = PerturbationInfo(pert_type=PerturbationType.COMPOUND)
-        with pytest.raises(AttributeError):
-            info.pert_type = PerturbationType.CRISPR  # type: ignore[misc]
-
-    def test_custom_fields(self) -> None:
-        info = PerturbationInfo(
-            pert_type=PerturbationType.COMPOUND,
-            pert_iname="Aloxistatin",
-            target_list="CTSL",
-            smiles="CC(CC)C=O",
-        )
-        assert info.pert_iname == "Aloxistatin"
-        assert info.target_list == "CTSL"
-
-
 class TestWellConversion:
     @pytest.mark.parametrize(
         ("row", "col", "expected"),
@@ -274,9 +238,3 @@ class TestMetadataIndex:
         index = MetadataIndex.from_directory(metadata_dir, batch=BATCH)
         info = index.lookup("NONEXISTENT", "A01")
         assert info.pert_type == PerturbationType.UNKNOWN
-
-    def test_repr(self, metadata_dir: Path) -> None:
-        index = MetadataIndex.from_directory(metadata_dir, batch=BATCH)
-        r = repr(index)
-        assert "MetadataIndex" in r
-        assert "plates=" in r

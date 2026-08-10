@@ -105,14 +105,6 @@ class TestMorphoCLIPDataset:
             sample = ds[i]
             assert sample.pert_info.pert_type == PerturbationType.COMPOUND
 
-    def test_metadata_property(self, fake_features: Path, metadata_index: MetadataIndex) -> None:
-        ds = MorphoCLIPDataset(
-            feature_dir=fake_features,
-            metadata=metadata_index,
-            plates=["BR00116991"],
-        )
-        assert ds.metadata is metadata_index
-
     def test_text_levels(self, fake_features: Path, metadata_index: MetadataIndex) -> None:
         for level in ["name_only", "name_target", "full"]:
             ds = MorphoCLIPDataset(

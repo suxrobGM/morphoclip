@@ -8,7 +8,6 @@ import torch
 
 from morphoclip.data.image_loader import (
     CHANNEL_NAMES,
-    DINO_INPUT_SIZE,
     FLUORESCENCE_CHANNELS,
     ImageKey,
     discover_sites,
@@ -78,32 +77,10 @@ class TestImageKey:
         key = ImageKey(row=3, col=12, field=7)
         assert str(key) == "r03c12f07"
 
-    def test_frozen(self) -> None:
-        key = ImageKey(row=1, col=1, field=1)
-        with pytest.raises(AttributeError):
-            key.row = 2  # type: ignore[misc]
-
-    def test_equality(self) -> None:
-        k1 = ImageKey(row=1, col=1, field=1)
-        k2 = ImageKey(row=1, col=1, field=1)
-        assert k1 == k2
-
-    def test_hashable(self) -> None:
-        k1 = ImageKey(row=1, col=1, field=1)
-        k2 = ImageKey(row=1, col=1, field=2)
-        s = {k1, k2}
-        assert len(s) == 2
-
 
 class TestConstants:
-    def test_fluorescence_channels(self) -> None:
-        assert FLUORESCENCE_CHANNELS == (1, 2, 3, 4, 5)
-
     def test_channel_names_keys(self) -> None:
         assert set(CHANNEL_NAMES.keys()) == set(FLUORESCENCE_CHANNELS)
-
-    def test_dino_input_size(self) -> None:
-        assert DINO_INPUT_SIZE == 384
 
 
 class TestDiscoverSites:

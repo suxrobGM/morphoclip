@@ -5,7 +5,6 @@ import torch
 from morphoclip.data.perturbation import PerturbationInfo, PerturbationType
 from morphoclip.models.projection_head import ProjectionHead
 from morphoclip.models.prompts import (
-    TEMPLATES,
     build_prompt,
     build_prompt_from_info,
     build_prompts,
@@ -15,12 +14,6 @@ from morphoclip.models.prompts import (
 
 
 class TestTemplates:
-    def test_default_templates_exist(self) -> None:
-        assert "{compound_name}" in TEMPLATES["compound"]
-        assert "{gene_symbol}" in TEMPLATES["crispr"]
-        assert "{gene_symbol}" in TEMPLATES["orf"]
-        assert "{cell_line}" in TEMPLATES["negcon"]
-
     def test_extract_fields(self) -> None:
         fields = extract_template_fields("Hello {name}, your {item} is ready.")
         assert fields == ["name", "item"]

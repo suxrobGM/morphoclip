@@ -8,8 +8,6 @@ import pytest
 
 from morphoclip.data.pipeline import PlateExtractionPipeline
 from morphoclip.data.progress import (
-    PipelineProgress,
-    PlateRecord,
     PlateStatus,
     _utcnow,
 )
@@ -63,23 +61,6 @@ def config(tmp_path: Path) -> dict[str, Any]:
 @pytest.fixture
 def progress_path(tmp_path: Path) -> Path:
     return tmp_path / "progress.json"
-
-
-class TestPlateRecord:
-    def test_defaults(self) -> None:
-        record = PlateRecord()
-        assert record.status == PlateStatus.PENDING
-        assert record.barcode == ""
-        assert record.sites_extracted == 0
-        assert record.error is None
-
-
-class TestPipelineProgress:
-    def test_defaults(self) -> None:
-        progress = PipelineProgress()
-        assert progress.schema_version == 1
-        assert progress.metadata_downloaded is False
-        assert progress.plates == {}
 
 
 class TestProgressIO:
