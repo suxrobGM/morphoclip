@@ -2,7 +2,6 @@
 
 import csv
 import random
-import sys
 from collections.abc import Iterable
 from enum import StrEnum
 from pathlib import Path
@@ -19,8 +18,6 @@ import torch.nn.functional as F
 import typer
 from PIL import Image
 from rich.console import Console
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from morphoclip.data.image_loader import FLUORESCENCE_CHANNELS, parse_filename
 

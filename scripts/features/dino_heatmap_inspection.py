@@ -1,6 +1,5 @@
 """Render a DINO attention heatmap next to a microscopy image."""
 
-import sys
 from collections.abc import Iterable
 from enum import StrEnum
 from pathlib import Path
@@ -18,8 +17,6 @@ import typer
 from PIL import Image
 from rich.console import Console
 from transformers import AutoImageProcessor, AutoModel
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from morphoclip.data.feature_extractor import DEFAULT_MODEL
 from morphoclip.data.image_loader import parse_filename

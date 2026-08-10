@@ -19,7 +19,6 @@ Usage:
 
 import json
 import random
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -29,8 +28,6 @@ import torch
 import typer
 import yaml
 from rich.console import Console
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from morphoclip.data.image_loader import CHANNEL_NAMES, FLUORESCENCE_CHANNELS
 

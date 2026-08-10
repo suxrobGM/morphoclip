@@ -1,17 +1,13 @@
 #!/usr/bin/env python
 """Analyze a local CellCLIP training run and write reusable diagnostics."""
 
-import sys
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
-
-from cellclip.training.analysis import (  # noqa: E402
+from cellclip.training.analysis import (
     build_comparison,
     build_run_summary,
     write_analysis_outputs,
