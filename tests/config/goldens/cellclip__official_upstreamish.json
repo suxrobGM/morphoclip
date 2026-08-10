@@ -1,0 +1,84 @@
+{
+  "dataset": {
+    "batch_size": 64,
+    "dataset_config_path": "configs/dataset.yml",
+    "eval_batch_size": 64,
+    "eval_max_sites_per_well": null,
+    "eval_subset": "validate",
+    "exclude_controls": true,
+    "feature_root": "data/features_cellclip_base",
+    "interp_alpha": 0.4,
+    "max_eval_wells": null,
+    "max_sites_per_well": null,
+    "max_train_wells": null,
+    "num_workers": 4,
+    "pin_memory": true,
+    "same_pert_interp_sites": 0,
+    "seed": 42,
+    "split_manifest_path": null,
+    "split_strategy": "cpjump1_official_representation",
+    "subset": "train",
+    "test_fraction": 0.1,
+    "text_level": "full",
+    "train_max_sites_per_well": null,
+    "unique_perturbations": false,
+    "val_fraction": 0.1,
+    "within_well_interp_sites": 0
+  },
+  "distributed": {
+    "backend": "nccl",
+    "enabled": false,
+    "find_unused_parameters": false,
+    "gradient_accumulation_steps": 1
+  },
+  "model": {
+    "chem_fusion_type": "film",
+    "chem_prompt_policy": "remove_smiles",
+    "chemberta_context_length": 512,
+    "chemberta_model_name": "seyonec/PubChem10M_SMILES_BPE_450k",
+    "chemberta_pooling": "mean",
+    "chemberta_tokenizer_name": "seyonec/PubChem10M_SMILES_BPE_450k",
+    "chemberta_tune_layers": 0,
+    "context_length": 512,
+    "embed_dim": 512,
+    "freeze_chemberta": true,
+    "input_channels": 5,
+    "pooling": "attention",
+    "text_model_name": "bert-base-cased",
+    "tokenizer_name": "bert-base-cased",
+    "use_bias": false,
+    "variant": "baseline",
+    "vision_heads": 8,
+    "vision_layers": 12,
+    "vision_width": 1536
+  },
+  "optimization": {
+    "betas": [
+      0.9,
+      0.999
+    ],
+    "epochs": 50,
+    "eps": 1e-08,
+    "grad_clip_norm": 20.0,
+    "loss_type": "cwcl",
+    "lr": 0.0001,
+    "warmup_steps": 1000,
+    "weight_decay": 0.1
+  },
+  "runtime": {
+    "amp": true,
+    "device": "auto",
+    "eval_every_epochs": 1,
+    "log_every_steps": 10,
+    "max_train_steps": null,
+    "output_root": "output/train_runs",
+    "run_name": "cellclip_official_upstreamish",
+    "save_every_epochs": 1,
+    "seed": 42
+  },
+  "tensorboard": {
+    "enabled": true,
+    "flush_every_steps": 50,
+    "histogram_every_epochs": 5
+  }
+}

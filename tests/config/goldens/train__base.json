@@ -1,0 +1,49 @@
+{
+  "dataset": {
+    "batch_sampler": "random",
+    "batch_size": 512,
+    "dataset_config_path": "configs/dataset.yml",
+    "eval_batch_size": 512,
+    "exclude_controls": true,
+    "feature_root": "data/features",
+    "max_sites_per_well": null,
+    "preload": true,
+    "replicates_per_group": 2,
+    "split_strategy": "pert_type",
+    "text_cache_path": "data/text/cached_text_features.pt",
+    "text_level": "full",
+    "val_fraction": 0.1
+  },
+  "distributed": {
+    "enabled": false,
+    "gradient_accumulation_steps": 1
+  },
+  "model": {
+    "aggregator": "ccf-mean",
+    "ccf_heads": 4,
+    "ccf_layers": 1,
+    "output_dim": 512,
+    "proj_dropout": 0.3
+  },
+  "optimization": {
+    "epochs": 100,
+    "loss_type": "cwcl",
+    "lr": 0.0001,
+    "replicate_temperature": null,
+    "replicate_weight": 0.0,
+    "target_weight": 0.0,
+    "use_cwa": false,
+    "warmup_steps": 100,
+    "weight_decay": 0.2
+  },
+  "runtime": {
+    "amp": true,
+    "device": "auto",
+    "early_stop_patience": null,
+    "log_every_steps": 10,
+    "max_train_steps": null,
+    "output_root": "output/morphoclip_runs",
+    "run_name": null,
+    "seed": 42
+  }
+}
