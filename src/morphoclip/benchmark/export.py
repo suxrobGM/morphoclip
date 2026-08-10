@@ -193,8 +193,7 @@ def _encode_plate_wells(
     dataset = build_eval_dataset(config, plates=[plate], exclude_controls=False)
     if len(dataset) == 0:
         raise ValueError(
-            f"No cached features found for plate {plate!r} under "
-            f"{config.dataset.feature_root}"
+            f"No cached features found for plate {plate!r} under {config.dataset.feature_root}"
         )
     loader = build_eval_dataloader(dataset, config, device, batch_size=batch_size)
 
@@ -258,8 +257,7 @@ def export_plate_profiles(
         )
         if not has_negcon:
             logger.warning(
-                "Plate %s has zero negcon rows with features; falling back to "
-                "all-well centering",
+                "Plate %s has zero negcon rows with features; falling back to all-well centering",
                 plate,
             )
         profile_df = negcon_center_profiles(profile_df)

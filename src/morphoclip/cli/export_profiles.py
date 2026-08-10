@@ -106,8 +106,7 @@ def export_profiles(
 
     console.print(table)
     console.print(
-        f"\nExported {n_ok}/{len(resolved_plates)} plates "
-        f"({n_skipped} skipped, {n_failed} failed)."
+        f"\nExported {n_ok}/{len(resolved_plates)} plates ({n_skipped} skipped, {n_failed} failed)."
     )
     if n_failed:
         raise typer.Exit(1)

@@ -59,9 +59,7 @@ def evaluate_genetic(
             "Perturbation==@modality_2_perturbation"
         )
         for modality_2_timepoint in modality_2_experiments_df.Time.unique():
-            modality_2_timepoint_df = modality_2_experiments_df.query(
-                "Time==@modality_2_timepoint"
-            )
+            modality_2_timepoint_df = modality_2_experiments_df.query("Time==@modality_2_timepoint")
 
             modality_2_df = load_profiles_for_plates(
                 loader=loader,
@@ -78,8 +76,7 @@ def evaluate_genetic(
 
             if modality_2_df.empty:
                 print(
-                    f"Skipping {modality_2_perturbation}_{cell}_"
-                    f"{modality_2_timepoint}h - no data"
+                    f"Skipping {modality_2_perturbation}_{cell}_{modality_2_timepoint}h - no data"
                 )
                 continue
 
@@ -242,8 +239,7 @@ def _evaluate_cross_modality(
         return
 
     description_cross = (
-        f"{modality_1_perturbation}_{cell}_{_time}"
-        f"-{modality_2_perturbation}_{cell}_{time_2}"
+        f"{modality_1_perturbation}_{cell}_{_time}-{modality_2_perturbation}_{cell}_{time_2}"
     )
     print(f"[{count}] Computing {description_cross} matching")
 

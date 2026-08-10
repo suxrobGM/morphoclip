@@ -320,9 +320,7 @@ class TestComputeTrainingLoss:
 
     def test_no_components_when_replicate_disabled(self) -> None:
         image, text, scale, broad = self._inputs()
-        total, components = compute_training_loss(
-            "cwcl", image, text, scale, broad_samples=broad
-        )
+        total, components = compute_training_loss("cwcl", image, text, scale, broad_samples=broad)
         expected = compute_loss("cwcl", image, text, scale, broad_samples=broad)
         torch.testing.assert_close(total, expected)
         assert components == {}

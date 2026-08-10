@@ -50,9 +50,9 @@ class TestLoadReferenceMetadata:
 
     def test_raises_when_plate_not_found(self, tmp_path: Path) -> None:
         csv_path = tmp_path / "metadata.csv"
-        pd.DataFrame(
-            {"Metadata_Plate": ["BR00116991"], "Metadata_Well": ["A01"]}
-        ).to_csv(csv_path, index=False)
+        pd.DataFrame({"Metadata_Plate": ["BR00116991"], "Metadata_Well": ["A01"]}).to_csv(
+            csv_path, index=False
+        )
 
         with pytest.raises(ValueError, match="No reference metadata"):
             load_reference_metadata(csv_path, "BR00999999")
@@ -147,9 +147,13 @@ class TestNegconCenterProfiles:
         )
 
         centered = negcon_center_profiles(profiles)
-        negcon_mean = centered.loc[
-            centered["Metadata_control_type"] == "negcon", ["feature_0000", "feature_0001"]
-        ].to_numpy(dtype=np.float32).mean(axis=0)
+        negcon_mean = (
+            centered.loc[
+                centered["Metadata_control_type"] == "negcon", ["feature_0000", "feature_0001"]
+            ]
+            .to_numpy(dtype=np.float32)
+            .mean(axis=0)
+        )
 
         np.testing.assert_allclose(negcon_mean, [0.0, 0.0], atol=0.1)
 

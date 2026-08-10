@@ -182,8 +182,7 @@ def run_epoch(
                 current_lr = float(ctx.scheduler.get_last_lr()[0])
                 current_tau = sp.exp().item()
                 component_vals = {
-                    name: float(total) / accum_steps
-                    for name, total in component_totals.items()
+                    name: float(total) / accum_steps for name, total in component_totals.items()
                 }
                 note = "".join(
                     f" {name}=[magenta]{value:.5f}[/magenta]"

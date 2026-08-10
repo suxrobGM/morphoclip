@@ -66,9 +66,7 @@ def _raise_for_missing(
     """Raise ``ValueError`` if any context keys are missing."""
     if missing:
         preview = ", ".join(formatter(item) for item in sorted(missing)[:5])
-        raise ValueError(
-            f"Missing {metadata_label} for {len(missing)} {noun} in {path}: {preview}"
-        )
+        raise ValueError(f"Missing {metadata_label} for {len(missing)} {noun} in {path}: {preview}")
 
 
 def _annotated_official_wells(

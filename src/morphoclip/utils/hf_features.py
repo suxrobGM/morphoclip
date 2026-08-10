@@ -28,9 +28,7 @@ def is_plate_extracted(plate_dir: Path) -> bool:
     return plate_dir.is_dir() and any(plate_dir.glob("*.pt"))
 
 
-def partition_pending_archives(
-    archives: list[str], output_dir: Path
-) -> tuple[list[str], int]:
+def partition_pending_archives(archives: list[str], output_dir: Path) -> tuple[list[str], int]:
     """Split repo archives into (pending, already-extracted-count)."""
     pending: list[str] = []
     skipped = 0
