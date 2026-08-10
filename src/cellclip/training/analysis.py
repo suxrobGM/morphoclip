@@ -7,7 +7,7 @@ owns the model/checkpoint-heavy embedding collection and the top-level
 """
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import torch
@@ -34,7 +34,7 @@ from cellclip.training.dataset import (
     resolve_cell_type,
 )
 from cellclip.training.engine import resolve_device
-from cellclip.training.model import build_cellclip_model
+from cellclip.training.model import CellCLIPChemBERTa, build_cellclip_model
 from morphoclip.data.perturbation import extract_plate_barcode
 
 __all__ = [
@@ -172,7 +172,10 @@ def collect_eval_embeddings(
             pooled_images = model.encode_mil(features)
             image_features = F.normalize(model.encode_image(pooled_images), dim=1)
             if hasattr(model, "encode_text_with_diagnostics"):
-                text_hidden, batch_diagnostics = model.encode_text_with_diagnostics(
+                # Only the ChemBERTa variant reports fusion diagnostics.
+                text_hidden, batch_diagnostics = cast(
+                    CellCLIPChemBERTa, model
+                ).encode_text_with_diagnostics(
                     text_tokens,
                     smiles=smiles_tokens,
                     has_smiles=has_smiles,
@@ -234,7 +237,7 @@ def build_run_summary(
         metrics_frame = pd.read_csv(metrics_path)
         metrics_rows = metrics_frame.to_dict(orient="records")
         if not metrics_frame.empty:
-            final_metrics = metrics_frame.iloc[-1].to_dict()
+            final_metrics = cast(dict[str, Any], metrics_frame.iloc[-1].to_dict())
 
     collected = collect_eval_embeddings(run_dir, max_eval_wells=max_eval_wells)
     image_features = collected["image_features"]

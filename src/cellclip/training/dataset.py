@@ -125,7 +125,7 @@ class CellCLIPCollator:
     chemberta_context_length: int = 512
 
     def __call__(self, batch: list[Any]) -> dict[str, Any]:
-        payload = morphoclip_collate_fn(batch)
+        payload: dict[str, Any] = dict(morphoclip_collate_fn(batch))
         prompts: list[str] = []
         smiles_strings: list[str] = []
         has_smiles: list[bool] = []

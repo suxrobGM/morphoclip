@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -33,7 +33,7 @@ def load_benchmark_tables(benchmark_dir: Path) -> dict[str, list[dict[str, Any]]
     tables: dict[str, list[dict[str, Any]]] = {}
     for csv_path in sorted(tables_dir.glob("*summary.csv")):
         frame = pd.read_csv(csv_path)
-        tables[csv_path.stem] = frame.to_dict(orient="records")
+        tables[csv_path.stem] = cast(list[dict[str, Any]], frame.to_dict(orient="records"))
     return tables
 
 

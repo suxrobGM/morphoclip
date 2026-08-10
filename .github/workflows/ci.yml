@@ -21,6 +21,7 @@ jobs:
       - run: uv sync --extra cpu --extra benchmark --group dev
       - run: uv run ruff format --check .
       - run: uv run ruff check .
+      - run: uv run mypy src
       - run: uv run pytest --cov --cov-report=xml
       - uses: actions/upload-artifact@v7
         with:

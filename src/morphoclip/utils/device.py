@@ -81,9 +81,10 @@ def resolve_num_workers(requested: int) -> int:
     Returns:
         ``min(requested, available_cores - 1)``, at least 0.
     """
-    try:
+    # sched_getaffinity is POSIX-only and respects cgroup/taskset limits.
+    if hasattr(os, "sched_getaffinity"):
         available = len(os.sched_getaffinity(0))
-    except AttributeError:
+    else:
         available = os.cpu_count() or 1
     max_workers = max(0, available - 1)
     return min(requested, max_workers)

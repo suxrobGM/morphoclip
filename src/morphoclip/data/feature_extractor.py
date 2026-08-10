@@ -18,6 +18,8 @@ from transformers import AutoImageProcessor, AutoModel
 
 from morphoclip.data.image_loader import (
     FLUORESCENCE_CHANNELS,
+    IMAGENET_MEAN,
+    IMAGENET_STD,
     ImageKey,
     discover_sites,
     load_site_as_tensor,
@@ -127,8 +129,10 @@ def _preprocess_batch(
     all_images = torch.cat(site_tensors, dim=0)  # (N*5, 3, H, W)
 
     # Apply normalization manually — processor expects PIL images but we have tensors
-    mean = torch.tensor(processor.image_mean, dtype=all_images.dtype).view(1, 3, 1, 1)
-    std = torch.tensor(processor.image_std, dtype=all_images.dtype).view(1, 3, 1, 1)
+    image_mean = getattr(processor, "image_mean", IMAGENET_MEAN)
+    image_std = getattr(processor, "image_std", IMAGENET_STD)
+    mean = torch.tensor(image_mean, dtype=all_images.dtype).view(1, 3, 1, 1)
+    std = torch.tensor(image_std, dtype=all_images.dtype).view(1, 3, 1, 1)
     return (all_images - mean) / std
 
 

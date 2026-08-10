@@ -26,7 +26,6 @@ from morphoclip.data.feature_extractor import (
     repack_feature_file,
     verify_plate_features,
 )
-from morphoclip.data.image_loader import discover_sites, load_site_as_tensor
 from morphoclip.data.perturbation import extract_plate_barcode
 from morphoclip.data.pipeline import PlateExtractionPipeline
 from morphoclip.data.pipeline import setup_logging as setup_pipeline_logging
@@ -77,13 +76,6 @@ def extract(
     device: Annotated[str | None, typer.Option(help="Override device (e.g. cuda, cpu).")] = None,
     batch_size: Annotated[int | None, typer.Option(help="Override batch size.")] = None,
     no_tensors: Annotated[bool, typer.Option(help="Skip saving resized tensors.")] = False,
-    visualize: Annotated[
-        bool, typer.Option(help="Save channel grid and composite PNGs for sample sites.")
-    ] = False,
-    visualize_n: Annotated[int, typer.Option(help="Sample sites to visualize per plate.")] = 4,
-    visualize_only: Annotated[
-        bool, typer.Option(help="Only generate visualizations, skip extraction.")
-    ] = False,
 ) -> None:
     """Extract DINOv3 features from downloaded CPJUMP1 plates."""
     load_dotenv()
@@ -143,37 +135,6 @@ def extract(
             else:
                 console.print("  [green]All sites extracted[/green]")
             continue
-
-        if visualize or visualize_only:
-            # NOTE: `morphoclip.data.visualize` is not present in the package; this
-            # path mirrors the original (broken) script and errors only if used.
-            from morphoclip.data.visualize import save_site_comparison
-
-            vis_dir = Path("data/visualizations") / barcode
-            sites = discover_sites(image_dir)
-            sample_keys = sorted(sites.keys(), key=str)[:visualize_n]
-            console.print(
-                f"\n[bold]Visualizing [cyan]{barcode}[/cyan] ({len(sample_keys)} sample sites)..."
-            )
-            for key in sample_keys:
-                site_tensor = load_site_as_tensor(sites[key], resize=384)
-                feat_path = feature_dir / f"r{key.row:02d}c{key.col:02d}f{key.field:02d}.pt"
-                cls_features = None
-                if feat_path.exists():
-                    cls_features = torch.load(feat_path, weights_only=True)
-                cmp_path = save_site_comparison(
-                    site_tensor, key, vis_dir, cls_features=cls_features
-                )
-                console.print(f"  {key}: [dim]{cmp_path}[/dim]")
-                if cls_features is not None:
-                    console.print(f"         [dim]CLS features: {tuple(cls_features.shape)}[/dim]")
-                else:
-                    console.print(
-                        "         [yellow]No CLS features found (run extraction first)[/yellow]"
-                    )
-            console.print(f"  [green]Saved {len(sample_keys)} images to {vis_dir}[/green]")
-            if visualize_only:
-                continue
 
         console.print(f"\n[bold]Processing plate [cyan]{barcode}[/cyan]...")
         console.print(f"  Images:   {image_dir}")

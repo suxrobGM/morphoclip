@@ -309,7 +309,7 @@ def _plot_task_comparison(
     ax.set_xlim(0, max(1.05, max_fr + 0.1))
     ax.set_xlabel("Fraction Retrieved")
     ax.set_ylabel("")
-    ax.set_title(plot_df["task_title"].iat[0])
+    ax.set_title(str(plot_df["task_title"].iat[0]))
     ax.grid(axis="x", color="#d9dde1", linestyle="--", linewidth=0.8)
     ax.grid(axis="y", visible=False)
     ax.legend(title="Profile", loc="lower right", frameon=True)

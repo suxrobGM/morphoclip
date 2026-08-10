@@ -28,14 +28,11 @@ def resolve_checkpoint(
             "Install it or pass --ckpt-path."
         ) from exc
 
-    kwargs = {
-        "repo_id": checkpoint_repo_id,
-        "filename": checkpoint_filename,
-    }
-    if download_dir is not None:
-        kwargs["local_dir"] = str(download_dir)
-
-    return hf_hub_download(**kwargs)
+    return hf_hub_download(
+        repo_id=checkpoint_repo_id,
+        filename=checkpoint_filename,
+        local_dir=str(download_dir) if download_dir is not None else None,
+    )
 
 
 def _load_raw_checkpoint(checkpoint_path: str, device: str) -> dict[str, torch.Tensor]:

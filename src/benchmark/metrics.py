@@ -79,7 +79,7 @@ def run_map_pipeline(
     if multilabel_col and multilabel_col in pos_sameby:
         return modern["average_precision_multilabel"](
             meta=meta,
-            feats=features,  # type: ignore
+            feats=features,
             pos_sameby=pos_sameby,
             pos_diffby=pos_diffby,
             neg_sameby=neg_sameby,
@@ -92,7 +92,7 @@ def run_map_pipeline(
 
     return modern["average_precision_single"](
         meta=meta,
-        feats=features,  # type: ignore
+        feats=features,
         pos_sameby=pos_sameby,
         pos_diffby=pos_diffby,
         neg_sameby=neg_sameby,
@@ -185,7 +185,7 @@ def evaluate_replicability(
         DataFrame with per-sample average precision values.
     """
     pos_sameby = [sample_col]
-    pos_diffby = []
+    pos_diffby: list[str] = []
     neg_sameby = [plate_col]
     neg_diffby = [negcon_col]
 
@@ -240,8 +240,8 @@ def evaluate_matching(
         DataFrame with per-sample average precision values.
     """
     pos_sameby = [target_col]
-    pos_diffby = []
-    neg_sameby = []
+    pos_diffby: list[str] = []
+    neg_sameby: list[str] = []
     neg_diffby = [target_col]
 
     meta = get_metadata(profiles)
@@ -286,7 +286,7 @@ def evaluate_cross_modality_matching(
     """
     pos_sameby = [target_col]
     pos_diffby = [modality_col]
-    neg_sameby = []
+    neg_sameby: list[str] = []
     neg_diffby = [target_col, modality_col]
 
     meta = get_metadata(profiles)

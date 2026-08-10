@@ -1,6 +1,7 @@
 """Benchmark export helpers for local CellCLIP profile generation."""
 
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -13,6 +14,7 @@ from benchmark.export_utils import (
     negcon_center_profiles,
     output_profile_path,
 )
+from cellclip.benchmark.model import CellCLIPVisualEncoder
 from morphoclip.data.image_loader import FEATURE_PATTERN
 from morphoclip.data.perturbation import well_from_row_col
 
@@ -166,8 +168,9 @@ def encode_well(
 ) -> np.ndarray:
     """Encode one well using the trainer-faithful MIL pooling path."""
     del site_batch_size
-    pooled_sites = model.encode_mil(sites.unsqueeze(0).to(device))
-    well_embedding = model.encode_image(pooled_sites).squeeze(0).detach().cpu().float()
+    encoder = cast(CellCLIPVisualEncoder, model)
+    pooled_sites = encoder.encode_mil(sites.unsqueeze(0).to(device))
+    well_embedding = encoder.encode_image(pooled_sites).squeeze(0).detach().cpu().float()
     return well_embedding.numpy()
 
 

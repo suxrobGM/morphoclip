@@ -2,6 +2,7 @@
 
 from collections import OrderedDict
 from dataclasses import dataclass
+from typing import cast
 
 import torch
 from torch import nn
@@ -180,7 +181,8 @@ class CellCLIPVisualEncoder(nn.Module):
 
     @property
     def dtype(self) -> torch.dtype:
-        return self.visual.transformer.resblocks[0].mlp.c_fc.weight.dtype
+        mlp = cast(nn.Module, self.visual.transformer.resblocks[0].mlp)
+        return cast(nn.Linear, mlp.c_fc).weight.dtype
 
     def encode_mil(self, image: torch.Tensor) -> torch.Tensor:
         """Pool site bags before the visual transformer."""

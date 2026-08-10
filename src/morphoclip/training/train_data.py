@@ -90,7 +90,7 @@ def build_train_data(
 
     # Preload train+val features into RAM for fast training
     if ds_cfg.preload:
-        used_indices = set(train_set.indices + val_set.indices)
+        used_indices = set(train_set.indices) | set(val_set.indices)
         dataset.preload(indices=used_indices)
 
     dist_sampler: DistributedSampler | None = None

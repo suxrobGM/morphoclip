@@ -67,6 +67,7 @@ dev = [
   "mypy>=1.19.0",
   "types-PyYAML>=6.0.12",
   "poethepoet>=0.30.0",
+  "pandas-stubs>=3.0.5.260730",
 ]
 
 [tool.uv]
@@ -109,6 +110,7 @@ lint = "ruff check ."
 format = "ruff format ."
 format-check = "ruff format --check ."
 typecheck = "mypy src"
+check = ["format-check", "lint", "typecheck", "test"]
 
 # Pipeline entry points now live in the `morphoclip` CLI (src/morphoclip/cli/).
 check-plates = "morphoclip data check-plates"
@@ -192,6 +194,15 @@ known-first-party = ["morphoclip", "cellclip", "benchmark"]
 [tool.mypy]
 python_version = "3.14"
 mypy_path = "src"
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true
+
+# Only these third-party packages ship no usable stubs. A blanket
+# ignore_missing_imports hides real typos in first-party import paths.
+[[tool.mypy.overrides]]
+module = ["copairs.*", "cv2.*", "seaborn.*", "skimage.*", "sklearn.*", "torchvision.*", "tqdm.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

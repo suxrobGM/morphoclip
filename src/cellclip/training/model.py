@@ -1,6 +1,7 @@
 """Local CellCLIP model for training on precomputed site features."""
 
 from contextlib import nullcontext
+from typing import cast
 
 import numpy as np
 import torch
@@ -74,7 +75,8 @@ class CellCLIP(nn.Module):
 
     @property
     def dtype(self) -> torch.dtype:
-        return self.visual.transformer.resblocks[0].mlp.c_fc.weight.dtype
+        mlp = cast(nn.Module, self.visual.transformer.resblocks[0].mlp)
+        return cast(nn.Linear, mlp.c_fc).weight.dtype
 
     def encode_mil(self, image: torch.Tensor) -> torch.Tensor:
         """Pool site bags before the visual transformer."""
@@ -162,8 +164,9 @@ class CellCLIPChemBERTa(CellCLIP):
                 nn.GELU(),
                 nn.Linear(prompt_width * 2, prompt_width),
             )
-        nn.init.zeros_(self.chem_fusion[-1].weight)
-        nn.init.zeros_(self.chem_fusion[-1].bias)
+        last_fusion = cast(nn.Linear, self.chem_fusion[-1])
+        nn.init.zeros_(last_fusion.weight)
+        nn.init.zeros_(last_fusion.bias)
         self._configure_chemberta_trainability()
 
     def _configure_chemberta_trainability(self) -> None:
@@ -191,7 +194,7 @@ class CellCLIPChemBERTa(CellCLIP):
             self.chemberta.eval()
         return self
 
-    def load_state_dict(self, state_dict, strict: bool = True):
+    def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
         """Support legacy FiLM checkpoints after the fusion-module rename."""
         if "chem_fusion.0.weight" not in state_dict and "film.0.weight" in state_dict:
             remapped = dict(state_dict)
@@ -199,7 +202,7 @@ class CellCLIPChemBERTa(CellCLIP):
                 if key.startswith("film."):
                     remapped[key.replace("film.", "chem_fusion.", 1)] = value
             state_dict = remapped
-        return super().load_state_dict(state_dict, strict=strict)
+        return super().load_state_dict(state_dict, strict=strict, assign=assign)
 
     @staticmethod
     def _masked_mean_norm(values: torch.Tensor, mask: torch.Tensor) -> float:

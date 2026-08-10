@@ -56,12 +56,12 @@ def _normalize_copairs_mode(copairs_mode: CopairsMode) -> Literal["stable", "exp
 def _get_modern_modules():
     """Import modern copairs modules required for experimental mode."""
     try:
-        from copairs.map import mean_average_precision  # type: ignore
+        from copairs.map import mean_average_precision
         from copairs.map.average_precision import (
-            average_precision as average_precision_single,  # type: ignore
+            average_precision as average_precision_single,
         )
         from copairs.map.multilabel import (
-            average_precision as average_precision_multilabel,  # type: ignore
+            average_precision as average_precision_multilabel,
         )
     except Exception as exc:  # pragma: no cover - depends on installed copairs version
         raise RuntimeError(EXPERIMENTAL_COPAIRS_ERROR) from exc
@@ -76,13 +76,13 @@ def _get_modern_modules():
 def _get_legacy_modules():
     """Import old copairs modules required for stable mode."""
     try:
-        import copairs.compute_np as backend  # type: ignore
-        from copairs.compute import cosine_indexed  # type: ignore
+        import copairs.compute_np as backend
+        from copairs.compute import cosine_indexed
         from copairs.map import (
-            aggregate,  # type: ignore
-            build_rank_list_multi,  # type: ignore
-            build_rank_lists,  # type: ignore
-            results_to_dframe,  # type: ignore
+            aggregate,
+            build_rank_list_multi,
+            build_rank_lists,
+            results_to_dframe,
         )
         from copairs.matching import Matcher, MatcherMultilabel, dict_to_dframe
     except Exception as exc:  # pragma: no cover - depends on installed copairs version

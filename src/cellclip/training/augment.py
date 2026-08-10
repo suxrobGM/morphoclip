@@ -145,7 +145,7 @@ class FeatureBagAugmenter:
         pool = preferred or fallback
         if not pool:
             return None
-        choice = torch.randint(len(pool), (1,)).item()
+        choice = int(torch.randint(len(pool), (1,)).item())
         return pool[choice]
 
     def _apply_same_perturbation(

@@ -9,6 +9,7 @@ accumulation/persistence logic — can be imported without the ``benchmark`` ext
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -47,7 +48,7 @@ class StableResults:
         result: pd.DataFrame,
         group_cols: list[str],
         null_size: int,
-        metadata: dict[str, object],
+        metadata: dict[str, Any],
     ) -> None:
         """Compute mAP/FR for *result* and append a row to each accumulator.
 
@@ -66,7 +67,7 @@ class StableResults:
         *,
         map_df: pd.DataFrame,
         fr: float,
-        metadata: dict[str, object],
+        metadata: dict[str, Any],
     ) -> None:
         """Attach *metadata* to the mAP/FR rows and concat (pure; no copairs)."""
         fr_row = {key: [value] for key, value in metadata.items()}
