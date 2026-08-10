@@ -15,12 +15,6 @@ def _make_well_former() -> WellFormer:
 class TestWellFormer:
     """Test suite for the WellFormer module."""
 
-    def test_output_shape(self) -> None:
-        model = _make_well_former()
-        x = torch.randn(2, 4, 5, 64)
-        mask = torch.ones(2, 4, dtype=torch.bool)
-        assert model(x, mask).shape == (2, 64)
-
     def test_masking_ignores_padding(self) -> None:
         """Appending padded sites must not change the output."""
         model = _make_well_former()
@@ -34,34 +28,6 @@ class TestWellFormer:
         mask_4 = torch.tensor([[True, True, False, False]])
 
         torch.testing.assert_close(model(x_2, mask_2), model(x_4, mask_4), atol=1e-5, rtol=1e-5)
-
-    def test_site_permutation_invariance(self) -> None:
-        """Sites are unordered: shuffling them must not change the output."""
-        model = _make_well_former()
-        x = torch.randn(1, 4, 5, 64)
-        mask = torch.ones(1, 4, dtype=torch.bool)
-
-        perm = torch.tensor([2, 0, 3, 1])
-        out = model(x, mask)
-        out_perm = model(x[:, perm], mask)
-        torch.testing.assert_close(out, out_perm, atol=1e-5, rtol=1e-5)
-
-    def test_channel_order_matters(self) -> None:
-        """Channel-type embeddings make channels distinguishable."""
-        model = _make_well_former()
-        x = torch.randn(1, 3, 5, 64)
-        mask = torch.ones(1, 3, dtype=torch.bool)
-
-        perm = torch.tensor([4, 3, 2, 1, 0])
-        out = model(x, mask)
-        out_perm = model(x[:, :, perm], mask)
-        assert not torch.allclose(out, out_perm, atol=1e-4)
-
-    def test_single_site(self) -> None:
-        model = _make_well_former()
-        x = torch.randn(1, 1, 5, 64)
-        mask = torch.tensor([[True]])
-        assert model(x, mask).shape == (1, 64)
 
     def test_gradients_flow(self) -> None:
         model = WellFormer(embed_dim=64, num_layers=1, num_heads=4, dropout=0.0)

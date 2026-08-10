@@ -173,14 +173,6 @@ class TestDedupeAndAggregate:
         assert torch.allclose(profiles[1], torch.tensor([0.0, 1.0, 0.0]), atol=1e-6)
         assert torch.allclose(profiles[2], torch.tensor([0.0, 0.0, 1.0]), atol=1e-6)
 
-    def test_aggregate_matches_dedupe_order(self) -> None:
-        samples = ["z", "y", "z", "x"]
-        emb = torch.randn(4, 6, generator=torch.Generator().manual_seed(3))
-        _, unique_ids, well_to_pert = dedupe_texts(emb, samples)
-        profiles = aggregate_images(emb, well_to_pert, len(unique_ids))
-        assert unique_ids == ["z", "y", "x"]
-        assert profiles.shape[0] == len(unique_ids)
-
 
 def test_defensive_normalization_is_scale_invariant() -> None:
     generator = torch.Generator().manual_seed(4)

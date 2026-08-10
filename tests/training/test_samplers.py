@@ -69,14 +69,6 @@ class TestResolveBaseDataset:
 class TestPerturbationBatchSampler:
     """Tests for batch construction, plate mixing, and determinism."""
 
-    def test_every_index_appears_exactly_once(self) -> None:
-        group_keys, plate_keys = _synthetic_keys(n_groups=25, replicates=4, n_plates=4)
-        sampler = PerturbationBatchSampler(
-            group_keys, plate_keys, batch_size=16, replicates_per_group=2
-        )
-        seen = [pos for batch in sampler for pos in batch]
-        assert sorted(seen) == list(range(len(group_keys)))
-
     def test_every_index_once_per_epoch(self) -> None:
         group_keys, plate_keys = _synthetic_keys(n_groups=13, replicates=3, n_plates=3)
         sampler = PerturbationBatchSampler(

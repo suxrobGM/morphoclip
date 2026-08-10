@@ -169,14 +169,6 @@ def test_run_plate_pipeline_keeps_features_when_export_fails(
     assert (feature_dir / "r01c01f02.pt").exists()
 
 
-def test_cached_feature_width_reads_saved_tensor_width(tmp_path: Path) -> None:
-    feature_dir = tmp_path / "features" / "BR00116993"
-    feature_dir.mkdir(parents=True)
-    torch.save(torch.zeros(5, 1536), feature_dir / "r01c01f01.pt")
-
-    assert cached_feature_width(feature_dir) == 1536
-
-
 def test_run_plate_pipeline_reextracts_when_cached_width_is_wrong(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

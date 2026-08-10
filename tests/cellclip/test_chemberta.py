@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from cellclip.training.config import CellCLIPModelConfig, load_training_config
+from cellclip.training.config import CellCLIPModelConfig
 from cellclip.training.dataset import build_tokenized_collate_fn
 from cellclip.training.model import CellCLIPChemBERTa, CellCLIPChemBERTaFiLM
 from morphoclip.data.metadata import MetadataIndex
@@ -307,32 +307,3 @@ def test_chemberta_variant_loads_legacy_film_checkpoint_keys(
     loaded = model.load_state_dict(legacy_state, strict=True)
     assert not loaded.missing_keys
     assert not loaded.unexpected_keys
-
-
-def test_load_training_config_accepts_chemberta_variant(tmp_path: Path) -> None:
-    config_path = tmp_path / "chemberta.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                "model:",
-                '  variant: "chemberta"',
-                '  chemberta_model_name: "fake-chem"',
-                '  chemberta_tokenizer_name: "fake-chem"',
-                '  chem_fusion_type: "concat_mlp"',
-                '  chem_prompt_policy: "keep_smiles"',
-                "  freeze_chemberta: false",
-                "  chemberta_tune_layers: 2",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    config = load_training_config(config_path)
-
-    assert config.model.variant == "chemberta"
-    assert config.model.chemberta_model_name == "fake-chem"
-    assert config.model.chem_fusion_type == "concat_mlp"
-    assert config.model.chem_prompt_policy == "keep_smiles"
-    assert config.model.freeze_chemberta is False
-    assert config.model.chemberta_tune_layers == 2

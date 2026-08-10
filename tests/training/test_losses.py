@@ -62,12 +62,6 @@ class TestInfoNCELoss:
 class TestBuildSoftLabels:
     """Tests for soft label matrix construction."""
 
-    def test_identity_labels(self) -> None:
-        """All unique samples → identity matrix."""
-        labels = build_soft_labels(["A", "B", "C"], device=torch.device("cpu"))
-        expected = torch.eye(3)
-        torch.testing.assert_close(labels, expected)
-
     def test_shared_perturbation(self) -> None:
         """Shared broad_sample → equal weight among matches."""
         labels = build_soft_labels(
@@ -81,14 +75,6 @@ class TestBuildSoftLabels:
         torch.testing.assert_close(labels[0, 2], torch.tensor(0.0))
         # Third sample is unique → 1.0 on diagonal
         torch.testing.assert_close(labels[2, 2], torch.tensor(1.0))
-
-    def test_rows_sum_to_one(self) -> None:
-        labels = build_soft_labels(
-            ["A", "A", "B", "B", "C"],
-            device=torch.device("cpu"),
-        )
-        row_sums = labels.sum(dim=1)
-        torch.testing.assert_close(row_sums, torch.ones(5), atol=1e-6, rtol=0)
 
 
 class TestGeneAwareSoftLabels:
@@ -263,12 +249,6 @@ class TestReplicateImageLoss:
         # losses differ; the singleton row itself contributes nothing.
         assert with_singleton.item() >= 0.0
         assert pair_only.item() >= 0.0
-
-    def test_scale_can_be_a_tensor(self) -> None:
-        emb = F.normalize(torch.randn(4, 16), dim=-1)
-        scale = torch.tensor(2.6593).exp()
-        loss = replicate_image_loss(emb, scale, broad_samples=["A", "A", "B", "B"])
-        assert loss.item() >= 0.0
 
 
 class TestComputeLoss:

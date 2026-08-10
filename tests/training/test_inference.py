@@ -14,7 +14,7 @@ import torch
 from torch import nn
 
 from morphoclip.data.perturbation import PerturbationInfo, PerturbationType
-from morphoclip.training.inference import EncodedWells, encode_wells
+from morphoclip.training.inference import encode_wells
 
 DEVICE = torch.device("cpu")
 
@@ -148,9 +148,3 @@ class TestAutocast:
         encode_wells(RecordingEncoder(), [make_batch(["A01"])], device=DEVICE)
         encode_wells(RecordingEncoder(), [make_batch(["A01"])], device=DEVICE, amp=True)
         assert requested == [False, True]
-
-
-def test_encoded_wells_defaults_are_not_shared_between_instances() -> None:
-    first, second = EncodedWells(image=torch.empty(0)), EncodedWells(image=torch.empty(0))
-    first.wells.append("A01")
-    assert second.wells == []

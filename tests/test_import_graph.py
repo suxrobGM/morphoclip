@@ -40,10 +40,10 @@ def test_module_import_stays_within_budget(module: str, budget: int) -> None:
     )
 
 
-@pytest.mark.parametrize("module", ["morphoclip.training.config", "benchmark.data"])
-def test_light_modules_do_not_import_torch(module: str) -> None:
-    loaded = _probe(f"import sys, {module}; print('torch' in sys.modules)")
-    assert loaded == "False", f"{module} pulled in torch"
+def test_the_training_config_does_not_import_torch() -> None:
+    """`benchmark` gets the same guarantee from the whole-package test below."""
+    loaded = _probe("import sys, morphoclip.training.config; print('torch' in sys.modules)")
+    assert loaded == "False", "morphoclip.training.config pulled in torch"
 
 
 def test_benchmark_data_does_not_pull_the_metrics_stack() -> None:

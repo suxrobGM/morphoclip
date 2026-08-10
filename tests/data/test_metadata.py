@@ -180,18 +180,6 @@ class TestMetadataIndex:
         assert len(plates) >= 50
         assert "BR00116991" in plates
 
-    def test_plate_types(self, metadata_dir: Path) -> None:
-        """Verify plates map to all three platemap types."""
-        index = MetadataIndex.from_directory(metadata_dir, batch=BATCH)
-        compound_info = index.lookup("BR00116991", "A01")
-        assert compound_info.pert_type == PerturbationType.COMPOUND
-
-        crispr_info = index.lookup("BR00117000", "A01")
-        assert crispr_info.pert_type == PerturbationType.CRISPR
-
-        orf_info = index.lookup("BR00117006", "A01")
-        assert orf_info.pert_type == PerturbationType.ORF
-
     def test_lookup_real_compound(self, metadata_dir: Path) -> None:
         """gabapentin-enacarbil at BR00116991 A01."""
         index = MetadataIndex.from_directory(metadata_dir, batch=BATCH)

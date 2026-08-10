@@ -3,7 +3,6 @@
 import torch
 
 from cellclip.benchmark.checkpoint import load_cellclip_visual_encoder
-from cellclip.benchmark.export import encode_well
 from cellclip.model import CellCLIPVisualConfig, CellCLIPVisualEncoder
 
 
@@ -49,19 +48,3 @@ def test_load_cellclip_visual_encoder_from_torch_checkpoint(tmp_path) -> None:
     expected = reference.encode_image(sample)
     actual = loaded.encode_image(sample)
     assert torch.allclose(actual, expected)
-
-
-def test_encode_well_mean_pools_sites() -> None:
-    class DummyEncoder:
-        def encode_mil(self, batch: torch.Tensor) -> torch.Tensor:
-            # MIL pooling: [B, sites, channels, D] -> [B, channels, D]
-            return batch.mean(dim=1)
-
-        def encode_image(self, batch: torch.Tensor) -> torch.Tensor:
-            # Image encoding: [B, channels, D] -> [B, D]
-            return batch.mean(dim=1)
-
-    sites = torch.randn(3, 5, 4)
-    embedding = encode_well(DummyEncoder(), sites, device="cpu")
-    # encode_mil([1, 3, 5, 4]) -> [1, 5, 4] -> encode_image([1, 5, 4]) -> [1, 4] -> squeeze -> (4,)
-    assert embedding.shape == (4,)

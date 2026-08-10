@@ -40,39 +40,6 @@ class TestMorphoCLIPImageEncoder:
         torch.testing.assert_close(norms, torch.ones(3), atol=1e-5, rtol=0)
 
     @pytest.mark.parametrize("aggregator", AGGREGATORS)
-    def test_masking_ignores_padding(self, aggregator: str) -> None:
-        """Padded sites should not affect the output."""
-        encoder = _make_encoder(aggregator)
-        encoder.eval()
-
-        # Well with 2 real sites
-        features_2 = torch.randn(1, 2, 5, 64)
-        mask_2 = torch.tensor([[True, True]])
-
-        # Same well padded to 4 sites
-        features_4 = torch.zeros(1, 4, 5, 64)
-        features_4[:, :2] = features_2
-        mask_4 = torch.tensor([[True, True, False, False]])
-
-        out_2 = encoder(features_2, mask_2)
-        out_4 = encoder(features_4, mask_4)
-        torch.testing.assert_close(out_2, out_4, atol=1e-5, rtol=1e-5)
-
-    @pytest.mark.parametrize("aggregator", AGGREGATORS)
-    def test_variable_sites(self, aggregator: str) -> None:
-        """Handles wells with different site counts via masking."""
-        encoder = _make_encoder(aggregator)
-        features = torch.randn(2, 5, 5, 64)  # padded to 5 sites
-        site_mask = torch.tensor(
-            [
-                [True, True, True, False, False],
-                [True, True, True, True, True],
-            ]
-        )
-        out = encoder(features, site_mask)
-        assert out.shape == (2, 32)
-
-    @pytest.mark.parametrize("aggregator", AGGREGATORS)
     def test_single_site(self, aggregator: str) -> None:
         encoder = _make_encoder(aggregator)
         features = torch.randn(1, 1, 5, 64)

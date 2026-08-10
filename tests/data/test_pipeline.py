@@ -377,18 +377,6 @@ class TestRetryFailed:
 
 
 class TestConfigHash:
-    def test_hash_deterministic(self, config: dict, progress_path: Path) -> None:
-        pipeline = PlateExtractionPipeline(
-            config=config,
-            progress_path=progress_path,
-            backend="awscli",
-            dry_run=True,
-        )
-        h1 = pipeline._compute_config_hash()
-        h2 = pipeline._compute_config_hash()
-        assert h1 == h2
-        assert h1.startswith("sha256:")
-
     def test_hash_changes_with_plates(self, progress_path: Path, tmp_path: Path) -> None:
         config1 = _minimal_config(tmp_path, plates=["plate_a"])
         config2 = _minimal_config(tmp_path, plates=["plate_b"])

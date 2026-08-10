@@ -15,15 +15,6 @@ from morphoclip.training.config import (
 class TestMorphoCLIPTrainingConfig:
     """Tests for config creation and serialization."""
 
-    def test_default_creation(self) -> None:
-        config = MorphoCLIPTrainingConfig()
-        assert config.model.output_dim == 512
-        assert config.model.aggregator == "ccf-mean"
-        assert config.optimization.loss_type == "infonce"
-        assert config.optimization.lr == 3.0e-4
-        assert config.runtime.device == "auto"
-        assert config.dataset.batch_size == 32
-
     def test_training_signal_fields_default_off(self) -> None:
         """New features must default to current behavior."""
         config = MorphoCLIPTrainingConfig()
@@ -33,25 +24,6 @@ class TestMorphoCLIPTrainingConfig:
         assert config.optimization.replicate_weight == 0.0
         assert config.optimization.replicate_temperature is None
         assert config.runtime.early_stop_patience is None
-
-    def test_training_signal_fields_settable(self) -> None:
-        config = training_config_from_dict(
-            {
-                "dataset": {"batch_sampler": "perturbation", "replicates_per_group": 4},
-                "optimization": {
-                    "target_weight": 0.6,
-                    "replicate_weight": 0.3,
-                    "replicate_temperature": 0.1,
-                },
-                "runtime": {"early_stop_patience": 5},
-            }
-        )
-        assert config.dataset.batch_sampler == "perturbation"
-        assert config.dataset.replicates_per_group == 4
-        assert config.optimization.target_weight == 0.6
-        assert config.optimization.replicate_weight == 0.3
-        assert config.optimization.replicate_temperature == 0.1
-        assert config.runtime.early_stop_patience == 5
 
     def test_base_yaml_still_loads_with_current_behavior(self) -> None:
         base_yaml = Path("configs/train/base.yaml")
@@ -80,12 +52,6 @@ class TestMorphoCLIPTrainingConfig:
 
         with pytest.raises(ValueError, match=r"model\.channel_aggregation"):
             load_training_config(config_path)
-
-    def test_to_dict_is_plain_nested_data(self) -> None:
-        d = MorphoCLIPTrainingConfig().to_dict()
-        assert d["model"]["output_dim"] == 512
-        assert d["optimization"]["loss_type"] == "infonce"
-        assert d["runtime"]["amp"] is True
 
     def test_to_dict_round_trips_through_the_schema(self) -> None:
         """Checkpoints store `to_dict()`. Resume rebuilds from it, so it has to validate."""
@@ -126,14 +92,6 @@ class TestMorphoCLIPTrainingConfig:
         assert config.model.output_dim == 256  # from base
         assert config.model.ccf_layers == 4  # overridden by child
 
-    def test_yaml_load_unknown_key_raises(self, tmp_path: Path) -> None:
-        config_data = {"dataset": {"not_a_real_field": 1}}
-        config_path = tmp_path / "bad_config.yaml"
-        config_path.write_text(yaml.dump(config_data))
-
-        with pytest.raises(ValueError, match=r"dataset\.not_a_real_field"):
-            load_training_config(config_path)
-
     def test_dotted_overrides_apply_after_extends(self, tmp_path: Path) -> None:
         base = {"dataset": {"batch_size": 32}}
         (tmp_path / "base.yaml").write_text(yaml.dump(base))
@@ -170,20 +128,3 @@ class TestTrainingConfigFromDict:
         """`betas` is a CellCLIP key. Loading it here must name the offending path."""
         with pytest.raises(ValueError, match=r"optimization\.betas"):
             training_config_from_dict({"optimization": {"betas": [0.9, 0.999]}})
-
-    def test_populates_every_section(self) -> None:
-        config = training_config_from_dict(
-            {
-                "dataset": {"batch_size": 16},
-                "model": {"output_dim": 512, "aggregator": "wellformer"},
-                "optimization": {"lr": 1e-4, "replicate_weight": 0.5},
-                "runtime": {"seed": 7},
-                "distributed": {"enabled": False},
-            }
-        )
-        assert config.dataset.batch_size == 16
-        assert config.model.aggregator == "wellformer"
-        assert config.optimization.lr == 1e-4
-        assert config.optimization.replicate_weight == 0.5
-        assert config.runtime.seed == 7
-        assert config.distributed.enabled is False

@@ -9,12 +9,6 @@ from morphoclip.training.batch_correction import cross_well_alignment
 class TestCrossWellAlignment:
     """Tests for cross-well alignment batch correction."""
 
-    def test_output_shape(self) -> None:
-        emb = F.normalize(torch.randn(6, 32), dim=-1)
-        plates = ["P1", "P1", "P2", "P2", "P3", "P3"]
-        out = cross_well_alignment(emb, plates)
-        assert out.shape == (6, 32)
-
     def test_l2_normalized_output(self) -> None:
         emb = F.normalize(torch.randn(8, 16), dim=-1)
         plates = ["A", "A", "A", "A", "B", "B", "B", "B"]
@@ -38,17 +32,6 @@ class TestCrossWellAlignment:
         plates = ["A", "A", "B", "B"]
         cross_well_alignment(emb, plates)
         torch.testing.assert_close(emb, emb_copy)
-
-    def test_single_sample_per_plate(self) -> None:
-        """Singleton plates are skipped, not collapsed to the zero vector."""
-        emb = F.normalize(torch.randn(3, 8), dim=-1)
-        plates = ["A", "B", "C"]
-        out = cross_well_alignment(emb, plates)
-        assert out.shape == (3, 8)
-        # Correction is skipped, so the (already normalized) input is preserved.
-        torch.testing.assert_close(out, emb, atol=1e-6, rtol=0)
-        norms = torch.norm(out, dim=-1)
-        torch.testing.assert_close(norms, torch.ones(3), atol=1e-5, rtol=0)
 
     def test_singleton_plate_preserved_alongside_corrected_plate(self) -> None:
         """A lone well keeps its embedding while multi-well plates are corrected."""

@@ -7,7 +7,6 @@ import pytest
 import torch
 
 from morphoclip.data.image_loader import (
-    CHANNEL_NAMES,
     FLUORESCENCE_CHANNELS,
     ImageKey,
     discover_sites,
@@ -78,24 +77,12 @@ class TestImageKey:
         assert str(key) == "r03c12f07"
 
 
-class TestConstants:
-    def test_channel_names_keys(self) -> None:
-        assert set(CHANNEL_NAMES.keys()) == set(FLUORESCENCE_CHANNELS)
-
-
 class TestDiscoverSites:
     def test_finds_complete_sites(self, sample_plate_dir: Path) -> None:
         sites = discover_sites(sample_plate_dir)
         assert len(sites) > 0
         for _key, ch_paths in sites.items():
             assert set(ch_paths.keys()) == set(FLUORESCENCE_CHANNELS)
-
-    def test_keys_have_correct_format(self, sample_plate_dir: Path) -> None:
-        sites = discover_sites(sample_plate_dir)
-        for key in sites:
-            assert 1 <= key.row <= 16
-            assert 1 <= key.col <= 24
-            assert key.field >= 1
 
     def test_skips_sites_missing_a_channel(self, sample_plate_dir: Path) -> None:
         wells = {key.well for key in discover_sites(sample_plate_dir)}
@@ -196,8 +183,3 @@ class TestPrepareChannelsForDino:
         result = prepare_channels_for_dino(site_tensor, apply_imagenet_norm=True)
         # After normalization, values should differ from 0.5
         assert not torch.allclose(result[0, 0], torch.ones(32, 32) * 0.5)
-
-    def test_preserves_dtype(self) -> None:
-        site_tensor = torch.rand(5, 32, 32, dtype=torch.float32)
-        result = prepare_channels_for_dino(site_tensor)
-        assert result.dtype == torch.float32

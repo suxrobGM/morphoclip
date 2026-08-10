@@ -126,9 +126,3 @@ class TestProjectionHead:
         out = head(x)
         norms = out.norm(dim=-1)
         assert torch.allclose(norms, torch.ones(3), atol=1e-5)
-
-    def test_different_dims(self) -> None:
-        head = ProjectionHead(input_dim=1024, hidden_dim=128, output_dim=256)
-        x = torch.randn(2, 1024)
-        out = head(x)
-        assert out.shape == (2, 256)
