@@ -155,7 +155,7 @@ class _GatherWithGrad(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx: Any, tensor: torch.Tensor) -> torch.Tensor:  # noqa: ANN401
+    def forward(ctx: Any, tensor: torch.Tensor) -> torch.Tensor:
         world_size = dist.get_world_size()
         gathered = [torch.zeros_like(tensor) for _ in range(world_size)]
         dist.all_gather(gathered, tensor)
@@ -164,7 +164,7 @@ class _GatherWithGrad(torch.autograd.Function):
         return torch.cat(gathered, dim=0)
 
     @staticmethod
-    def backward(ctx: Any, grad_output: torch.Tensor) -> torch.Tensor:  # noqa: ANN401
+    def backward(ctx: Any, grad_output: torch.Tensor) -> torch.Tensor:
         start = ctx.rank * ctx.batch_size
         end = start + ctx.batch_size
         return grad_output[start:end]

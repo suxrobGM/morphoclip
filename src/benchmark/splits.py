@@ -35,18 +35,18 @@ from morphoclip.data.perturbation import extract_plate_barcode
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "METADATA_PATH",
     "FALLBACK_METADATA_PATH",
+    "METADATA_PATH",
     "OFFICIAL_SPLIT_METADATA_PATH",
     "BenchmarkPlateContext",
     "OfficialSplitContext",
+    "build_split_groups",
+    "build_split_manifest",
+    "create_splits",
+    "load_official_split_contexts",
+    "load_plate_contexts",
     "resolve_metadata_path",
     "resolve_official_split_metadata_path",
-    "load_plate_contexts",
-    "load_official_split_contexts",
-    "build_split_manifest",
-    "build_split_groups",
-    "create_splits",
 ]
 
 
@@ -79,15 +79,19 @@ def build_split_manifest(
         dataset,
         strategy=strategy,
     )
-    subset_by_idx = {idx: "train" for idx in train_idx}
-    subset_by_idx.update({idx: "validate" for idx in val_idx})
-    subset_by_idx.update({idx: "test" for idx in test_idx})
+    subset_by_idx = dict.fromkeys(train_idx, "train")
+    subset_by_idx.update(dict.fromkeys(val_idx, "validate"))
+    subset_by_idx.update(dict.fromkeys(test_idx, "test"))
 
+    # A missing or malformed file leaves the cell-line/timepoint columns empty,
+    # which then silently drives the cellclip_cpjump_style split. Say so.
     official_contexts: dict = {}
     try:
         official_contexts = load_official_split_contexts()
-    except Exception:
-        pass
+    except (FileNotFoundError, ValueError) as exc:
+        logger.warning(
+            "Official split metadata unavailable, context columns will be empty: %s", exc
+        )
 
     records: list[dict[str, str | int]] = []
     for idx, (plate, well, _) in enumerate(dataset.index_entries):

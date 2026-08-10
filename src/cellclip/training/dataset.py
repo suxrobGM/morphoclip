@@ -192,7 +192,7 @@ def _filter_official_contexts(
     official_contexts: dict[tuple[str, str], Any],
 ) -> None:
     """Restrict a dataset index to wells present in the official split metadata."""
-    dataset._index = [  # noqa: SLF001
+    dataset._index = [
         entry
         for entry in dataset.index_entries
         if (extract_plate_barcode(entry[0]), entry[1].upper()) in official_contexts

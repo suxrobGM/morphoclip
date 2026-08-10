@@ -42,7 +42,7 @@ def partition_pending_archives(archives: list[str], output_dir: Path) -> tuple[l
 
 
 def download_and_extract_archive(
-    *, api: HfApi, repo_id: str, filename: str, output_dir: Path, skip_extract: bool
+    *, repo_id: str, filename: str, output_dir: Path, skip_extract: bool
 ) -> str:
     """Download a single archive and extract it. Returns a status string."""
     plate_name = filename.removesuffix(".tar.gz")

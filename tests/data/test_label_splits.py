@@ -83,4 +83,5 @@ class TestCreateSplitKeys:
         assert not set(train_keys) & set(test_keys)
         assert set(train_keys) | set(test_keys) == {"B1-a", "B1-b", "B2-c", "B2-d"}
         # each group of 2 splits 1/1
-        assert len(train_keys) == 2 and len(test_keys) == 2
+        assert len(train_keys) == 2
+        assert len(test_keys) == 2

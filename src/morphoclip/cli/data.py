@@ -208,10 +208,13 @@ MAX_WORKERS = 10
 
 def _run_aws(args: list[str]) -> str:
     """Run an AWS CLI command and return stdout, or exit on error."""
+    # check=False on purpose: the branch below turns a non-zero exit into a
+    # readable message rather than a CalledProcessError traceback.
     result = subprocess.run(
         ["aws", "s3", *args, "--no-sign-request"],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         console.log(f"[red]AWS CLI error:[/red] {result.stderr.strip()}")

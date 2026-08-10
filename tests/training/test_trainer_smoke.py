@@ -11,7 +11,6 @@ are still connected to each other after a refactor.
 """
 
 import math
-from collections.abc import Iterator
 from pathlib import Path
 
 import pandas as pd
@@ -42,7 +41,7 @@ def _usable_wells(metadata: MetadataIndex, plate: str, count: int) -> list[str]:
 
 
 @pytest.fixture
-def training_config(tmp_path: Path, metadata_dir: Path) -> Iterator[MorphoCLIPTrainingConfig]:
+def training_config(tmp_path: Path, metadata_dir: Path) -> MorphoCLIPTrainingConfig:
     metadata = MetadataIndex.from_directory(metadata_dir, batch="2020_11_04_CPJUMP1")
     plates = {plate: _usable_wells(metadata, plate, WELLS_PER_PLATE) for plate in PLATES}
 
@@ -50,7 +49,7 @@ def training_config(tmp_path: Path, metadata_dir: Path) -> Iterator[MorphoCLIPTr
     text_cache = write_text_cache(tmp_path / "text.pt", metadata, plates)
     dataset_yml = write_dataset_yml(tmp_path / "dataset.yml", metadata_dir=metadata_dir)
 
-    yield training_config_from_dict(
+    return training_config_from_dict(
         {
             "dataset": {
                 "dataset_config_path": str(dataset_yml),

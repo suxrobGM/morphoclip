@@ -60,15 +60,15 @@ def _compute_embedding_diagnostics(
     skipped = 0
     with torch.no_grad():
         for batch in loader:
-            batch, n_skipped = filter_batch_to_cached(batch, text_cache)
+            cached, n_skipped = filter_batch_to_cached(batch, text_cache)
             skipped += n_skipped
-            if not batch["pert_info"]:
+            if not cached["pert_info"]:
                 continue
-            features = batch["features"].to(device, non_blocking=True)
-            site_mask = batch["site_mask"].to(device, non_blocking=True)
+            features = cached["features"].to(device, non_blocking=True)
+            site_mask = cached["site_mask"].to(device, non_blocking=True)
             with autocast_context(device, amp):
                 img = image_encoder(features, site_mask)
-                raw_text = lookup_text_embeddings(batch["pert_info"], text_cache, device)
+                raw_text = lookup_text_embeddings(cached["pert_info"], text_cache, device)
                 txt = text_projection(raw_text)
             image_embs.append(img.cpu())
             text_embs.append(txt.cpu())

@@ -66,7 +66,7 @@ def normalize_timelines(value) -> list[str]:
 
 def get_profile_metadata_columns(df: pd.DataFrame) -> list[str]:
     """Return metadata columns preserved in exported profile CSVs."""
-    return [c for c in df.columns if c.startswith("Metadata_") or c.startswith("Meta_")]
+    return [c for c in df.columns if c.startswith(("Metadata_", "Meta_"))]
 
 
 def select_target_plates(

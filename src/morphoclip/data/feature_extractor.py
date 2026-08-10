@@ -129,9 +129,7 @@ def _preprocess_batch(
     # Apply normalization manually — processor expects PIL images but we have tensors
     mean = torch.tensor(processor.image_mean, dtype=all_images.dtype).view(1, 3, 1, 1)
     std = torch.tensor(processor.image_std, dtype=all_images.dtype).view(1, 3, 1, 1)
-    all_images = (all_images - mean) / std
-
-    return all_images
+    return (all_images - mean) / std
 
 
 def feature_filename(key: ImageKey) -> str:

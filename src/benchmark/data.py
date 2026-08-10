@@ -216,7 +216,7 @@ def compute_consensus(
     """
     metadata_df = get_metadata(df).drop_duplicates(subset=[group_col])
     assert metadata_df is not None, "metadata_df should not be None"
-    feature_cols = [group_col] + get_feature_columns(df)
+    feature_cols = [group_col, *get_feature_columns(df)]
 
     if agg_func == "median":
         consensus_df = df[feature_cols].groupby(group_col).median().reset_index()

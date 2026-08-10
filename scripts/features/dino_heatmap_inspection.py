@@ -21,8 +21,8 @@ from transformers import AutoImageProcessor, AutoModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from morphoclip.data.feature_extractor import DEFAULT_MODEL  # noqa: E402
-from morphoclip.data.image_loader import parse_filename  # noqa: E402
+from morphoclip.data.feature_extractor import DEFAULT_MODEL
+from morphoclip.data.image_loader import parse_filename
 
 DEFAULT_OUTPUT_DIR = Path("output/dino_heatmap_inspection")
 DEFAULT_RAW_ROOTS = (Path("data/raw/images"), Path("data/raw"))
@@ -233,15 +233,15 @@ def compute_attention_rollout(
     rollout = torch.eye(num_tokens, device=attentions[0].device)
 
     for layer_attention in attentions:
-        layer_attention = layer_attention.mean(dim=1).squeeze(0)
-        layer_attention = layer_attention + torch.eye(num_tokens, device=layer_attention.device)
-        layer_attention = layer_attention / layer_attention.sum(dim=-1, keepdim=True)
-        rollout = layer_attention @ rollout
+        averaged = layer_attention.mean(dim=1).squeeze(0)
+        with_residual = averaged + torch.eye(num_tokens, device=averaged.device)
+        normalized = with_residual / with_residual.sum(dim=-1, keepdim=True)
+        rollout = normalized @ rollout
 
     patch_start = 1 + max(num_register_tokens, 0)
     cls_attention = rollout[0, patch_start:]
     num_patches = cls_attention.numel()
-    grid_size = int(round(num_patches**0.5))
+    grid_size = round(num_patches**0.5)
     if grid_size * grid_size != num_patches:
         raise ValueError(f"Cannot reshape {num_patches} patch tokens into a square heatmap.")
 
@@ -280,7 +280,7 @@ def compute_cls_attention_map(
     cls_attention = torch.stack(cls_maps, dim=0).mean(dim=0)
 
     num_patches = cls_attention.numel()
-    grid_size = int(round(num_patches**0.5))
+    grid_size = round(num_patches**0.5)
     if grid_size * grid_size != num_patches:
         raise ValueError(f"Cannot reshape {num_patches} patch tokens into a square heatmap.")
 

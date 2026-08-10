@@ -94,10 +94,7 @@ def _create_demo_dataset(
         for well, num_sites in wells.items():
             row, col = row_col_from_well(well)
             for field in range(1, num_sites + 1):
-                if mode == "features":
-                    tensor = torch.randn(5, 384)
-                else:
-                    tensor = torch.randn(5, 64, 64)
+                tensor = torch.randn(5, 384) if mode == "features" else torch.randn(5, 64, 64)
                 torch.save(tensor, plate_dir / f"r{row:02d}c{col:02d}f{field:02d}.pt")
 
     return sorted(demo_layout.keys())

@@ -171,7 +171,7 @@ def build_wide_comparison(
     if df.empty:
         return pd.DataFrame(columns=[*spec.key_columns, "task", "task_title", "plot_label"])
 
-    key_columns = list(spec.key_columns) + ["task", "task_title", "plot_label"]
+    key_columns = [*list(spec.key_columns), "task", "task_title", "plot_label"]
     wide = df.pivot_table(
         index=key_columns,
         columns="profile_slug",

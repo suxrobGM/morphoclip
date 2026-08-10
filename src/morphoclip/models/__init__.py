@@ -14,11 +14,11 @@ from morphoclip.models.well_former import WellFormer
 
 __all__ = [
     "AGGREGATORS",
+    "TEMPLATES",
     "AttentionSitePooling",
     "MorphoCLIPImageEncoder",
     "MorphoCLIPTextEncoder",
     "ProjectionHead",
-    "TEMPLATES",
     "WellFormer",
     "build_prompt",
     "build_prompt_from_info",

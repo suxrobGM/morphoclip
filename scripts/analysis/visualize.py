@@ -85,7 +85,7 @@ def save_site_comparison(
     if cls_features is not None:
         feat = cls_features.numpy() if isinstance(cls_features, torch.Tensor) else cls_features
         dim = feat.shape[1]
-        side = int(math.isqrt(dim))
+        side = math.isqrt(dim)
         if side * side < dim:
             side += 1
         padded_dim = side * side

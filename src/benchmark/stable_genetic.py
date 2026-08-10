@@ -138,38 +138,39 @@ def evaluate_genetic(
                 ~modality_2_consensus_df["Metadata_gene"].isin(genes_without_sister)
             ].reset_index(drop=True)
 
-            if modality_2_perturbation == "crispr":
-                if not _already_computed(results.matching_map, description_2):
-                    print(f"[{count}] Computing {description_2} matching")
+            if modality_2_perturbation == "crispr" and not _already_computed(
+                results.matching_map, description_2
+            ):
+                print(f"[{count}] Computing {description_2} matching")
 
-                    result = run_with_unpaired_guard(
-                        evaluate_matching,
-                        modality_2_consensus_for_matching_df,
-                        target_col="Metadata_matching_target",
-                        use_abs=False,
-                        multilabel=False,
-                        null_size=null_size,
-                        batch_size=batch_size,
-                        copairs_mode="stable",
-                    )
-                    if result.empty:
-                        print(f"Skipping {description_2} matching - no valid pairs")
-                        continue
+                result = run_with_unpaired_guard(
+                    evaluate_matching,
+                    modality_2_consensus_for_matching_df,
+                    target_col="Metadata_matching_target",
+                    use_abs=False,
+                    multilabel=False,
+                    null_size=null_size,
+                    batch_size=batch_size,
+                    copairs_mode="stable",
+                )
+                if result.empty:
+                    print(f"Skipping {description_2} matching - no valid pairs")
+                    continue
 
-                    results.append(
-                        "matching_map",
-                        "matching_fr",
-                        result=result,
-                        group_cols=["Metadata_matching_target"],
-                        null_size=null_size,
-                        metadata={
-                            "Description": description_2,
-                            "Modality": modality_2_perturbation,
-                            "Cell": cell,
-                            "time": _time_2,
-                            "timepoint": modality_2_timepoint,
-                        },
-                    )
+                results.append(
+                    "matching_map",
+                    "matching_fr",
+                    result=result,
+                    group_cols=["Metadata_matching_target"],
+                    null_size=null_size,
+                    metadata={
+                        "Description": description_2,
+                        "Modality": modality_2_perturbation,
+                        "Cell": cell,
+                        "time": _time_2,
+                        "timepoint": modality_2_timepoint,
+                    },
+                )
 
             _evaluate_cross_modality(
                 results,

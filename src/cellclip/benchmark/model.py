@@ -56,8 +56,7 @@ class ResidualAttentionBlock(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         attn_out = self.attn(self.ln_1(x), self.ln_1(x), self.ln_1(x), need_weights=False)[0]
         x = x + attn_out
-        x = x + self.mlp(self.ln_2(x))
-        return x
+        return x + self.mlp(self.ln_2(x))
 
 
 class Transformer(nn.Module):

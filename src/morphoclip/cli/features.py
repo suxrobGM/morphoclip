@@ -409,7 +409,6 @@ def download(
             futures = {
                 pool.submit(
                     download_and_extract_archive,
-                    api=api,
                     repo_id=repo_id,
                     filename=archive,
                     output_dir=output_dir,

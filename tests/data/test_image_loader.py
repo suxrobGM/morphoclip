@@ -150,7 +150,8 @@ class TestLoadSingleChannel:
         arr = load_single_channel(ch_path)
         assert arr.dtype == np.float32
         assert arr.ndim == 2
-        assert arr.shape[0] > 0 and arr.shape[1] > 0
+        assert arr.shape[0] > 0
+        assert arr.shape[1] > 0
 
     def test_normalized_range(self, sample_plate_dir: Path) -> None:
         sites = discover_sites(sample_plate_dir)

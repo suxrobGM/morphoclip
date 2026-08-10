@@ -22,7 +22,7 @@ from rich.console import Console
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from morphoclip.data.image_loader import FLUORESCENCE_CHANNELS, parse_filename  # noqa: E402
+from morphoclip.data.image_loader import FLUORESCENCE_CHANNELS, parse_filename
 
 DEFAULT_OUTPUT_DIR = Path("output/downsampling_inspection")
 DEFAULT_RAW_ROOTS = (Path("data/raw/images"), Path("data/raw"))

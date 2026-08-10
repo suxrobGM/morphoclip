@@ -58,7 +58,7 @@ def _resolve_run_dir(config, *, run_name: str | None, output_dir: Path | None) -
     base_output = output_dir or (Path.cwd() / config.runtime.output_root)
     resolved_name = run_name or config.runtime.run_name
     if resolved_name is None:
-        resolved_name = datetime.now().strftime("cellclip_%Y%m%d_%H%M%S")
+        resolved_name = datetime.now().astimezone().strftime("cellclip_%Y%m%d_%H%M%S")
     return base_output / resolved_name
 
 

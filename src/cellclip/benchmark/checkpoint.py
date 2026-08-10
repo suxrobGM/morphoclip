@@ -120,16 +120,12 @@ def load_cellclip_visual_encoder(
     )
 
     missing, unexpected = model.load_state_dict(state_dict, strict=False)
-    required_missing = [
-        key for key in missing if key.startswith("visual.") or key.startswith("image_pool.")
-    ]
+    required_missing = [key for key in missing if key.startswith(("visual.", "image_pool."))]
     if required_missing:
         preview = ", ".join(required_missing[:5])
         raise RuntimeError(f"Checkpoint is missing visual pooling weights: {preview}")
 
-    unexpected_visual = [
-        key for key in unexpected if key.startswith("visual.") or key.startswith("image_pool.")
-    ]
+    unexpected_visual = [key for key in unexpected if key.startswith(("visual.", "image_pool."))]
     if unexpected_visual:
         preview = ", ".join(unexpected_visual[:5])
         raise RuntimeError(f"Checkpoint has unexpected visual pooling weights: {preview}")

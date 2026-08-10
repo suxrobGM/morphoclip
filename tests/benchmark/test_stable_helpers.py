@@ -6,8 +6,8 @@ import pytest
 
 pytest.importorskip("sklearn", reason="scikit-learn not installed (benchmark extra)")
 
-from benchmark.data import ProfileLoader  # noqa: E402
-from benchmark.stable_helpers import (  # noqa: E402
+from benchmark.data import ProfileLoader
+from benchmark.stable_helpers import (
     apply_batch_correction,
     fit_batch_correction,
     run_with_unpaired_guard,

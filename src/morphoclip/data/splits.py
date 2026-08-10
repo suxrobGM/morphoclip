@@ -130,7 +130,6 @@ def build_split_manifest(
     strategy: str = "pert_type",
     *,
     val_fraction: float = 0.1,
-    test_fraction: float = 0.1,
     seed: int = 42,
 ) -> pd.DataFrame:
     """Return a split manifest keyed by ``Metadata_Plate`` + ``Metadata_Well``."""
@@ -140,9 +139,9 @@ def build_split_manifest(
         val_fraction=val_fraction,
         seed=seed,
     )
-    subset_by_idx = {idx: "train" for idx in train_idx}
-    subset_by_idx.update({idx: "validate" for idx in val_idx})
-    subset_by_idx.update({idx: "test" for idx in test_idx})
+    subset_by_idx = dict.fromkeys(train_idx, "train")
+    subset_by_idx.update(dict.fromkeys(val_idx, "validate"))
+    subset_by_idx.update(dict.fromkeys(test_idx, "test"))
 
     records: list[dict[str, str | int]] = []
     for idx, (plate, well, _) in enumerate(dataset.index_entries):
@@ -173,7 +172,6 @@ def save_split_manifest(
     strategy: str = "pert_type",
     *,
     val_fraction: float = 0.1,
-    test_fraction: float = 0.1,
     seed: int = 42,
 ) -> pd.DataFrame:
     """Build and save a split manifest CSV."""
@@ -181,7 +179,6 @@ def save_split_manifest(
         dataset,
         strategy=strategy,
         val_fraction=val_fraction,
-        test_fraction=test_fraction,
         seed=seed,
     )
     output_path = Path(output_path)
@@ -213,7 +210,6 @@ def create_splits(
     dataset: MorphoCLIPDataset,
     strategy: str = "pert_type",
     val_fraction: float = 0.1,
-    test_fraction: float = 0.1,
     seed: int = 42,
 ) -> tuple[Subset[MorphoCLIPSample], Subset[MorphoCLIPSample], Subset[MorphoCLIPSample]]:
     """Split dataset into train/val/test subsets.
@@ -223,9 +219,8 @@ def create_splits(
         strategy: ``"pert_type"`` — stratified split across all perturbation
             types (compounds, CRISPR, ORF).  Uses only local metadata.
             For benchmark strategies, use ``benchmark.splits`` directly.
-        val_fraction: Fraction of broad_samples for validation (equal
-            fraction used for test).
-        test_fraction: Unused (val_fraction controls both val and test).
+        val_fraction: Fraction of broad_samples for validation. The same
+            fraction is used for test.
         seed: Random seed for deterministic compound splitting.
 
     Returns:

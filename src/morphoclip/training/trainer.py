@@ -236,7 +236,6 @@ def _train_loop(
             result = run_epoch(
                 ctx,
                 train_loader,
-                epoch=epoch,
                 global_step=global_step,
                 total_steps=total_steps,
                 progress=progress,

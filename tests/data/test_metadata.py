@@ -58,7 +58,7 @@ class TestPerturbationInfo:
 
 class TestWellConversion:
     @pytest.mark.parametrize(
-        "row,col,expected",
+        ("row", "col", "expected"),
         [
             (1, 1, "A01"),
             (1, 24, "A24"),
@@ -71,7 +71,7 @@ class TestWellConversion:
         assert well_from_row_col(row, col) == expected
 
     @pytest.mark.parametrize(
-        "well,expected_row,expected_col",
+        ("well", "expected_row", "expected_col"),
         [
             ("A01", 1, 1),
             ("A24", 1, 24),

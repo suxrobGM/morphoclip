@@ -60,7 +60,7 @@ def test_root_help() -> None:
     assert result.exit_code == 0, result.output
 
 
-@pytest.mark.parametrize("path", ALL_COMMANDS, ids=lambda path: " ".join(path))
+@pytest.mark.parametrize("path", ALL_COMMANDS, ids=" ".join)
 def test_command_help_exits_zero(path: tuple[str, ...]) -> None:
     result = runner.invoke(app, [*path, "--help"])
     assert result.exit_code == 0, result.output

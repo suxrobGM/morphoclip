@@ -44,7 +44,7 @@ class MorphoCLIPSample:
         pert_info: Full perturbation metadata.
     """
 
-    __slots__ = ("features", "text", "plate", "well", "pert_info")
+    __slots__ = ("features", "pert_info", "plate", "text", "well")
 
     def __init__(
         self,

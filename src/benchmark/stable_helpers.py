@@ -17,20 +17,20 @@ from benchmark.metrics import compute_fraction_retrieved, compute_map
 from benchmark.profile_ops import concat_profiles
 
 __all__ = [
-    "concat_profiles",
-    "load_profiles_for_plates",
     "BatchCorrectionTransform",
-    "fit_batch_correction",
     "apply_batch_correction",
-    "run_with_unpaired_guard",
     "compute_map_and_fr",
-    "plot_replicability_barplot",
-    "plot_matching_barplot",
+    "concat_profiles",
+    "fit_batch_correction",
+    "load_profiles_for_plates",
     "plot_cross_modality_barplot",
-    "plot_replicability_map_boxplot",
-    "plot_matching_map_boxplot",
-    "plot_replicability_fr_faceted",
+    "plot_matching_barplot",
     "plot_matching_fr_faceted",
+    "plot_matching_map_boxplot",
+    "plot_replicability_barplot",
+    "plot_replicability_fr_faceted",
+    "plot_replicability_map_boxplot",
+    "run_with_unpaired_guard",
 ]
 
 

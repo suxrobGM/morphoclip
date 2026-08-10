@@ -32,7 +32,7 @@ from rich.console import Console
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from morphoclip.data.image_loader import CHANNEL_NAMES, FLUORESCENCE_CHANNELS  # noqa: E402
+from morphoclip.data.image_loader import CHANNEL_NAMES, FLUORESCENCE_CHANNELS
 
 console = Console()
 
@@ -313,7 +313,7 @@ def plot_pca_channels(features: torch.Tensor, output_dir: Path, *, seed: int = 4
     else:
         ch_labels = np.tile(np.arange(n_channels), n_sites)
 
-    _, s, v = torch.svd_lowrank(flat_centered, q=10)
+    _, _s, v = torch.svd_lowrank(flat_centered, q=10)
     proj = (flat_centered @ v[:, :2]).numpy()
 
     colors = ["#c44e52", "#dd8452", "#55a868", "#ccb974", "#4c72b0"]
@@ -412,10 +412,7 @@ def main(
     local = cfg.get("local", {})
     features_root = Path(local.get("features", "data/features"))
 
-    if plate:
-        plates = [plate]
-    else:
-        plates = [d.name for d in sorted(features_root.iterdir()) if d.is_dir()]
+    plates = [plate] if plate else [d.name for d in sorted(features_root.iterdir()) if d.is_dir()]
 
     if not plates:
         console.print("[red]No feature directories found.[/red]")
@@ -434,7 +431,7 @@ def main(
         console.rule(f"[bold blue]Diagnosing {plate} ({n_files} sites)")
 
         # Load
-        features, names = load_features(feature_dir, max_sites=max_sites)
+        features, _names = load_features(feature_dir, max_sites=max_sites)
         console.print(f"  Loaded {features.shape[0]} sites, shape: {tuple(features.shape)}")
 
         # Compute metrics

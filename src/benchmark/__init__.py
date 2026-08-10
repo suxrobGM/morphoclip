@@ -13,11 +13,11 @@ from benchmark.metrics import (
 )
 
 __all__ = [
-    "ProfileLoader",
-    "get_metadata_columns",
-    "get_feature_columns",
     "CopairsMode",
-    "compute_map",
+    "ProfileLoader",
     "compute_fraction_retrieved",
+    "compute_map",
+    "get_feature_columns",
+    "get_metadata_columns",
     "run_map_pipeline",
 ]

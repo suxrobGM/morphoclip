@@ -144,7 +144,47 @@ line-length = 100
 src = ["src", "scripts"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = [
+  "E",    # pycodestyle
+  "F",    # pyflakes
+  "I",    # import sorting
+  "UP",   # pyupgrade
+  "B",    # bugbear
+  "SIM",  # collapsible ifs, contextlib.suppress, ternaries
+  "C4",   # comprehensions
+  "RET",  # assign-then-return
+  "PIE",  # incl. PIE810, multiple startswith/endswith in the column parsers
+  "ISC",  # implicit string concat, easy to do by accident in the literal tables
+  "FURB", # modern stdlib idioms
+  "ERA",  # commented-out code, which a big refactor invites
+  "RUF",  # incl. RUF100 (stale noqa) and RUF022 (unsorted __all__)
+  "TID",  # no relative imports; the layering ban lands here once the layout is final
+  "ARG",  # dead parameters
+  "PT",   # pytest style
+  "T20",  # library code must not print
+  "PLC",
+  "PLE",
+  "PLW",  # incl. PLW1510, subprocess.run without check
+  "LOG",
+  "G",    # logging call shape
+  "DTZ",  # naive datetime
+]
+ignore = [
+  # Optional extras (copairs, sklearn) are imported inside command bodies on
+  # purpose, so `morphoclip --help` works without them installed.
+  "PLC0415",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Report printers and dev scripts are presentation layers; converting their
+# ~110 print calls to logging is its own job.
+"src/benchmark/*" = ["T20"]
+"src/cellclip/*" = ["T20"]
+"scripts/*" = ["T20"]
+# Mixes 19 bare prints with rich output. Both go when this file is split.
+"src/morphoclip/cli/cellclip_cmds.py" = ["T20"]
+# Tests print for debugging and take fixtures purely for their side effects.
+"tests/*" = ["T20", "ARG"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["morphoclip", "cellclip", "benchmark"]

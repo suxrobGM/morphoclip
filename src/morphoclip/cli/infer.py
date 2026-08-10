@@ -45,14 +45,14 @@ def _encode_all_wells(image_encoder, text_projection, text_cache, loader, *, dev
 
     with torch.no_grad():
         for batch in loader:
-            batch, n_skipped = filter_batch_to_cached(batch, text_cache)
+            cached, n_skipped = filter_batch_to_cached(batch, text_cache)
             skipped += n_skipped
-            pert_infos: list[PerturbationInfo] = batch["pert_info"]
+            pert_infos: list[PerturbationInfo] = cached["pert_info"]
             if not pert_infos:
                 continue
 
-            features = batch["features"].to(device, non_blocking=True)
-            site_mask = batch["site_mask"].to(device, non_blocking=True)
+            features = cached["features"].to(device, non_blocking=True)
+            site_mask = cached["site_mask"].to(device, non_blocking=True)
 
             with autocast_context(device, amp):
                 img = image_encoder(features, site_mask)
@@ -61,8 +61,8 @@ def _encode_all_wells(image_encoder, text_projection, text_cache, loader, *, dev
 
             image_embs.append(img.cpu())
             text_embs.append(txt.cpu())
-            all_plates.extend(batch["plates"])
-            all_wells.extend(batch["wells"])
+            all_plates.extend(cached["plates"])
+            all_wells.extend(cached["wells"])
             all_pert_infos.extend(pert_infos)
 
     if skipped:

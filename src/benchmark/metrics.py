@@ -14,12 +14,12 @@ from benchmark.data import get_features, get_metadata
 
 __all__ = [
     "CopairsMode",
-    "run_map_pipeline",
-    "compute_map",
     "compute_fraction_retrieved",
-    "evaluate_replicability",
-    "evaluate_matching",
+    "compute_map",
     "evaluate_cross_modality_matching",
+    "evaluate_matching",
+    "evaluate_replicability",
+    "run_map_pipeline",
 ]
 
 

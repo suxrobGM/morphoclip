@@ -86,7 +86,6 @@ def run_epoch(
     ctx: TrainContext,
     train_loader,
     *,
-    epoch: int,
     global_step: int,
     total_steps: int,
     progress: Progress,

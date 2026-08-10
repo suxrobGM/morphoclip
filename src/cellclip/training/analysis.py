@@ -38,19 +38,19 @@ from cellclip.training.model import build_cellclip_model
 from morphoclip.data.perturbation import extract_plate_barcode
 
 __all__ = [
-    "to_serializable",
-    "compute_pca_stats",
+    "build_comparison",
+    "build_run_summary",
+    "collect_eval_embeddings",
     "compute_grouped_retrieval_metrics",
+    "compute_pca_stats",
     "compute_perturbation_retrieval_metrics",
     "compute_split_pca_stats",
     "load_benchmark_tables",
-    "build_comparison",
     "render_report",
-    "write_analysis_outputs",
     "resolve_checkpoint_path",
     "summarize_subset_duplicates",
-    "collect_eval_embeddings",
-    "build_run_summary",
+    "to_serializable",
+    "write_analysis_outputs",
 ]
 
 

@@ -5,6 +5,7 @@ weight histograms, and similarity heatmaps.  Silent no-op when
 ``rank != 0`` or TensorBoard is disabled in config.
 """
 
+import logging
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,8 @@ from morphoclip.training.metrics import (
     compute_param_norm,
     compute_uniformity,
 )
+
+logger = logging.getLogger(__name__)
 
 HISTOGRAM_EVERY_EPOCHS = 5  # Weight/embedding histograms every N epochs
 FLUSH_EVERY_STEPS = 50  # Flush TensorBoard writer every N steps
@@ -92,7 +95,8 @@ class TrainingLogger:
         try:
             w.add_custom_scalars(_CUSTOM_SCALARS_LAYOUT)
         except Exception:
-            pass
+            # Cosmetic dashboard layout; never worth failing a run over.
+            logger.debug("Could not write the TensorBoard scalar layout", exc_info=True)
 
     def log_step(
         self,

@@ -232,9 +232,12 @@ class PlateExtractionPipeline:
                 self._save_progress()
 
                 if self._tensors_only:
-                    sites_count = self._save_tensors_only(image_dir, tensor_dir, batch_size)
+                    sites_count = self._save_tensors_only(image_dir, tensor_dir)
                 else:
-                    assert model is not None and processor is not None
+                    if model is None or processor is None:
+                        raise RuntimeError(
+                            "DINOv3 model and processor are required unless tensors_only is set"
+                        )
                     saved = extract_plate_features_with_model(
                         image_dir,
                         feature_dir,
@@ -260,7 +263,7 @@ class PlateExtractionPipeline:
                 record["error"] = f"{type(exc).__name__}: {exc}"
                 record["completed_at"] = _utcnow()
                 self._save_progress()
-                logger.error("Plate %s failed: %s", plate_name, exc, exc_info=True)
+                logger.exception("Plate %s failed: %s", plate_name, exc)
                 console.print(f"  [bold red]Failed: {exc}[/bold red]")
                 failed += 1
 
@@ -409,14 +412,12 @@ class PlateExtractionPipeline:
         self,
         image_dir: Path,
         tensor_dir: Path,
-        batch_size: int,
     ) -> int:
         """Save only resized image tensors, no DINOv3 extraction.
 
         Args:
             image_dir: Path to the plate's ``Images/`` directory.
             tensor_dir: Directory to save tensor ``.pt`` files.
-            batch_size: Number of sites to process per batch (for progress display).
 
         Returns:
             Number of sites saved.

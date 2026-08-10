@@ -29,7 +29,7 @@ def split(
     full_label_df = load_and_prepare_labels(label_file)
     key_df = full_label_df.drop_duplicates(subset=["UNIQUE_SAMPLE_KEY"]).reset_index(drop=True)
 
-    required_columns = set(group_columns + ["treatment", "UNIQUE_SAMPLE_KEY"])
+    required_columns = {*group_columns, "treatment", "UNIQUE_SAMPLE_KEY"}
     missing = required_columns - set(key_df.columns)
     if missing:
         raise ValueError(f"Label table missing required columns: {sorted(missing)}")

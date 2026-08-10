@@ -174,4 +174,4 @@ def extract_plate_barcode(plate_dir_name: str) -> str:
     Plate directories have format ``BR00116991__2020-11-05T19_51_35-Measurement1``.
     The barcode is the prefix before ``__``.
     """
-    return plate_dir_name.split("__")[0]
+    return plate_dir_name.split("__", maxsplit=1)[0]

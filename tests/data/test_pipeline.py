@@ -55,12 +55,12 @@ def _minimal_config(
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def config(tmp_path: Path) -> dict[str, Any]:
     return _minimal_config(tmp_path)
 
 
-@pytest.fixture()
+@pytest.fixture
 def progress_path(tmp_path: Path) -> Path:
     return tmp_path / "progress.json"
 
