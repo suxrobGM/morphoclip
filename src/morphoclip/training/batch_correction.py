@@ -161,12 +161,13 @@ def refresh_plate_offsets(
     plate_conditions: dict[str, str],
     *,
     device: torch.device,
+    amp: bool = False,
     dist_state: DistributedState | None = None,
 ) -> PlateOffsets:
     """Re-estimate plate offsets from a full pass over the training wells.
 
-    Runs the encoder in eval mode under ``no_grad`` and fp32 so dropout cannot
-    poison the estimate, then restores the mode it found. Under DDP every rank
+    Runs the encoder in eval mode under ``no_grad``, which is what keeps dropout
+    out of the estimate, then restores the mode it found. Under DDP every rank
     runs the same unsharded pass and rank 0's table is broadcast, so all ranks
     hold bitwise identical offsets.
 
@@ -175,6 +176,10 @@ def refresh_plate_offsets(
         loader: Sequential DataLoader over the training wells.
         plate_conditions: Plate barcode to condition key.
         device: Device to run the pass on.
+        amp: Run the pass under autocast, as the training forward does. This is
+            a whole extra pass over the training set once per epoch, and fp32
+            roughly doubles it. An offset is a mean over hundreds of wells, so
+            autocast moves it by a fraction of a percent of its own magnitude.
         dist_state: Distributed state, when training under DDP.
 
     Returns:
@@ -186,7 +191,7 @@ def refresh_plate_offsets(
     was_training = module.training
     module.eval()
     try:
-        encoded = encode_wells(module, loader, device=device, amp=False)
+        encoded = encode_wells(module, loader, device=device, amp=amp)
     finally:
         module.train(was_training)
 

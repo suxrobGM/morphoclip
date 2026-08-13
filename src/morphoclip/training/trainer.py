@@ -240,6 +240,7 @@ def _train_loop(
                     offset_loader,
                     plate_conditions,
                     device=device,
+                    amp=config.runtime.amp,
                     dist_state=dist_state,
                 )
 
