@@ -226,6 +226,11 @@ def _load_experiment_conditions() -> dict[str, str]:
     part of the key: they are exactly what separates the non-benchmark plates
     from the standard-condition plates that otherwise share cell type,
     modality, and timepoint.
+
+    Raises:
+        ValueError: If the TSV exists but lacks a column the key needs. Skipping
+            the check would return an empty map, which reaches training as a
+            zero CWA offset on every plate the official CSV does not cover.
     """
     path = _resolve_optional_metadata_path()
     if path is None:
@@ -234,6 +239,17 @@ def _load_experiment_conditions() -> dict[str, str]:
     result: dict[str, str] = {}
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter="\t")
+        if reader.fieldnames is None:
+            raise ValueError(f"Experiment metadata is empty: {path}")
+
+        required = {"Assay_Plate_Barcode", *_EXPERIMENT_CONDITION_FIELDS}
+        missing_columns = required - set(reader.fieldnames)
+        if missing_columns:
+            missing_display = ", ".join(sorted(missing_columns))
+            raise ValueError(
+                f"Missing required columns in experiment metadata {path}: {missing_display}"
+            )
+
         for row in reader:
             barcode = row.get("Assay_Plate_Barcode", "")
             values = [row.get(field, "") for field in _EXPERIMENT_CONDITION_FIELDS]

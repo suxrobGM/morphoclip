@@ -183,6 +183,22 @@ def test_plate_conditions_fall_back_to_the_experiment_tsv_on_every_axis(
     assert conditions["BR00117008"] != conditions["BR00117050"]
 
 
+def test_plate_conditions_reject_an_experiment_tsv_missing_a_condition_column(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, official_split_metadata: None
+) -> None:
+    """Without the check, a renamed column zeroes the offset of every fallback plate."""
+    rows = (
+        "Batch\tAssay_Plate_Barcode\tPerturbation\tCell_type\tTime\tDensity\tAntibiotics",
+        "b\tBR00117008\tcompound\tA549\t48\t80\tabsent",
+    )
+    tsv = tmp_path / "experiment-metadata.tsv"
+    tsv.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    monkeypatch.setattr(split_contexts, "METADATA_PATH", tsv)
+
+    with pytest.raises(ValueError, match="Cell_line, Time_delay"):
+        load_plate_conditions()
+
+
 def test_plate_conditions_reject_a_plate_whose_wells_disagree(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
