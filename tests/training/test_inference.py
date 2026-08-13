@@ -13,8 +13,9 @@ import pytest
 import torch
 from torch import nn
 
-from morphoclip.data.perturbation import PerturbationInfo, PerturbationType
+from morphoclip.training.batch_correction import PlateOffsets
 from morphoclip.training.inference import encode_wells
+from tests.support.batches import make_batch, make_text_cache
 
 DEVICE = torch.device("cpu")
 
@@ -34,28 +35,6 @@ class CountingEncoder(nn.Module):
 class DoublingProjection(nn.Module):
     def forward(self, raw: torch.Tensor) -> torch.Tensor:
         return raw * 2
-
-
-def make_batch(wells: list[str], *, plate: str = "P1", sites: int = 2) -> dict:
-    pert_infos = [
-        PerturbationInfo(pert_type=PerturbationType.COMPOUND, broad_sample=f"BRD-{well}")
-        for well in wells
-    ]
-    return {
-        "features": torch.ones(len(wells), sites, 5, 8),
-        "site_mask": torch.ones(len(wells), sites, dtype=torch.bool),
-        "plates": [plate] * len(wells),
-        "wells": list(wells),
-        "pert_info": pert_infos,
-    }
-
-
-def make_text_cache(broad_samples: list[str], dim: int = 4) -> dict:
-    return {
-        "id_to_idx": {sample: i for i, sample in enumerate(broad_samples)},
-        "embeddings": torch.arange(len(broad_samples) * dim, dtype=torch.float).reshape(-1, dim),
-        "perturbation_ids": list(broad_samples),
-    }
 
 
 class TestImageOnly:
@@ -121,6 +100,23 @@ class TestTextCache:
         )
         expected = cache["embeddings"][cache["id_to_idx"]["BRD-A02"]] * 2
         assert torch.equal(encoded.require_text()[0], expected)
+
+
+class TestPlateOffsets:
+    """The one hook that carries CWA into eval diagnostics, infer and export."""
+
+    def test_offsets_are_subtracted_and_the_result_renormalized(self) -> None:
+        offsets = PlateOffsets({"P1": torch.tensor([2.0, 0.0, 0.0, 0.0])})
+        encoded = encode_wells(
+            CountingEncoder(), [make_batch(["A01"])], device=DEVICE, plate_offsets=offsets
+        )
+        # CountingEncoder emits (2, 2, 2, 2) for a two-site well.
+        expected = torch.nn.functional.normalize(torch.tensor([[0.0, 2.0, 2.0, 2.0]]), dim=-1)
+        torch.testing.assert_close(encoded.image, expected)
+
+    def test_no_offsets_leaves_the_encoder_output_untouched(self) -> None:
+        encoded = encode_wells(CountingEncoder(), [make_batch(["A01"])], device=DEVICE)
+        torch.testing.assert_close(encoded.image, torch.full((1, 4), 2.0))
 
 
 def test_the_amp_flag_reaches_autocast_and_defaults_to_off(

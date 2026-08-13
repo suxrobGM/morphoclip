@@ -60,6 +60,8 @@ class MorphoCLIPOptimizationConfig(StrictModel):
     weight_decay: float = 0.1
     epochs: int = 20
     warmup_steps: int = 200
+    # CWA subtracts a per-plate offset (plate mean minus the mean over the
+    # replicate plates of its condition), recomputed at each epoch start.
     use_cwa: bool = False
     # Gene-aware CWCL: affinity for pairs whose target genes intersect but
     # whose broad_sample differs. 0.0 gives binary labels.

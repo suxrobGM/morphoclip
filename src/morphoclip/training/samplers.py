@@ -2,8 +2,8 @@
 
 :class:`PerturbationBatchSampler` puts replicate wells of the same perturbation
 in one batch, so CWCL soft positives and the replicate image-image term have
-positives to work with, while keeping at least two plates per batch so CWA
-removes a real batch effect rather than a single-plate mean.
+positives to work with, while keeping at least two plates per batch so those
+replicate pairs span plates rather than sitting inside one.
 """
 
 import logging

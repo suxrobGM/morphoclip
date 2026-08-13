@@ -151,9 +151,10 @@ def infer(
     console.rule("[bold blue]MorphoCLIP Inference")
     console.print(f"Checkpoint: {checkpoint} | Device: {device} | Mode: {mode.value}")
 
-    image_encoder, text_projection, ckpt, cfg = load_models_from_checkpoint(checkpoint, device)
-    if config:
-        cfg = load_training_config(str(config))
+    loaded = load_models_from_checkpoint(checkpoint, device)
+    image_encoder, text_projection = loaded.image_encoder, loaded.text_projection
+    plate_offsets, ckpt = loaded.plate_offsets, loaded.ckpt
+    cfg = load_training_config(str(config)) if config else loaded.config
 
     console.print(f"Epoch: {ckpt['epoch']}, step: {ckpt['steps']}")
 
@@ -177,6 +178,7 @@ def infer(
         text_projection=text_projection,
         text_cache=text_cache,
         amp=cfg.runtime.amp,
+        plate_offsets=plate_offsets,
     )
     if encoded.skipped:
         console.print(f"[yellow]Skipped {encoded.skipped} wells with no text cache entry[/yellow]")

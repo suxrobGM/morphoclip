@@ -21,12 +21,21 @@ from morphoclip.data.metadata import MetadataIndex
 from morphoclip.data.perturbation import is_control_or_empty
 from morphoclip.training.config import MorphoCLIPTrainingConfig, training_config_from_dict
 from morphoclip.training.trainer import train_morphoclip
+from tests.support.contexts import write_official_split_csv
 from tests.support.features import make_feature_root, write_dataset_yml, write_text_cache
 
 pytestmark = pytest.mark.slow
 
 PLATES = ("BR00116991", "BR00116992")
 WELLS_PER_PLATE = 8
+OUTPUT_DIM = 8
+
+# Both fixture plates are A549 compound replicates at 24 h, so they land in one
+# condition and their offsets are the drift between them.
+CONDITION_CSV_ROWS = (
+    "BR00116991,A01,BRD-A86665761-001-01-1,CACNB4,A549,Compound,24,low,TRUE,2",
+    "BR00116992,A01,BRD-A86665761-001-01-1,CACNB4,A549,Compound,24,low,TRUE,2",
+)
 
 
 def _usable_wells(metadata: MetadataIndex, plate: str, count: int) -> list[str]:
@@ -60,7 +69,7 @@ def training_config(tmp_path: Path, metadata_dir: Path) -> MorphoCLIPTrainingCon
                 "val_fraction": 0.25,
                 "preload": True,
             },
-            "model": {"output_dim": 8, "ccf_layers": 1, "ccf_heads": 2},
+            "model": {"output_dim": OUTPUT_DIM, "ccf_layers": 1, "ccf_heads": 2},
             "optimization": {"epochs": 1, "warmup_steps": 1},
             "runtime": {
                 "device": "cpu",
@@ -105,7 +114,31 @@ def test_training_writes_finite_metrics_and_a_resumable_checkpoint(
         "epoch",
         "config",
     }
-    assert training_config_from_dict(checkpoint["config"]).model.output_dim == 8
+    assert training_config_from_dict(checkpoint["config"]).model.output_dim == OUTPUT_DIM
+    assert checkpoint["plate_offsets"] is None, "CWA is off, so no offsets belong in the payload"
+
+
+def test_cwa_stores_one_offset_per_plate_in_the_checkpoint(
+    training_config: MorphoCLIPTrainingConfig,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Offsets are the checkpoint contract eval, infer and export replay."""
+    write_official_split_csv(monkeypatch, tmp_path, CONDITION_CSV_ROWS)
+    training_config.optimization.use_cwa = True
+
+    summary = train_morphoclip(training_config, run_dir=tmp_path / "runs" / "cwa")
+
+    checkpoint = torch.load(summary["last_checkpoint"], map_location="cpu", weights_only=False)
+    offsets = checkpoint["plate_offsets"]
+    assert set(offsets) == set(PLATES)
+    for offset in offsets.values():
+        assert offset.shape == (OUTPUT_DIM,)
+        assert torch.isfinite(offset).all()
+
+    # Equal plate weight inside one condition: the two offsets cancel.
+    total = offsets[PLATES[0]] + offsets[PLATES[1]]
+    torch.testing.assert_close(total, torch.zeros(OUTPUT_DIM), atol=1e-5, rtol=0)
 
 
 def test_resume_continues_instead_of_restarting(

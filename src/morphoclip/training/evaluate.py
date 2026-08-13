@@ -5,7 +5,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from morphoclip.data.perturbation import PerturbationInfo, target_gene_key
-from morphoclip.training.batch_correction import cross_well_alignment
+from morphoclip.training.batch_correction import PlateOffsets
 from morphoclip.training.losses import compute_loss
 from morphoclip.training.retrieval import compute_retrieval_metrics
 from morphoclip.utils.device import autocast_context
@@ -42,14 +42,27 @@ def evaluate_epoch(
     device: torch.device,
     logit_scale: nn.Parameter,
     loss_type: str,
-    use_cwa: bool,
     amp: bool,
+    plate_offsets: PlateOffsets | None = None,
     target_weight: float = 0.0,
 ) -> dict[str, float]:
     """Run one evaluation epoch.
 
     The eval loss covers text alignment only. The replicate image-image term is
     left out so model selection stays comparable across ablations.
+
+    Args:
+        image_encoder: Encoder producing one embedding per well.
+        text_projection: Projection head over cached BERT features.
+        text_cache: Cached text features.
+        loader: DataLoader over the evaluation wells.
+        device: Device to run on.
+        logit_scale: Learnable temperature.
+        loss_type: Which contrastive loss to score with.
+        amp: Run the forward pass under autocast.
+        plate_offsets: CWA offsets to subtract, or ``None`` to evaluate
+            uncorrected embeddings.
+        target_weight: Gene-aware CWCL affinity weight.
 
     Returns:
         Dict with ``eval_loss`` and retrieval metrics.
@@ -73,8 +86,8 @@ def evaluate_epoch(
                 raw_text = lookup_text_embeddings(pert_infos, text_cache, device)
                 text_emb = text_projection(raw_text)
 
-                if use_cwa:
-                    image_emb = cross_well_alignment(image_emb, batch["plates"])
+                if plate_offsets is not None:
+                    image_emb = plate_offsets.apply(image_emb, batch["plates"])
 
                 broad_samples = [info.broad_sample for info in pert_infos]
                 loss = compute_loss(

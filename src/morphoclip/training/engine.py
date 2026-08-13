@@ -7,6 +7,7 @@ import torch
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
 
+from morphoclip.training.batch_correction import PlateOffsets
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.distributed import LogitScaleModule
 from morphoclip.training.metrics import compute_grad_norm
@@ -36,11 +37,16 @@ def save_checkpoint(
     global_step: int,
     best_eval_loss: float,
     config: MorphoCLIPTrainingConfig,
+    plate_offsets: PlateOffsets | None = None,
 ) -> None:
     """Save a training checkpoint.
 
     Automatically unwraps DDP wrappers so checkpoints are portable
     between single-GPU and multi-GPU modes.
+
+    ``plate_offsets`` is stored so eval, inference and profile export apply the
+    same CWA correction the run was trained under. It is ``None`` when CWA is
+    off, and absent entirely from checkpoints written before offsets existed.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -54,6 +60,7 @@ def save_checkpoint(
             "steps": global_step,
             "best_eval_loss": best_eval_loss,
             "config": config.to_dict(),
+            "plate_offsets": plate_offsets.state_dict() if plate_offsets is not None else None,
         },
         path,
     )
@@ -123,7 +130,7 @@ def forward_step(
     *,
     device: torch.device,
     amp: bool,
-    use_cwa: bool,
+    plate_offsets: PlateOffsets | None,
     use_ddp: bool,
     dist_state: Any,
     target_weight: float = 0.0,
@@ -137,7 +144,6 @@ def forward_step(
     """
     # Lazy imports to avoid circular dependency (engine <-> evaluate)
     from morphoclip.data.perturbation import target_gene_key
-    from morphoclip.training.batch_correction import cross_well_alignment
     from morphoclip.training.distributed import all_gather_tensors, gather_string_lists
     from morphoclip.training.evaluate import lookup_text_embeddings
 
@@ -150,8 +156,8 @@ def forward_step(
         raw_text = lookup_text_embeddings(pert_infos, text_cache, device)
         text_emb = text_projection(raw_text)
 
-        if use_cwa:
-            image_emb = cross_well_alignment(image_emb, batch["plates"])
+        if plate_offsets is not None:
+            image_emb = plate_offsets.apply(image_emb, batch["plates"])
 
         broad_samples = [info.broad_sample for info in pert_infos]
         target_keys = (

@@ -49,7 +49,7 @@ def _build_eval_loader(config, device, *, split):
 
 
 def _compute_embedding_diagnostics(
-    image_encoder, text_projection, text_cache, loader, *, device, amp
+    image_encoder, text_projection, text_cache, loader, *, device, amp, plate_offsets
 ) -> dict[str, float]:
     """Compute alignment, uniformity, and intra-batch similarity."""
     encoded = encode_wells(
@@ -59,6 +59,7 @@ def _compute_embedding_diagnostics(
         text_projection=text_projection,
         text_cache=text_cache,
         amp=amp,
+        plate_offsets=plate_offsets,
     )
     if encoded.skipped:
         console.print(
@@ -102,9 +103,10 @@ def evaluate(
     console.rule("[bold blue]MorphoCLIP Evaluation")
     console.print(f"Checkpoint: {checkpoint} | Device: {device} | Split: {split.value}")
 
-    image_encoder, text_projection, ckpt, cfg = load_models_from_checkpoint(checkpoint, device)
-    if config:
-        cfg = load_training_config(str(config))
+    loaded = load_models_from_checkpoint(checkpoint, device)
+    image_encoder, text_projection = loaded.image_encoder, loaded.text_projection
+    plate_offsets, ckpt = loaded.plate_offsets, loaded.ckpt
+    cfg = load_training_config(str(config)) if config else loaded.config
 
     logit_scale = torch.nn.Parameter(ckpt["logit_scale"].to(device))
     console.print(
@@ -126,8 +128,8 @@ def evaluate(
             device=device,
             logit_scale=logit_scale,
             loss_type=cfg.optimization.loss_type,
-            use_cwa=cfg.optimization.use_cwa,
             amp=cfg.runtime.amp,
+            plate_offsets=plate_offsets,
             target_weight=cfg.optimization.target_weight,
         )
     )
@@ -142,6 +144,7 @@ def evaluate(
                 loader,
                 device=device,
                 amp=cfg.runtime.amp,
+                plate_offsets=plate_offsets,
             )
         )
 

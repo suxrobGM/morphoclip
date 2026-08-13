@@ -138,6 +138,26 @@ def broadcast_flag(value: bool, *, src: int = 0) -> bool:
     return bool(tensor.item())
 
 
+def broadcast_tensor(tensor: torch.Tensor, *, src: int = 0) -> torch.Tensor:
+    """Overwrite every rank's copy of *tensor* with the one held by *src*.
+
+    No-op if not distributed (returns *tensor* unchanged). The tensor must
+    already be on the communication device and identically shaped on every
+    rank, which is what makes a table derived per rank safe to converge.
+
+    Args:
+        tensor: Local tensor, modified in place on ranks other than *src*.
+        src: Rank whose values win.
+
+    Returns:
+        The same tensor object, holding *src*'s values.
+    """
+    if not dist.is_initialized():
+        return tensor
+    dist.broadcast(tensor, src=src)
+    return tensor
+
+
 class _GatherWithGrad(torch.autograd.Function):
     """All-gather that preserves gradient flow for contrastive loss.
 

@@ -7,6 +7,7 @@ against CellCLIP or CellProfiler profiles.
 """
 
 import logging
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
@@ -22,6 +23,8 @@ from benchmark.profiles import (
     profile_path,
     write_profile,
 )
+from morphoclip.data.metadata import MetadataIndex
+from morphoclip.training.batch_correction import PlateOffsets
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.inference import (
     build_eval_dataloader,
@@ -33,7 +36,24 @@ from morphoclip.utils.device import resolve_device
 
 logger = logging.getLogger(__name__)
 
-type ExportModels = tuple[nn.Module, MorphoCLIPTrainingConfig, torch.device]
+
+@dataclass(frozen=True, slots=True)
+class ExportModels:
+    """Everything the per-plate export needs, loaded once and reused.
+
+    Attributes:
+        image_encoder: Trained image encoder in eval mode.
+        plate_offsets: CWA offsets from the checkpoint, ``None`` when CWA was off.
+        config: The checkpoint's training config.
+        device: Device the encoder lives on.
+        metadata: Plate metadata index, shared by every plate in the export.
+    """
+
+    image_encoder: nn.Module
+    plate_offsets: PlateOffsets | None
+    config: MorphoCLIPTrainingConfig
+    device: torch.device
+    metadata: MetadataIndex
 
 
 class PlateNotInReferenceError(ValueError):
@@ -46,21 +66,24 @@ class PlateNotInReferenceError(ValueError):
 
 
 def load_export_models(checkpoint: Path, device: str = "auto") -> ExportModels:
-    """Load the image encoder and config from a checkpoint, for reuse across plates.
+    """Load the image encoder, CWA offsets and config from a checkpoint.
 
     Args:
         checkpoint: Path to a trained MorphoCLIP checkpoint.
         device: Device string (``"auto"``, ``"cuda"``, ``"cpu"``, ...).
 
     Returns:
-        Tuple of ``(image_encoder, config, device)`` ready for encoding.
+        An :class:`ExportModels` ready for encoding, reusable across plates.
     """
     torch_device = resolve_device(device)
-    image_encoder, _text_projection, _ckpt, config = load_models_from_checkpoint(
-        checkpoint, torch_device
+    loaded = load_models_from_checkpoint(checkpoint, torch_device)
+    return ExportModels(
+        image_encoder=loaded.image_encoder,
+        plate_offsets=loaded.plate_offsets,
+        config=loaded.config,
+        device=torch_device,
+        metadata=MetadataIndex.from_config(Path(loaded.config.dataset.dataset_config_path)),
     )
-    image_encoder.eval()
-    return image_encoder, config, torch_device
 
 
 @lru_cache(maxsize=4)
@@ -197,16 +220,22 @@ def _encode_plate_wells(
     Runs in fp32: these embeddings are written to disk and every benchmark
     number downstream is computed from them.
     """
-    image_encoder, config, device = models
-
-    dataset = build_eval_dataset(config, plates=[plate], exclude_controls=False)
+    dataset = build_eval_dataset(
+        models.config, plates=[plate], exclude_controls=False, metadata=models.metadata
+    )
     if len(dataset) == 0:
         raise ValueError(
-            f"No cached features found for plate {plate!r} under {config.dataset.feature_root}"
+            f"No cached features found for plate {plate!r} under "
+            f"{models.config.dataset.feature_root}"
         )
-    loader = build_eval_dataloader(dataset, config, device, batch_size=batch_size)
+    loader = build_eval_dataloader(dataset, models.config, models.device, batch_size=batch_size)
 
-    encoded = encode_wells(image_encoder, loader, device=device)
+    encoded = encode_wells(
+        models.image_encoder,
+        loader,
+        device=models.device,
+        plate_offsets=models.plate_offsets,
+    )
     return encoded.image.numpy(), encoded.wells
 
 
@@ -227,7 +256,7 @@ def export_plate_profiles(
     the path :func:`benchmark.profiles.profile_path` expects.
 
     Args:
-        models: ``(image_encoder, config, device)`` from
+        models: Encoder, offsets, config and device from
             :func:`load_export_models`, loaded once and reused across plates.
         plate: Plate barcode to export.
         metadata_csv: Path to the CPJUMP1 reference metadata CSV.

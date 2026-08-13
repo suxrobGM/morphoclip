@@ -14,7 +14,10 @@ import pandas as pd
 import torch
 import torch.distributed as torch_dist
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn, TimeRemainingColumn
+from torch.utils.data import DataLoader
 
+from morphoclip.splits.contexts import load_plate_conditions
+from morphoclip.training.batch_correction import PlateOffsets, refresh_plate_offsets
 from morphoclip.training.config import MorphoCLIPTrainingConfig
 from morphoclip.training.distributed import (
     DistributedState,
@@ -24,6 +27,7 @@ from morphoclip.training.distributed import (
 )
 from morphoclip.training.engine import load_checkpoint, save_checkpoint, scale_param
 from morphoclip.training.evaluate import evaluate_epoch
+from morphoclip.training.inference import build_eval_dataloader
 from morphoclip.training.loop import TrainContext, run_epoch
 from morphoclip.training.setup import (
     build_and_wrap_models,
@@ -104,6 +108,15 @@ def _train_loop(
     if is_main:
         console.print(f"  Train: {train_count:,} | Val: {val_count:,}")
 
+    plate_conditions: dict[str, str] = {}
+    offset_loader: DataLoader | None = None
+    plate_offsets: PlateOffsets | None = None
+    if opt_cfg.use_cwa:
+        plate_conditions = load_plate_conditions()
+        offset_loader = build_eval_dataloader(
+            train_loader.dataset, config, device, preloaded=config.dataset.preload
+        )
+
     text_cache = load_cached_text_features(config.dataset.text_cache_path)
     if is_main:
         console.print(f"  Text cache: {text_cache['embeddings'].shape[0]:,} perturbations")
@@ -180,6 +193,7 @@ def _train_loop(
             global_step=global_step,
             best_eval_loss=best,
             config=config,
+            plate_offsets=plate_offsets,
         )
 
     ctx = TrainContext(
@@ -218,6 +232,17 @@ def _train_loop(
             if train_sampler is not None:
                 train_sampler.set_epoch(epoch)
 
+            if offset_loader is not None:
+                # Every rank runs this: it holds a collective under DDP, and the
+                # offsets have to be identical everywhere before the batch loop.
+                plate_offsets = refresh_plate_offsets(
+                    image_encoder,
+                    offset_loader,
+                    plate_conditions,
+                    device=device,
+                    dist_state=dist_state,
+                )
+
             image_encoder.train()
             text_projection.train()
             epoch_start = time.time()
@@ -230,6 +255,7 @@ def _train_loop(
                 total_steps=total_steps,
                 progress=progress,
                 batch_task=batch_task,
+                plate_offsets=plate_offsets,
             )
             global_step = result.global_step
             progress.remove_task(batch_task)
@@ -252,8 +278,8 @@ def _train_loop(
                     device=device,
                     logit_scale=scale_param(logit_scale),
                     loss_type=opt_cfg.loss_type,
-                    use_cwa=opt_cfg.use_cwa,
                     amp=config.runtime.amp,
+                    plate_offsets=plate_offsets,
                     target_weight=opt_cfg.target_weight,
                 )
                 train_metrics.update(eval_metrics)

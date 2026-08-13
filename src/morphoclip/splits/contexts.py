@@ -12,6 +12,7 @@ from pathlib import Path
 
 METADATA_PATH = Path("output/benchmark/input/experiment-metadata.tsv")
 FALLBACK_METADATA_PATH = Path("output/benchmark/output/experiment-metadata.tsv")
+REFERENCE_METADATA_PATH = Path("data/reference/cpjump1/experiment-metadata.tsv")
 OFFICIAL_SPLIT_METADATA_PATH = Path("data/reference/cpjump1/cpjump1_metadata.csv")
 
 
@@ -41,13 +42,26 @@ class OfficialSplitContext:
 
 
 def resolve_metadata_path() -> Path:
-    """Find the experiment metadata TSV."""
-    for path in (METADATA_PATH, FALLBACK_METADATA_PATH):
+    """Find the experiment metadata TSV.
+
+    Regenerated copies under ``output/benchmark/`` win over the vendored
+    reference copy, so a rerun of the upstream notebook takes effect without
+    touching the repo.
+    """
+    path = _resolve_optional_metadata_path()
+    if path is None:
+        raise AssertionError(
+            f"Experiment metadata not found: {METADATA_PATH}, {FALLBACK_METADATA_PATH}, "
+            f"or {REFERENCE_METADATA_PATH}"
+        )
+    return path
+
+
+def _resolve_optional_metadata_path() -> Path | None:
+    for path in (METADATA_PATH, FALLBACK_METADATA_PATH, REFERENCE_METADATA_PATH):
         if path.exists():
             return path
-    raise AssertionError(
-        f"Experiment metadata not found: {METADATA_PATH} or {FALLBACK_METADATA_PATH}"
-    )
+    return None
 
 
 def resolve_official_split_metadata_path() -> Path:
@@ -156,4 +170,74 @@ def load_official_split_contexts() -> dict[tuple[str, str], OfficialSplitContext
 
     if not result:
         raise ValueError(f"No official split metadata rows found in {path}")
+    return result
+
+
+def load_plate_conditions() -> dict[str, str]:
+    """Map each plate barcode to its experimental condition key.
+
+    The condition is ``"<cell_line>|<experiment_type>|<timepoint>"``, which is
+    what makes two plates replicates of each other. Cross-Well Alignment groups
+    plates by this key so it removes replicate-to-replicate drift without
+    deleting the condition-level signal the text prompts encode.
+
+    Plates absent from the official CSV (the non-benchmark-eligible conditions:
+    non-standard seeding density, antibiotics present, compound plates on the
+    Cas9 line) fall back to the experiment metadata TSV, keyed on every
+    condition axis it records. The two sources deliberately produce different
+    key shapes: replicate groups never straddle the sources, and distinct
+    shapes cannot collide into one group by accident.
+
+    Returns:
+        Plate barcode to condition key.
+
+    Raises:
+        ValueError: If two wells of the same plate disagree on the condition.
+    """
+    conditions: dict[str, str] = {}
+    for context in load_official_split_contexts().values():
+        key = f"{context.cell_line}|{context.experiment_type}|{context.timepoint}"
+        existing = conditions.setdefault(context.plate, key)
+        if existing != key:
+            raise ValueError(
+                f"Plate {context.plate!r} has conflicting conditions in the official "
+                f"split metadata: {existing!r} and {key!r}"
+            )
+    for barcode, key in _load_experiment_conditions().items():
+        conditions.setdefault(barcode, key)
+    return conditions
+
+
+_EXPERIMENT_CONDITION_FIELDS = (
+    "Cell_type",
+    "Perturbation",
+    "Time",
+    "Density",
+    "Antibiotics",
+    "Cell_line",
+    "Time_delay",
+)
+
+
+def _load_experiment_conditions() -> dict[str, str]:
+    """Condition keys from the experiment TSV, for plates the official CSV lacks.
+
+    Density, Antibiotics, Cell_line (Parental vs Cas9), and Time_delay must be
+    part of the key: they are exactly what separates the non-benchmark plates
+    from the standard-condition plates that otherwise share cell type,
+    modality, and timepoint.
+    """
+    path = _resolve_optional_metadata_path()
+    if path is None:
+        return {}
+
+    result: dict[str, str] = {}
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for row in reader:
+            barcode = row.get("Assay_Plate_Barcode", "")
+            values = [row.get(field, "") for field in _EXPERIMENT_CONDITION_FIELDS]
+            if not barcode or not all(values):
+                continue
+            result[barcode] = "|".join(values)
     return result

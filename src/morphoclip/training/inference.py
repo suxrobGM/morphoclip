@@ -17,6 +17,7 @@ from morphoclip.data.metadata import MetadataIndex
 from morphoclip.data.perturbation import PerturbationInfo
 from morphoclip.models.image_encoder import MorphoCLIPImageEncoder
 from morphoclip.models.projection_head import ProjectionHead
+from morphoclip.training.batch_correction import PlateOffsets, offsets_from_checkpoint
 from morphoclip.training.config import (
     EMBED_DIM,
     INPUT_CHANNELS,
@@ -86,10 +87,21 @@ def build_eval_dataset(
     *,
     plates: list[str] | None = None,
     exclude_controls: bool | None = None,
+    metadata: MetadataIndex | None = None,
 ) -> MorphoCLIPDataset:
-    """Construct a ``MorphoCLIPDataset`` for eval/inference."""
+    """Construct a ``MorphoCLIPDataset`` for eval/inference.
+
+    Args:
+        config: Training config supplying the dataset paths and text level.
+        plates: Plates to include. Defaults to every plate with cached features.
+        exclude_controls: Override ``config.dataset.exclude_controls``.
+        metadata: Prebuilt index to reuse. Building one parses the platemaps and
+            the four external TSVs, so a caller looping over plates should build
+            it once and pass it in.
+    """
     ds_cfg = config.dataset
-    metadata = MetadataIndex.from_config(Path(ds_cfg.dataset_config_path))
+    if metadata is None:
+        metadata = MetadataIndex.from_config(Path(ds_cfg.dataset_config_path))
     feature_root = Path(ds_cfg.feature_root)
     if plates is None:
         plates = discover_plates(feature_root)
@@ -110,6 +122,7 @@ def build_eval_dataloader(
     device: torch.device,
     *,
     batch_size: int | None = None,
+    preloaded: bool = False,
 ) -> DataLoader:
     """Construct a non-shuffling DataLoader matching trainer conventions.
 
@@ -118,14 +131,17 @@ def build_eval_dataloader(
         config: Training config supplying the default eval batch size.
         device: Device the batches feed.
         batch_size: Override for ``config.dataset.eval_batch_size``.
+        preloaded: Whether ``dataset`` holds its features in memory. Workers
+            spawned over a preloaded cache would pickle the whole cache into
+            every one of them, so this drops them. Datasets from
+            :func:`build_eval_dataset` read from disk and leave it ``False``.
     """
     return DataLoader(
         dataset,
         batch_size=batch_size or config.dataset.eval_batch_size,
         shuffle=False,
         collate_fn=collate_fn,
-        # build_eval_dataset never preloads, so the dataset reads from disk.
-        num_workers=loader_workers(preloaded=False),
+        num_workers=loader_workers(preloaded=preloaded),
         pin_memory=supports_pin_memory(device),
     )
 
@@ -189,6 +205,7 @@ def encode_wells(
     text_projection: nn.Module | None = None,
     text_cache: dict | None = None,
     amp: bool = False,
+    plate_offsets: PlateOffsets | None = None,
 ) -> EncodedWells:
     """Encode every well in *loader*, optionally alongside its text embedding.
 
@@ -204,6 +221,9 @@ def encode_wells(
         amp: Run the forward pass under autocast. Defaults off, because
             profile export writes its embeddings to disk and fp16 there would
             move every downstream benchmark number.
+        plate_offsets: CWA offsets to subtract on-device before the embeddings
+            leave the GPU. ``None`` returns raw embeddings, which is what the
+            offset-refresh pass itself needs.
 
     Returns:
         The concatenated embeddings and the per-well metadata that survived.
@@ -229,7 +249,10 @@ def encode_wells(
         features = batch["features"].to(device, non_blocking=True)
         site_mask = batch["site_mask"].to(device, non_blocking=True)
         with autocast_context(device, amp):
-            image_embs.append(image_encoder(features, site_mask).cpu())
+            image_emb = image_encoder(features, site_mask)
+            if plate_offsets is not None:
+                image_emb = plate_offsets.apply(image_emb, batch["plates"])
+            image_embs.append(image_emb.cpu())
             if text_projection is not None:
                 raw_text = lookup_text_embeddings(pert_infos, text_cache or {}, device)
                 text_embs.append(text_projection(raw_text).cpu())
@@ -247,10 +270,30 @@ def encode_wells(
     return result
 
 
+@dataclass(frozen=True, slots=True)
+class LoadedCheckpoint:
+    """Everything a checkpoint restores, so no consumer has to dig for a piece.
+
+    Attributes:
+        image_encoder: Image encoder in eval mode.
+        text_projection: Text projection head in eval mode.
+        plate_offsets: CWA offsets the run was trained under, ``None`` when CWA
+            was off. Part of the model state, not a per-command choice.
+        ckpt: The raw checkpoint dict, for epoch, step and logit scale.
+        config: The training config the checkpoint was written with.
+    """
+
+    image_encoder: MorphoCLIPImageEncoder
+    text_projection: ProjectionHead
+    plate_offsets: PlateOffsets | None
+    ckpt: dict
+    config: MorphoCLIPTrainingConfig
+
+
 def load_models_from_checkpoint(
     checkpoint_path: Path,
     device: torch.device,
-) -> tuple[MorphoCLIPImageEncoder, ProjectionHead, dict, MorphoCLIPTrainingConfig]:
+) -> LoadedCheckpoint:
     """Load checkpoint, build models, and load weights."""
     ckpt, config = load_checkpoint(checkpoint_path, device)
     image_encoder, text_projection = build_models(config, device)
@@ -258,4 +301,10 @@ def load_models_from_checkpoint(
     text_projection.load_state_dict(ckpt["text_projection"])
     image_encoder.eval()
     text_projection.eval()
-    return image_encoder, text_projection, ckpt, config
+    return LoadedCheckpoint(
+        image_encoder=image_encoder,
+        text_projection=text_projection,
+        plate_offsets=offsets_from_checkpoint(ckpt, use_cwa=config.optimization.use_cwa),
+        ckpt=ckpt,
+        config=config,
+    )

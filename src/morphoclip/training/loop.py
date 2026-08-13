@@ -16,6 +16,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
+from morphoclip.training.batch_correction import PlateOffsets
 from morphoclip.training.config import (
     GRAD_CLIP_NORM,
     LOGIT_SCALE_MAX,
@@ -86,8 +87,14 @@ def run_epoch(
     total_steps: int,
     progress: Progress,
     batch_task: TaskID,
+    plate_offsets: PlateOffsets | None = None,
 ) -> EpochResult:
-    """Run one training epoch's batch loop, returning updated step + last embeddings."""
+    """Run one training epoch's batch loop, returning updated step + last embeddings.
+
+    ``plate_offsets`` is an argument rather than a :class:`TrainContext` field
+    because the context holds read-only handles while the offsets are recomputed
+    at the top of every epoch.
+    """
     config = ctx.config
     opt_cfg = config.optimization
     image_encoder = ctx.image_encoder
@@ -127,7 +134,7 @@ def run_epoch(
                 ctx.text_cache,
                 device=device,
                 amp=config.runtime.amp,
-                use_cwa=opt_cfg.use_cwa,
+                plate_offsets=plate_offsets,
                 use_ddp=use_ddp,
                 dist_state=ctx.dist_state,
                 target_weight=opt_cfg.target_weight,

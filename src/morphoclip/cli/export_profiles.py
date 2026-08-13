@@ -58,7 +58,7 @@ def export_profiles(
         raise typer.Exit(1)
 
     models = load_export_models(checkpoint, device)
-    resolved_plates = plates or discover_plates(Path(models[1].dataset.feature_root))
+    resolved_plates = plates or discover_plates(Path(models.config.dataset.feature_root))
     if not resolved_plates:
         console.print("[red]No plates to export.[/red]")
         raise typer.Exit(1)

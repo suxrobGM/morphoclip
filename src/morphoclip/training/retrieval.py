@@ -146,8 +146,9 @@ def compute_retrieval_metrics(
 ) -> dict[str, float]:
     """Compute well-level and perturbation-level retrieval metrics.
 
-    Both inputs are re-normalized because CWA batch correction in the eval loop
-    can leave embeddings off the unit sphere.
+    Both inputs are re-normalized as a safety net. Every producer normalizes
+    already, CWA included, but a cosine metric computed off unnormalized rows
+    would fail silently rather than loudly.
 
     Args:
         image_features: ``(N, D)`` image embeddings.
