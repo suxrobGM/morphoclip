@@ -119,7 +119,6 @@ def _train_loop(
             rank=dist_state.rank,
             shuffle=True,
         )
-        # Rebuild train loader with sampler
         prepared.train_loader = DataLoader(
             prepared.train_dataset,
             batch_size=config.dataset.batch_size,

@@ -2,8 +2,8 @@
 
 :class:`PerturbationBatchSampler` puts replicate wells of the same perturbation
 in one batch, so CWCL soft positives and the replicate image-image term have
-positives to work with, while keeping at least two plates per batch so those
-replicate pairs span plates rather than sitting inside one.
+positives to work with. It also keeps at least two plates per batch, so
+replicate pairs span plates instead of sitting inside one.
 """
 
 import logging
@@ -20,9 +20,8 @@ MIN_PLATES_PER_BATCH = 2
 def resolve_base_dataset(dataset: Dataset) -> tuple[Dataset, list[int]]:
     """Unwrap nested ``Subset``s to the base dataset and each position's index.
 
-    Returned together because the indices only mean anything against the
-    dataset they were resolved through, and because both halves have to agree
-    on what counts as a wrapper.
+    The indices only make sense against the returned base dataset, so the two
+    come back together.
 
     Args:
         dataset: A dataset, possibly wrapped in one or more

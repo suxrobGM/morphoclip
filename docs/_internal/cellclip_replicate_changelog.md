@@ -1,10 +1,10 @@
 # CellCLIP Replication Changelog
 
-This document tracks the local changes made to bring `src/cellclip` closer to
-the upstream [CellCLIP](https://github.com/suinleelab/CellCLIP) training and
-benchmark behavior. (The upstream repo is no longer vendored under `baselines/`.)
+Local changes that bring `src/cellclip` closer to the upstream
+[CellCLIP](https://github.com/suinleelab/CellCLIP) training and benchmark
+behavior. (The upstream repo is no longer vendored under `baselines/`.)
 
-It is focused on **replication fidelity**, not general feature development.
+The scope is replication fidelity, not general feature development.
 
 ## 1. Upstreamish Training Recipe
 
@@ -119,12 +119,9 @@ Two earlier conclusions should not be treated as the final replication result:
 2. The earlier benchmark numbers for that run were partly distorted by the old
    exporter path.
 
-So the meaningful comparison is:
-
-- corrected training semantics
-- corrected benchmark export semantics
-
-not the original local benchmark outputs from before those fixes.
+The meaningful comparison therefore uses the corrected training semantics and
+the corrected benchmark export, not the original local benchmark outputs from
+before those fixes.
 
 ## 7. Current Comparison Snapshot
 

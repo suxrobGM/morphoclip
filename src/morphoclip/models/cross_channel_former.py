@@ -1,8 +1,7 @@
-"""CrossChannelFormer: transformer aggregator for per-channel DINOv3 CLS tokens.
+"""CrossChannelFormer: transformer over the per-channel DINOv3 CLS tokens of one site.
 
-Learns cross-channel interactions between the 5 fluorescence channels
-(Mitochondria, Actin, Golgi, ER, DNA) and produces a single unified
-image representation per site.
+Lets the 5 fluorescence channels (Mitochondria, Actin, Golgi, ER, DNA) attend
+to each other and returns one vector per site.
 """
 
 import torch
@@ -13,14 +12,14 @@ import torch.nn.functional as F
 class CrossChannelFormer(nn.Module):
     """2-layer transformer aggregating 5 channel CLS tokens into 1 representation.
 
-    A learnable CLS token is prepended to the 5 channel tokens, and its
-    output is used as the aggregated representation.  Learnable channel-type
-    embeddings are added so the transformer can distinguish channels.
+    A learnable CLS token is prepended to the 5 channel tokens; its output is
+    the aggregated representation. Learnable channel-type embeddings let the
+    transformer tell the channels apart.
 
-    Unlike CellCLIP's CrossChannelFormer (1536-d, 12 layers, built-in
-    projection), this version operates on DINOv3 1024-d features with a
-    lightweight 2-layer encoder and no output projection — the downstream
-    ``ProjectionHead`` handles mapping to the contrastive space.
+    This is not CellCLIP's CrossChannelFormer (1536-d, 12 layers, built-in
+    projection). It takes DINOv3 1024-d features, uses 2 layers, and has no
+    output projection; the downstream ``ProjectionHead`` maps to the
+    contrastive space.
 
     Args:
         embed_dim: Input/output feature dimension (DINOv3 CLS = 1024).
@@ -45,11 +44,9 @@ class CrossChannelFormer(nn.Module):
         self.embed_dim = embed_dim
         self.input_channels = input_channels
 
-        # Learnable channel-type embeddings (Mito, Actin, Golgi, ER, DNA)
         self.channel_embed = nn.Parameter(torch.zeros(input_channels, embed_dim))
         nn.init.trunc_normal_(self.channel_embed, std=0.02)
 
-        # Learnable CLS token for aggregation
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         nn.init.trunc_normal_(self.cls_token, std=0.02)
 
@@ -91,18 +88,16 @@ class CrossChannelFormer(nn.Module):
         if dim != self.embed_dim:
             raise ValueError(f"Expected embedding dim {self.embed_dim}, got {dim}")
 
-        # L2-normalize raw DINOv3 features so channel embeddings are meaningful
+        # Normalize raw DINOv3 features so the added channel embeddings are
+        # on a comparable scale.
         x = F.normalize(x, dim=-1)
 
-        # Add channel-type embeddings
         x = x + self.channel_embed.unsqueeze(0)  # (B, C, D)
 
-        # Prepend CLS token
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # (B, 1, D)
         x = torch.cat([cls_tokens, x], dim=1)  # (B, C+1, D)
 
         x = self.ln_pre(x)
         x = self.transformer(x)  # (B, C+1, D)
 
-        # Extract CLS token output
         return self.ln_post(x[:, 0, :])  # (B, D)

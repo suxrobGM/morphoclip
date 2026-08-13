@@ -1,14 +1,14 @@
 # Benchmark Pipeline
 
-This document explains the benchmark evaluation process for perturbation embedding quality assessment. The pipeline measures how well learned embeddings capture biological similarity using information retrieval metrics.
+This page explains how the benchmark scores perturbation embeddings. It measures how well the embeddings capture biological similarity, using information retrieval metrics.
 
 ## Overview
 
 The benchmark evaluates embeddings on three tasks:
 
-1. **Replicability** - Can the model retrieve replicate samples of the same perturbation?
-2. **Target Matching** - Can the model retrieve perturbations that affect the same biological target?
-3. **Cross-Modality Matching** - Can the model match chemical perturbations to genetic perturbations of the same target?
+1. **Replicability**: can the model retrieve replicate samples of the same perturbation?
+2. **Target Matching**: can the model retrieve perturbations that affect the same biological target?
+3. **Cross-Modality Matching**: can the model match chemical perturbations to genetic perturbations of the same target?
 
 ## Data Structure
 
@@ -109,7 +109,7 @@ Positive pairs:  Same target, different modality (compound vs. gene)
 Negative pairs:  Different targets OR same modality
 ```
 
-This is the most challenging task, requiring the embedding to capture functional similarity across fundamentally different perturbation types.
+This is the hardest task: the embedding must capture functional similarity across two very different perturbation types.
 
 ## Pipeline Steps
 
@@ -227,5 +227,5 @@ For typical datasets (~10k samples, ~1k features), the pipeline runs in minutes.
 
 ## References
 
-- [copairs](https://github.com/cytomining/copairs) - Pairwise comparison library
-- Chandrasekaran et al. (2024) - CPJUMP1 benchmark methodology
+- [copairs](https://github.com/cytomining/copairs): pairwise comparison library
+- Chandrasekaran et al. (2024): CPJUMP1 benchmark methodology

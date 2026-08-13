@@ -1,20 +1,15 @@
 """Cross-Well Alignment (CWA): condition-relative plate offsets.
 
-CWA used to subtract the mean of whichever wells of a plate happened to land in
-the current batch. On CPJUMP1 that is wrong twice over. A plate is very nearly a
-single condition (one cell line, one modality, one timepoint), so the full plate
-mean carries exactly the biology the text prompts describe, and subtracting it
-deletes the training signal. The estimate was also drawn from a handful of wells
-and resampled every step, so most of what it removed was perturbation biology
-plus sampling noise.
+CWA subtracts a precomputed per-plate offset,
+``offset(plate) = plate mean - condition mean``, where the condition mean
+averages the per-plate means of the replicate plates sharing that plate's
+condition. Offsets within a condition sum to zero, so the correction removes
+plate-to-plate drift and keeps the condition signal. Offsets are recomputed
+once per epoch and treated as constants, never as a gradient path.
 
-What replaces it is a precomputed per-plate offset,
-``offset(plate) = plate mean - condition mean``, where the condition mean is the
-mean of the per-plate means over the replicate plates sharing that plate's
-condition. Offsets within a condition sum to zero by construction, so the
-correction removes replicate-to-replicate drift and leaves the condition
-untouched. They are recomputed once per epoch and treated as constants, never as
-a differentiable path.
+An earlier version subtracted the mean of whichever wells of a plate landed in
+the current batch. On CPJUMP1 a plate is nearly one condition, so that erased
+the biology the prompts describe, and the per-batch estimate was noisy.
 """
 
 import logging
@@ -50,11 +45,11 @@ class PlateOffsets:
         self._warned: set[str] = set()
 
     def _lookup(self, plate: str) -> torch.Tensor | None:
-        """Offset for a plate name, or ``None`` after warning once about it.
+        """Offset for a plate name, or ``None`` after warning once.
 
         ``batch["plates"]`` holds feature-directory names such as
-        ``BR00116991__2020-11-05T19_51_35-Measurement1`` while the table is keyed
-        by barcode, so every lookup normalizes first.
+        ``BR00116991__2020-11-05T19_51_35-Measurement1``. The table is keyed by
+        barcode, so every lookup normalizes first.
         """
         barcode = extract_plate_barcode(plate)
         offset = self.offsets.get(barcode)
@@ -107,9 +102,8 @@ def compute_plate_offsets(
 ) -> PlateOffsets:
     """Compute ``plate mean - condition mean`` for every plate present.
 
-    The condition mean weights each member plate equally rather than each well,
-    so offsets within one condition sum to zero however unevenly the wells are
-    distributed.
+    The condition mean weights each plate equally, not each well, so offsets
+    within one condition sum to zero even when wells are unevenly spread.
 
     Args:
         embeddings: ``(N, D)`` uncorrected well embeddings.
@@ -166,20 +160,20 @@ def refresh_plate_offsets(
 ) -> PlateOffsets:
     """Re-estimate plate offsets from a full pass over the training wells.
 
-    Runs the encoder in eval mode under ``no_grad``, which is what keeps dropout
-    out of the estimate, then restores the mode it found. Under DDP every rank
-    runs the same unsharded pass and rank 0's table is broadcast, so all ranks
-    hold bitwise identical offsets.
+    Runs the encoder in eval mode under ``no_grad`` to keep dropout out of the
+    estimate, then restores the mode it found. Under DDP every rank runs the
+    same unsharded pass and rank 0's table is broadcast, so all ranks hold
+    bitwise identical offsets.
 
     Args:
         image_encoder: Image encoder, possibly DDP-wrapped.
         loader: Sequential DataLoader over the training wells.
         plate_conditions: Plate barcode to condition key.
         device: Device to run the pass on.
-        amp: Run the pass under autocast, as the training forward does. This is
-            a whole extra pass over the training set once per epoch, and fp32
-            roughly doubles it. An offset is a mean over hundreds of wells, so
-            autocast moves it by a fraction of a percent of its own magnitude.
+        amp: Run the pass under autocast, like the training forward. The pass
+            happens once per epoch and fp32 roughly doubles its cost, while
+            autocast shifts an offset (a mean over hundreds of wells) by only
+            a fraction of a percent.
         dist_state: Distributed state, when training under DDP.
 
     Returns:
@@ -203,7 +197,7 @@ def _broadcast_offsets(
     offsets: PlateOffsets,
     dist_state: DistributedState | None,
 ) -> PlateOffsets:
-    """Replace every rank's table with rank 0's, so the ranks cannot drift apart."""
+    """Replace every rank's table with rank 0's so ranks cannot drift apart."""
     if dist_state is None or dist_state.world_size < 2:
         return offsets
 

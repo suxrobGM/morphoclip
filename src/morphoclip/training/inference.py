@@ -190,7 +190,7 @@ class EncodedWells:
     skipped: int = 0
 
     def require_text(self) -> torch.Tensor:
-        """Text embeddings, or an error naming what was not asked for."""
+        """Text embeddings, raising if none were computed."""
         if self.text is None:
             raise ValueError("encode_wells was called without a text projection")
         return self.text

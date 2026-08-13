@@ -4,9 +4,9 @@ Extracts per-channel CLS tokens from 5 fluorescence channels per site,
 saving ``(5, D)`` feature tensors as ``.pt`` files.
 
 Default model: DINOv3 ViT-L/16 (300M params, 1024-dim CLS token).
-Can also be used with DINOv2 and other Hugging Face vision backbones that
-accept ``pixel_values`` and return either ``pooler_output`` or
-``last_hidden_state`` with a CLS token.
+Also works with DINOv2 and other Hugging Face backbones that take
+``pixel_values`` and return ``pooler_output`` or a CLS token in
+``last_hidden_state``.
 """
 
 import logging
@@ -128,7 +128,7 @@ def _preprocess_batch(
     """
     all_images = torch.cat(site_tensors, dim=0)  # (N*5, 3, H, W)
 
-    # Apply normalization manually — processor expects PIL images but we have tensors
+    # Normalize by hand: the processor expects PIL images, not tensors
     image_mean = getattr(processor, "image_mean", IMAGENET_MEAN)
     image_std = getattr(processor, "image_std", IMAGENET_STD)
     mean = torch.tensor(image_mean, dtype=all_images.dtype).view(1, 3, 1, 1)

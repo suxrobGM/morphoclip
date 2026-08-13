@@ -1,8 +1,8 @@
 """Prompt templates and builder for BioClinical ModernBERT input.
 
-Verbose natural language descriptions give BERT maximum semantic signal for
-embedding perturbation metadata.  Distinct from the concise templates in
-``morphoclip.data.perturbation`` used for human-readable dataset labels.
+Prompts are deliberately verbose: more description gives BERT more to embed.
+The concise templates in ``morphoclip.data.perturbation`` are a separate
+system, used only for human-readable dataset labels.
 """
 
 import re

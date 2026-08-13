@@ -49,7 +49,7 @@ uv run morphoclip export-profiles --checkpoint output/morphoclip_runs/default/ch
 The default config is at `configs/train/base.yaml`. Key options:
 
 - `loss_type`: `"infonce"` (standard contrastive) or `"cwcl"` (soft-label contrastive)
-- `aggregator`: how channels and sites are pooled into a well embedding —
+- `aggregator`: how channels and sites are pooled into a well embedding:
   `"ccf-mean"` (default), `"meanpool-mean"`, `"ccf-attn"`, or `"wellformer"`
 - `use_cwa`: `true` to enable Cross-Well Alignment, a batch correction that subtracts
   precomputed per-plate offsets relative to each plate's replicate plates (disabled by default)
@@ -57,8 +57,8 @@ The default config is at `configs/train/base.yaml`. Key options:
 
 Alternative configs:
 
-- `configs/train/mean_pool.yaml` — uses mean pooling instead of CrossChannelFormer (`aggregator: meanpool-mean`)
-- `configs/train/ddp.yaml` — multi-GPU distributed training
+- `configs/train/mean_pool.yaml`: mean pooling instead of CrossChannelFormer (`aggregator: meanpool-mean`)
+- `configs/train/ddp.yaml`: multi-GPU distributed training
 
 ## Multi-GPU Training
 

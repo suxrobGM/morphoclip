@@ -1,7 +1,7 @@
 """`morphoclip benchmark` command (thin wrapper over `benchmark.stable`).
 
 The heavy benchmark stack (copairs, scikit-learn) lives behind the optional
-``benchmark`` extra, so it is imported lazily inside the command — the rest of
+``benchmark`` extra, so it is imported lazily inside the command. The rest of
 the CLI stays usable without that extra installed.
 """
 

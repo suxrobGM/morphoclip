@@ -1,7 +1,7 @@
-"""Embedding-space diagnostic metrics for training monitoring.
+"""Embedding-space diagnostics for training monitoring.
 
-Pure functions for computing alignment, uniformity, and other diagnostics
-that help detect overfitting, embedding collapse, and training health issues.
+Pure functions that help spot overfitting, embedding collapse, and other
+training health problems.
 """
 
 from collections.abc import Iterable
@@ -36,13 +36,13 @@ def compute_uniformity(
     *,
     t: float = 2.0,
 ) -> float:
-    """Measure how uniformly embeddings spread on the unit hypersphere.
+    """Measure how evenly embeddings spread over the unit sphere.
 
     Uses the metric from Wang & Isola (2020):
     ``log(mean(exp(-t * ||x_i - x_j||^2)))`` over all pairs.
 
-    More negative values indicate better spread. Values approaching 0
-    signal embedding collapse (all points mapping to the same region).
+    More negative is better spread. Values near 0 signal collapse, with all
+    points mapping to the same region.
 
     Args:
         emb: ``(N, D)`` L2-normalized embeddings.
@@ -52,7 +52,6 @@ def compute_uniformity(
         Scalar uniformity score (negative is better).
     """
     sq_pdist = torch.cdist(emb, emb, p=2).pow(2)
-    # Exclude self-distances (diagonal)
     mask = ~torch.eye(emb.shape[0], dtype=torch.bool, device=emb.device)
     pairwise = sq_pdist[mask]
     return float(torch.exp(-t * pairwise).mean().log().item())
@@ -62,8 +61,8 @@ def compute_uniformity(
 def compute_intra_batch_similarity(emb: torch.Tensor) -> float:
     """Mean off-diagonal cosine similarity within a batch.
 
-    High values indicate embeddings are collapsing to similar
-    representations regardless of input (mode collapse).
+    High values mean the embeddings look alike whatever the input, which is
+    mode collapse.
 
     Args:
         emb: ``(N, D)`` L2-normalized embeddings.
@@ -80,8 +79,8 @@ def compute_intra_batch_similarity(emb: torch.Tensor) -> float:
 def compute_logit_stats(logits: torch.Tensor) -> dict[str, float]:
     """Compute statistics of the similarity matrix.
 
-    Useful for detecting temperature/scale issues. Collapsing std
-    means the model cannot discriminate positive from negative pairs.
+    Useful for spotting temperature or scale problems. A shrinking std means
+    the model cannot tell positive pairs from negative ones.
 
     Args:
         logits: ``(B, B)`` similarity matrix (after temperature scaling).

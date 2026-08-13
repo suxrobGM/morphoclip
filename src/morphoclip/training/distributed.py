@@ -1,9 +1,8 @@
 """Distributed training utilities for multi-GPU DDP.
 
-Encapsulates all ``torch.distributed`` concerns so that the rest of the
-codebase can remain largely unaware of DDP.  When launched without
-``torchrun`` (no ``RANK`` in env), everything degrades gracefully to
-single-process mode.
+Keeps all ``torch.distributed`` handling in one place so the rest of the
+codebase can ignore DDP. Launched without ``torchrun`` (no ``RANK`` in env),
+everything falls back to single-process mode.
 
 Usage with torchrun::
 
@@ -44,10 +43,9 @@ class DistributedState:
 def setup_distributed(backend: str = "nccl") -> DistributedState:
     """Initialize the distributed process group.
 
-    Reads ``RANK``, ``LOCAL_RANK``, and ``WORLD_SIZE`` from the
-    environment (set automatically by ``torchrun``).  If these are
-    absent, returns a single-process ``DistributedState`` using
-    :func:`~morphoclip.utils.device.resolve_device`.
+    Reads ``RANK``, ``LOCAL_RANK``, and ``WORLD_SIZE`` from the environment
+    (set by ``torchrun``). When absent, returns a single-process
+    ``DistributedState`` using :func:`~morphoclip.utils.device.resolve_device`.
 
     Args:
         backend: Communication backend (``"nccl"`` for GPU).
@@ -121,8 +119,8 @@ def all_reduce_scalar(value: float, *, op: str = "mean") -> float:
 def broadcast_flag(value: bool, *, src: int = 0) -> bool:
     """Broadcast a boolean decision from *src* to every rank.
 
-    Lets a decision that only one rank can make (eval runs on rank 0) drive
-    control flow on all of them, so no rank is left waiting at a collective.
+    A decision only one rank can make (eval runs on rank 0) must drive control
+    flow on all ranks, or the others hang at the next collective.
 
     Args:
         value: Local value; only the one on *src* is used.
@@ -142,8 +140,8 @@ def broadcast_tensor(tensor: torch.Tensor, *, src: int = 0) -> torch.Tensor:
     """Overwrite every rank's copy of *tensor* with the one held by *src*.
 
     No-op if not distributed (returns *tensor* unchanged). The tensor must
-    already be on the communication device and identically shaped on every
-    rank, which is what makes a table derived per rank safe to converge.
+    already be on the communication device and have the same shape on every
+    rank.
 
     Args:
         tensor: Local tensor, modified in place on ranks other than *src*.
@@ -159,10 +157,10 @@ def broadcast_tensor(tensor: torch.Tensor, *, src: int = 0) -> torch.Tensor:
 
 
 class _GatherWithGrad(torch.autograd.Function):
-    """All-gather that preserves gradient flow for contrastive loss.
+    """All-gather that keeps gradients flowing for the contrastive loss.
 
-    During forward, gathers tensors from all ranks.  During backward,
-    copies the local rank's gradient slice back to the input.
+    Forward gathers tensors from all ranks. Backward copies the local rank's
+    gradient slice back to the input.
     """
 
     @staticmethod
@@ -192,9 +190,9 @@ def all_gather_tensors(
 
     Args:
         tensor: ``(B, D)`` tensor to gather.
-        with_grad: If ``True``, use a custom autograd function so
-            gradients from negative pairs on remote GPUs flow back
-            to the local model.  Critical for contrastive loss quality.
+        with_grad: If ``True``, use a custom autograd function so gradients
+            from negative pairs on remote GPUs flow back to the local model.
+            The contrastive loss needs this.
 
     Returns:
         ``(B * world_size, D)`` concatenated tensor.
@@ -237,8 +235,8 @@ def gather_string_lists(
 class LogitScaleModule(nn.Module):
     """Wraps the learnable logit-scale parameter as an ``nn.Module``.
 
-    DDP can only wrap ``nn.Module`` instances, not raw ``nn.Parameter``.
-    This thin wrapper lets DDP synchronize the temperature gradient.
+    DDP can only wrap ``nn.Module``, not a raw ``nn.Parameter``. This thin
+    wrapper lets DDP sync the temperature gradient.
 
     Args:
         init_value: Initial value for the log-scale parameter.

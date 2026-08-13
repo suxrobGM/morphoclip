@@ -1,11 +1,11 @@
 # Architecture
 
-Three top-level packages under `src/`: `morphoclip` (the model), `benchmark`
-(evaluation, standalone), `cellclip` (a frozen baseline).
+Three top-level packages live under `src/`: `morphoclip` (the model),
+`benchmark` (evaluation, standalone), and `cellclip` (a frozen baseline).
 
 ## Layers
 
-Each layer may import from the ones below it, never above.
+Each layer may import from the ones below it, never from the ones above.
 
 ```
 morphoclip.config     pydantic + yaml + pathlib only. No repo imports.
@@ -21,105 +21,112 @@ cellclip              morphoclip.{config,data,splits,utils}, parts of morphoclip
                       benchmark.{data,profiles,timelines}
 ```
 
-Two things that look like violations and are not:
+Two imports look like layer violations but are allowed:
 
 - `morphoclip.utils.caching` imports `models.prompts.build_prompts` at module
-  scope and `models.text_encoder` under `TYPE_CHECKING`. Caching text embeddings
-  needs the prompt builder; the encoder itself is only a type.
+  scope, and `models.text_encoder` only under `TYPE_CHECKING`. The text
+  embedding cache needs the prompt builder to do its job; the encoder is only
+  used as a type hint.
 - `cellclip.training` imports `morphoclip.training.{distributed,metrics,optim,tb_logger}`.
-  That is deliberate sharing, not a leak: both trainers use one optimizer and
-  schedule builder, and `optim.split_params` takes `decay_first` so CellCLIP
-  keeps its param-group order and old checkpoints still resume.
+  This sharing is deliberate: both trainers use the same optimizer and schedule
+  builder. `optim.split_params` takes a `decay_first` flag so CellCLIP keeps
+  its original parameter-group order, which lets old checkpoints still resume.
 
-`benchmark` being standalone is enforced by `tests/test_import_graph.py`, which
-imports every module in the package and asserts neither torch nor morphoclip
-appears in `sys.modules`.
+`tests/test_import_graph.py` enforces that `benchmark` stays standalone. It
+imports every module in the package and then checks that neither torch nor
+morphoclip ended up in `sys.modules`.
 
 ## morphoclip.config
 
-One `StrictModel` base (`extra="forbid"`, `validate_assignment=True`) and one
-loader used by both training packages: `load_config(model, path, overrides)`
-resolves `extends`, applies `--set` dotted overrides, then validates.
+One `StrictModel` base class (`extra="forbid"`, `validate_assignment=True`) and
+one loader shared by both training packages: `load_config(model, path,
+overrides)` resolves `extends`, applies `--set` dotted overrides, then
+validates.
 
-`extends` is resolved outside the model, not in a `model_validator`. A
-before-validator has no access to the source path, and re-validating a config
-read back from a checkpoint must not re-resolve `extends`.
+`extends` is resolved by the loader, not inside a pydantic `model_validator`.
+Two reasons: a before-validator cannot see which file the config came from, and
+a config read back out of a checkpoint must not resolve `extends` a second
+time.
 
-`tests/config/goldens/` records what every committed config resolves to.
-A diff there means resolution changed, which is either the point of the change
-or a bug.
+`tests/config/goldens/` stores the fully resolved form of every committed
+config. If a golden changes, config resolution changed. That is either the
+point of your change or a bug.
 
 ## morphoclip.data
 
-- `MetadataIndex` is the only entry point for plate metadata. It returns frozen
-  `PerturbationInfo` objects and has no mutators, which is why the test fixture
-  is session-scoped.
+- `MetadataIndex` is the only way in to plate metadata. It returns frozen
+  `PerturbationInfo` objects and nothing on it mutates state. That is why the
+  test fixture can be session-scoped.
 - `PerturbationType`: `COMPOUND`, `CRISPR`, `ORF`, `NEGCON`, `POSCON`, `UNKNOWN`.
-- `MorphoCLIPDataset` samples a *well*: every site in the well stacked into one
-  tensor, paired with the well's text. `preload(indices=...)` is partial, so
-  `_load_tensor` checks per path rather than treating a non-empty cache as full.
-- `config.py` owns `configs/dataset.yml`. Nothing else parses it.
-- `pipeline.py` is the unattended extraction loop; `progress.py` is its
-  crash-safe resume record.
+- One sample from `MorphoCLIPDataset` is a *well*: all of its sites stacked
+  into one tensor, paired with the well's text. `preload(indices=...)` can load
+  only part of the dataset, so `_load_tensor` checks each path individually
+  instead of assuming a non-empty cache is complete.
+- `config.py` owns `configs/dataset.yml`. Nothing else parses that file.
+- `pipeline.py` is the unattended feature-extraction loop. `progress.py` is
+  its resume record, written so a crash can pick up where it left off.
 
 ## morphoclip.models
 
-- `MorphoCLIPTextEncoder`: frozen ModernBERT plus a trainable `ProjectionHead`.
-  Do not unfreeze BERT.
+- `MorphoCLIPTextEncoder`: frozen ModernBERT plus a trainable
+  `ProjectionHead`. Do not unfreeze BERT.
 - `ProjectionHead`: Linear, LayerNorm, GELU, Dropout, Linear, L2-normalize.
   The output is always L2-normalized.
-- `MorphoCLIPImageEncoder` aggregates `(sites, channels, 1024)` into one
-  512-d vector. Four aggregators: `ccf-mean` (default), `meanpool-mean`,
-  `ccf-attn`, `wellformer`. Sites are an unordered bag, so no aggregator may
-  encode site order; channels are ordered, and every aggregator except
+- `MorphoCLIPImageEncoder` turns `(sites, channels, 1024)` into one 512-d
+  vector. Four aggregators: `ccf-mean` (default), `meanpool-mean`, `ccf-attn`,
+  `wellformer`. Sites have no meaningful order, so no aggregator may depend on
+  site order. Channels do have a fixed order, and every aggregator except
   `meanpool` adds a learned per-channel embedding.
 - `prompts.py` builds prompt strings from a dict or a `PerturbationInfo`.
   Missing fields become "unknown". There is no `PromptBuilder` class.
 
 ## morphoclip.splits
 
-Dataset splitting lives here rather than in `benchmark`, which is what keeps
+Splitting lives here, not in `benchmark`. Moving it out is what keeps
 `benchmark` free of torch.
 
-`strategies.py` holds the strategy table; `api.py` is the entry point
-(`create_splits`, `build_split_groups`); `contexts.py` reads the CPJUMP1
-reference metadata; `manifest.py` writes the split manifest the benchmark reads.
+`strategies.py` holds the table of split strategies. `api.py` is the entry
+point (`create_splits`, `build_split_groups`). `contexts.py` reads the CPJUMP1
+reference metadata. `manifest.py` writes the split manifest that the benchmark
+reads.
 
-`build_split_groups` raises for a strategy with no grouping notion rather than
-returning `{}`: a grouped consumer that silently receives zero groups falls back
-to ungrouped behaviour instead of failing at config-load time.
+`build_split_groups` raises for a strategy that has no notion of groups,
+instead of returning `{}`. If it returned an empty dict, a grouped consumer
+would silently run ungrouped instead of failing when the config loads.
 
-The `pert_type` bucketing is a deliberate stable md5 on the sample id. Changing
-it repartitions every split already on disk.
+The `pert_type` bucketing is a stable md5 hash on the sample id, on purpose.
+Changing it moves every sample to a different bucket, which invalidates every
+split already saved on disk.
 
 ## benchmark
 
-- `profiles.py` is the on-disk contract: one filename template, and
-  `metadata_columns`/`feature_columns` as exact complements, so every column
-  lands in exactly one set.
-- `data.py` loads and filters profiles; `metrics.py` computes mAP;
-  `stable_*.py` is the CPJUMP1 run against the pinned copairs commit
-  `880f22a`. "Stable" means the old copairs API, not stability of results.
-- `run_with_unpaired_guard` forwards its callee's signature with a ParamSpec.
-  It swallows only copairs' `UnpairedException` and the literal "dict_pairs
-  empty"; everything else re-raises. Widening it to `except Exception` would
-  turn a broken call site into six all-zero result CSVs.
-- The harness is not reproducible run to run. Only replicability
-  `mean_average_precision` is deterministic; fraction-retrieved varies because
-  the matching population is filtered by a random permutation null.
+- `profiles.py` defines the on-disk contract: one filename template, and
+  `metadata_columns`/`feature_columns` defined as exact complements so every
+  column belongs to exactly one of the two sets.
+- `data.py` loads and filters profiles. `metrics.py` computes mAP. The
+  `stable_*.py` modules run the CPJUMP1 evaluation against the pinned copairs
+  commit `880f22a`. "Stable" means the old copairs API, not stable results.
+- `run_with_unpaired_guard` keeps its callee's signature via a ParamSpec. It
+  catches only copairs' `UnpairedException` and the literal "dict_pairs empty"
+  message; everything else re-raises. Do not widen it to `except Exception`:
+  that would turn a broken call site into six result CSVs full of zeros.
+- The harness gives different numbers on every run. Only the replicability
+  `mean_average_precision` is deterministic. Fraction-retrieved varies because
+  the set of matched pairs is filtered by a random permutation test.
 
 ## cellclip
 
-A frozen baseline. Results are in `report/`; keep it runnable, do not extend it.
-`cellclip/model.py`'s `QuickGELU`, `ResidualAttentionBlock` and `LayerNorm` are
-the OpenAI-CLIP contract the published checkpoint depends on, and
-`checkpoint.py` hard-fails on a state-dict mismatch. Do not touch them.
-Do not merge CellCLIP components into `morphoclip.models`.
+A frozen baseline. Its results are recorded in `report/`. Keep it runnable,
+but do not extend it. In `cellclip/model.py`, the `QuickGELU`,
+`ResidualAttentionBlock` and `LayerNorm` classes match the OpenAI-CLIP
+implementation that the published checkpoint was trained with, and
+`checkpoint.py` fails hard on any state-dict mismatch. Do not touch them.
+Do not move CellCLIP components into `morphoclip.models`.
 
 ## Baselines
 
-External repos are not vendored. Reference them by link:
+External repos are not copied into this one. Reference them by link:
 [CellCLIP](https://github.com/suinleelab/CellCLIP),
 [Chandrasekaran 2024 CPJUMP1](https://github.com/jump-cellpainting/2024_Chandrasekaran_NatureMethods_CPJUMP1).
-The CPJUMP1 reference metadata the benchmark needs is first-party under
-`data/reference/cpjump1/`.
+The CPJUMP1 reference metadata the benchmark needs is committed to this repo
+under `data/reference/cpjump1/`.

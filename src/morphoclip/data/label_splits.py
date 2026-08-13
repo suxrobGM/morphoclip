@@ -1,9 +1,8 @@
 """Deterministic train/test label splitting from a labels.csv.
 
-Used by the ``morphoclip split`` command to turn a plate+well ``labels.csv`` into
-train/test label tables. This is distinct from :mod:`morphoclip.data.splits`,
-which splits a :class:`MorphoCLIPDataset` into torch ``Subset`` objects for
-training; here we produce deterministic per-group sample keys from a CSV.
+Backs the ``morphoclip split`` command. Not :mod:`morphoclip.splits`, which
+splits a dataset into torch ``Subset`` objects for training: this module only
+turns a plate+well ``labels.csv`` into deterministic per-group sample keys.
 """
 
 from pathlib import Path

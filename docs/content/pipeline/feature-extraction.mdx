@@ -3,9 +3,9 @@ import { Callout } from "nextra/components";
 # Feature Extraction Pipeline
 
 <Callout type="info" emoji="💡">
-  **In Plain English:** Before training, we need to convert raw microscopy images into compact
+  **In Plain English:** Before training, raw microscopy images are converted into compact
   numerical representations (features). This pipeline runs each image through a pre-trained vision
-  AI (DINOv3) that "summarizes" each image into a list of ~1000 numbers. These features are saved to
+  model (DINOv3) that summarizes it as a list of ~1000 numbers. The features are saved to
   disk so training can iterate quickly without re-processing images. See the
   [Glossary](/glossary) for term definitions.
 </Callout>

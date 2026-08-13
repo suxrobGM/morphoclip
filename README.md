@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">MorphoCLIP</h1>
   <p align="center">
-    AI-powered matching of cell microscopy images with text descriptions of biological treatments
+    Matching cell microscopy images to text descriptions of biological treatments
     <br />
     <a href="https://morphoclip.suxrobgm.net"><strong>Read the documentation &raquo;</strong></a>
     <br />
@@ -18,19 +18,19 @@
 
 ## Overview
 
-MorphoCLIP uses AI to connect microscopy images of cells with text descriptions of the treatments applied to them. Given an image of cells treated with a drug or genetic modification, MorphoCLIP can identify what treatment was applied - by learning to match visual patterns in cell images with their textual descriptions.
+MorphoCLIP matches microscopy images of cells to text descriptions of the treatments applied to them. Given an image of cells treated with a drug or a genetic modification, it can identify the treatment. It does this by learning to align visual patterns in cell images with their text descriptions.
 
-It combines three key ideas that no prior method unifies:
+It combines three ideas that no prior method uses together:
 
-- **Text supervision** - uses natural language descriptions to guide learning
-- **Batch correction** - removes unwanted variation between experimental runs
-- **Gene-inclusive training** - learns from both drug treatments and genetic modifications together
+- **Text supervision**: natural language descriptions guide learning
+- **Batch correction**: unwanted variation between experimental runs is removed
+- **Gene-inclusive training**: drug treatments and genetic modifications are learned together
 
 We evaluate on the [CPJUMP1 benchmark](https://github.com/jump-cellpainting/2024_Chandrasekaran_NatureMethods_CPJUMP1) (Chandrasekaran et al., 2024), where existing methods detect only 5-25% of expected drug-gene matches.
 
 ### How does MorphoCLIP differ from CellCLIP?
 
-[CellCLIP](https://github.com/suinleelab/CellCLIP) (Lu et al., NeurIPS 2025) is the closest prior work - it also uses text-guided learning for cell images. MorphoCLIP builds on CellCLIP's approach but addresses three key limitations:
+[CellCLIP](https://github.com/suinleelab/CellCLIP) (Lu et al., NeurIPS 2025) is the closest prior work. It also uses text-guided learning for cell images. MorphoCLIP builds on it and addresses three limitations:
 
 | | CellCLIP | MorphoCLIP |
 |---|---|---|

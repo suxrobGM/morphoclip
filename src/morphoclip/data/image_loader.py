@@ -218,22 +218,21 @@ def prepare_channels_for_dino(
     site_tensor: torch.Tensor,
     apply_imagenet_norm: bool = False,
 ) -> torch.Tensor:
-    """Prepare multi-channel site tensor for per-channel DINOv3 input.
+    """Prepare a multi-channel site tensor for per-channel DINOv3 input.
 
-    DINOv3 expects 3-channel (RGB) input. Each Cell Painting channel is
-    replicated to 3 channels to form a pseudo-RGB image.
+    DINOv3 expects RGB. Each Cell Painting channel is replicated to 3
+    channels, giving one pseudo-RGB image per channel.
 
     Args:
-        site_tensor: Tensor of shape ``(C, H, W)`` where ``C`` is the
-            number of fluorescence channels (typically 5). Values should
-            be in ``[0, 1]``.
+        site_tensor: Tensor of shape ``(C, H, W)``, ``C`` fluorescence
+            channels (typically 5), values in ``[0, 1]``.
         apply_imagenet_norm: If ``True``, apply ImageNet normalization
-            after replication. The ``AutoImageProcessor`` usually handles
-            this, so this is ``False`` by default.
+            after replication. Off by default because the
+            ``AutoImageProcessor`` usually does it.
 
     Returns:
-        Tensor of shape ``(C, 3, H, W)`` — a batch of ``C`` pseudo-RGB
-        images, one per fluorescence channel.
+        Tensor of shape ``(C, 3, H, W)``: one pseudo-RGB image per
+        fluorescence channel.
     """
     num_channels = site_tensor.shape[0]
     # (C, H, W) -> (C, 1, H, W) -> (C, 3, H, W)

@@ -176,17 +176,17 @@ def load_official_split_contexts() -> dict[tuple[str, str], OfficialSplitContext
 def load_plate_conditions() -> dict[str, str]:
     """Map each plate barcode to its experimental condition key.
 
-    The condition is ``"<cell_line>|<experiment_type>|<timepoint>"``, which is
-    what makes two plates replicates of each other. Cross-Well Alignment groups
-    plates by this key so it removes replicate-to-replicate drift without
-    deleting the condition-level signal the text prompts encode.
+    The key is ``"<cell_line>|<experiment_type>|<timepoint>"``. Plates that
+    share it are replicates. Cross-Well Alignment groups plates by this key,
+    so it removes drift between replicate plates without deleting the
+    condition signal the text prompts encode.
 
-    Plates absent from the official CSV (the non-benchmark-eligible conditions:
+    Plates missing from the official CSV (the ones the benchmark cannot use:
     non-standard seeding density, antibiotics present, compound plates on the
     Cas9 line) fall back to the experiment metadata TSV, keyed on every
-    condition axis it records. The two sources deliberately produce different
-    key shapes: replicate groups never straddle the sources, and distinct
-    shapes cannot collide into one group by accident.
+    condition column it records. The two sources give keys of different
+    shapes on purpose: a replicate group can never mix plates from both, and
+    the shapes cannot collide into one group by accident.
 
     Returns:
         Plate barcode to condition key.

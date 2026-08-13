@@ -29,7 +29,6 @@ def build_id_labels(metadata_dir: Path) -> dict[str, str]:
     """Map perturbation_id (broad_sample / negcon) -> human-readable label."""
     labels: dict[str, str] = {}
 
-    # Compounds
     compound_path = metadata_dir / "JUMP-Target-1_compound_metadata_targets.tsv"
     if not compound_path.exists():
         compound_path = metadata_dir / "JUMP-Target-1_compound_metadata.tsv"
@@ -43,7 +42,6 @@ def build_id_labels(metadata_dir: Path) -> dict[str, str]:
             name = str(row.get(name_col, pid)).strip()
             labels[pid] = f"{name} (compound)"
 
-    # CRISPR
     crispr_path = metadata_dir / "JUMP-Target-1_crispr_metadata.tsv"
     if crispr_path.exists():
         df = pd.read_csv(crispr_path, sep="\t")
@@ -54,7 +52,6 @@ def build_id_labels(metadata_dir: Path) -> dict[str, str]:
             gene = str(row.get("gene", "")).strip() or pid
             labels[pid] = f"{gene} (crispr)"
 
-    # ORF
     orf_path = metadata_dir / "JUMP-Target-1_orf_metadata.tsv"
     if orf_path.exists():
         df = pd.read_csv(orf_path, sep="\t")
@@ -65,7 +62,6 @@ def build_id_labels(metadata_dir: Path) -> dict[str, str]:
             gene = str(row.get("gene", "")).strip() or pid
             labels[pid] = f"{gene} (orf)"
 
-    # Neg controls: use a generic label if present
     labels.setdefault("negcon", "negcon (control)")
     return labels
 
@@ -86,7 +82,6 @@ def main(
     id_labels = build_id_labels(METADATA_DIR)
     pretty = [id_labels.get(pid, pid) for pid in ids_small]
 
-    # Raw BERT similarities
     emb_raw_norm = F.normalize(emb_raw_small, dim=-1)
     sim_raw = emb_raw_norm @ emb_raw_norm.T
 

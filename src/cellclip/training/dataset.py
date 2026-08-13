@@ -248,10 +248,9 @@ def subset_from_manifest(
         if (extract_plate_barcode(plate), well.upper()) in keys
     ]
     if unique_perturbations:
-        # Upstream CellCLIP strips the last view token from SAMPLE_KEY when
-        # `--unique` is enabled. The local feature cache is already one bag per
-        # well, so the upstream-faithful behavior is simply to preserve unique
-        # well entries and avoid any extra perturbation-level collapsing.
+        # Upstream `--unique` strips the last view token from SAMPLE_KEY. Our
+        # cache is already one bag per well, so deduplicating well entries
+        # matches it; no perturbation-level collapsing.
         indices = list(dict.fromkeys(indices))
     if max_wells is not None:
         indices = indices[:max_wells]

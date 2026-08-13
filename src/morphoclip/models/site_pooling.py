@@ -1,4 +1,4 @@
-"""Gated-attention MIL pooling over the sites of a well.
+"""Gated-attention pooling over the sites of a well.
 
 Sites in a well are an unordered bag, and some are out of focus, empty, or
 off-target. Masked mean pooling weights them all equally; gated attention
@@ -13,7 +13,7 @@ ATTENTION_HIDDEN_DIM = 256
 
 
 class AttentionSitePooling(nn.Module):
-    """Gated-attention MIL pooling over the site axis.
+    """Gated-attention pooling over the site axis.
 
     Computes ``a_i = w2 @ (tanh(W1 h_i) * sigmoid(Wg h_i))`` for each site,
     softmaxes the scores over real (unpadded) sites, and returns the weighted

@@ -29,4 +29,4 @@ class ProjectionHead(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         projected = self.net(x)  # [B, output_dim]
-        return F.normalize(projected, dim=-1)  # L2 normalize
+        return F.normalize(projected, dim=-1)

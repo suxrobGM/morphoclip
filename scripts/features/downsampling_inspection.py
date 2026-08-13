@@ -287,7 +287,7 @@ def main(
     target_size: Annotated[int, typer.Option(help="Target square size for downsampling.")] = 384,
     channels: Annotated[
         list[int], typer.Option(help="Channels to sample from. Defaults to fluorescence 1-5.")
-    ] = list(FLUORESCENCE_CHANNELS),  # noqa: B006 — Typer copies list defaults per call
+    ] = list(FLUORESCENCE_CHANNELS),  # noqa: B006 - Typer copies list defaults per call
     seed: Annotated[int, typer.Option(help="Random seed used when sampling demo images.")] = 56,
     mode: Annotated[
         InterpMode, typer.Option(help="Interpolation mode for downsampling and reconstruction.")

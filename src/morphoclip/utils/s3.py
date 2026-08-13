@@ -103,7 +103,7 @@ def sync_s3_path(
     Args:
         s3_uri: Source S3 URI (e.g. ``s3://bucket/prefix``).
         dest: Local directory to sync files into.
-        backend: Transfer tool — ``"awscli"`` or ``"rclone"``.
+        backend: Transfer tool, ``"awscli"`` or ``"rclone"``.
         no_sign_request: If ``True``, pass ``--no-sign-request`` to the
             AWS CLI (for public buckets). Ignored when using rclone.
         rclone_remote: Rclone remote specification. Defaults to an

@@ -65,7 +65,7 @@ def resolve_export_settings(
         project_root: Root for resolving relative paths.
         benchmark_config: The ``benchmark`` YAML section (timeline/profiles fallbacks).
         export_config: The ``cellclip_export`` YAML section.
-        context: ``"exporter"`` or ``"pipeline"`` — used in the ignored-flag warnings.
+        context: ``"exporter"`` or ``"pipeline"``, used in the ignored-flag warnings.
         default_device: Device fallback when neither the override nor config sets one
             (export uses ``"auto"``; pipeline uses the dataset extraction device).
 

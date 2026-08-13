@@ -4,9 +4,9 @@ import { Callout } from "nextra/components";
 
 <Callout type="info" emoji="💡">
   **In Plain English:** MorphoCLIP learns to match microscopy images with text descriptions of
-  biological treatments. It takes cell images processed through a vision AI (DINOv3) and text
-  descriptions processed through a language AI (ModernBERT), then trains small "adapter" networks to
-  place matching image-text pairs near each other in a shared mathematical space. See the
+  biological treatments. It takes cell images encoded by a vision model (DINOv3) and text
+  descriptions encoded by a language model (ModernBERT), then trains small "adapter" networks to
+  place matching image-text pairs near each other in a shared space. See the
   [Glossary](/glossary) for term definitions.
 </Callout>
 
@@ -69,11 +69,11 @@ IMAGE BRANCH                              TEXT BRANCH
 
 Aggregates 5 per-channel CLS tokens into a single image representation per site.
 
-**Why needed:** DINOv3 processes each of the 5 fluorescence channels independently (replicated to pseudo-RGB). The CrossChannelFormer learns cross-channel interactions — e.g., how mitochondrial morphology relates to actin cytoskeleton structure — producing one unified 1024-d token per site.
+**Why needed:** DINOv3 processes each of the 5 fluorescence channels independently (replicated to pseudo-RGB). The CrossChannelFormer learns cross-channel interactions (for example, how mitochondrial shape relates to actin structure) and produces one 1024-d token per site.
 
 ```text
-Input:  (batch, 5, 1024)    — 5 channel CLS tokens
-Output: (batch, 1024)       — single aggregated representation
+Input:  (batch, 5, 1024)    - 5 channel CLS tokens
+Output: (batch, 1024)       - single aggregated representation
 ```
 
 **Design:**
@@ -86,7 +86,7 @@ Output: (batch, 1024)       — single aggregated representation
 
 **Alternatives considered:**
 
-- Simple mean pooling (no learnable cross-channel interaction — baseline ablation)
+- Simple mean pooling (no learnable cross-channel interaction; baseline ablation)
 - Single attention layer (fewer params but may underfit)
 
 ### 2. Image Projection Head (`src/morphoclip/models/image_projection_head.py`)
@@ -94,8 +94,8 @@ Output: (batch, 1024)       — single aggregated representation
 Maps aggregated image representation to shared contrastive space.
 
 ```
-Input:  (batch, 1024)       — CrossChannelFormer output
-Output: (batch, 512)        — L2-normalized embedding
+Input:  (batch, 1024)       - CrossChannelFormer output
+Output: (batch, 512)        - L2-normalized embedding
 ```
 
 **Design:** Reuse existing `ProjectionHead` class with `input_dim=1024`:
@@ -110,11 +110,11 @@ Each well has multiple imaging sites (up to 9). Sites must be aggregated into a 
 
 **Options (in order of simplicity):**
 
-1. **Mean pooling** — average site embeddings (use `site_mask` from collate_fn to exclude padding)
-2. **Attention pooling** — learnable weighted average over sites
-3. **Max pooling** — element-wise max
+1. **Mean pooling**: average site embeddings (use `site_mask` from collate_fn to exclude padding)
+2. **Attention pooling**: learnable weighted average over sites
+3. **Max pooling**: element-wise max
 
-**Recommendation:** Start with masked mean pooling. It's simple, proven, and the site-level variation within a well is small.
+**Recommendation:** Start with masked mean pooling. It is simple, proven, and site-level variation within a well is small.
 
 **Implemented aggregators** (`model.aggregator` in the training config, channel step + site step):
 
@@ -131,7 +131,7 @@ embedding, so its output is invariant to site order.
 
 ### 4. CWCL Loss (`src/morphoclip/training/losses.py`)
 
-**Continuously Weighted Contrastive Loss** — handles soft positives (multiple wells with the same perturbation).
+**Continuously Weighted Contrastive Loss**: handles soft positives (multiple wells with the same perturbation).
 
 Standard CLIP uses hard positive pairs (1 image ↔ 1 text). In Cell Painting, many wells share the same perturbation, creating multiple valid positives per text description. CWCL assigns continuous similarity weights instead of binary labels.
 
@@ -145,7 +145,7 @@ Output: scalar loss
 1. Compute cosine similarity matrix: `S = image_embeds @ text_embeds.T` → `(B, B)`
 2. Build soft label matrix `W` where `W[i,j]` reflects how similar perturbation_i is to perturbation_j:
    - Same `broad_sample` → weight 1.0
-   - Same target gene (different compound) → weight 0.5–0.8
+   - Same target gene (different compound) → weight 0.5 to 0.8
    - Different perturbation → weight 0.0
 3. Temperature-scaled cross-entropy with soft labels:
 
@@ -161,9 +161,9 @@ Output: scalar loss
 
 ### 5. CWA Batch Correction (`src/morphoclip/training/batch_correction.py`)
 
-**Cross-Well Alignment** — removes replicate-to-replicate plate drift from image embeddings while preserving condition-level signal.
+**Cross-Well Alignment**: removes replicate-to-replicate plate drift from image embeddings while keeping condition-level signal.
 
-Cell Painting images have significant batch effects (plate-to-plate variation from staining, imaging conditions). But in CPJUMP1 a plate is nearly one condition (one cell line, one modality, one timepoint), so naively subtracting the full per-plate mean deletes exactly the biology the text prompts describe. CWA therefore corrects each plate only relative to its replicate plates.
+Cell Painting images have strong batch effects (plate-to-plate variation from staining and imaging conditions). But in CPJUMP1 a plate is nearly one condition (one cell line, one modality, one timepoint), so subtracting the full per-plate mean deletes exactly the biology the text prompts describe. CWA therefore corrects each plate only relative to its replicate plates.
 
 **Algorithm:**
 
@@ -189,11 +189,11 @@ class MorphoCLIPImageEncoder(nn.Module):
     def forward(self, features, site_mask):
         """
         Args:
-            features: (B, max_sites, 5, 1024) — padded DINOv3 CLS tokens
-            site_mask: (B, max_sites) — True for real sites
+            features: (B, max_sites, 5, 1024) - padded DINOv3 CLS tokens
+            site_mask: (B, max_sites) - True for real sites
 
         Returns:
-            (B, 512) — L2-normalized well embeddings
+            (B, 512) - L2-normalized well embeddings
         """
         B, S, C, D = features.shape
         # Merge batch and site dims
@@ -297,9 +297,9 @@ for batch in train_loader:
 
 **Config variants:**
 
-- `configs/train/base.yaml` — default config (`aggregator: ccf-mean`, batch_size=512)
-- `configs/train/mean_pool.yaml` — `aggregator: meanpool-mean`, replaces CCF with simple mean pooling (ablation)
-- `configs/train/ddp.yaml` — multi-GPU DDP (batch_size=128/GPU, num_workers=4)
+- `configs/train/base.yaml`: default config (`aggregator: ccf-mean`, batch_size=512)
+- `configs/train/mean_pool.yaml`: `aggregator: meanpool-mean`, replaces CCF with simple mean pooling (ablation)
+- `configs/train/ddp.yaml`: multi-GPU DDP (batch_size=128/GPU, num_workers=4)
 
 ### Hardware Budget (RTX 5080, 16 GB VRAM)
 
@@ -351,11 +351,11 @@ Given an image embedding, retrieve the correct text description (and vice versa)
 
 Build the minimum viable training loop with standard CLIP loss.
 
-1. **CrossChannelFormer** — 2-layer transformer, mean-pool aggregation
-2. **Image encoder wrapper** — CrossChannelFormer + ProjectionHead + site mean-pool
-3. **Standard InfoNCE loss** — symmetric CLIP loss (no soft labels yet)
-4. **Training script** — basic loop with AdamW, cosine LR, early stopping
-5. **Evaluation** — Recall@1/5/10, mAP on validation set
+1. **CrossChannelFormer**: 2-layer transformer, mean-pool aggregation
+2. **Image encoder wrapper**: CrossChannelFormer + ProjectionHead + site mean-pool
+3. **Standard InfoNCE loss**: symmetric CLIP loss (no soft labels yet)
+4. **Training script**: basic loop with AdamW, cosine LR, early stopping
+5. **Evaluation**: Recall@1/5/10, mAP on validation set
 
 **Goal:** Verify the pipeline trains end-to-end and embeddings are meaningful.
 
@@ -363,19 +363,19 @@ Build the minimum viable training loop with standard CLIP loss.
 
 Add the MorphoCLIP-specific components.
 
-6. **CWCL loss** — soft positive weighting based on perturbation identity
-7. **CWA batch correction** — condition-relative plate offsets during training
-8. **Perturbation-aware evaluation** — NSC, cross-modality matching
+6. **CWCL loss**: soft positive weighting based on perturbation identity
+7. **CWA batch correction**: condition-relative plate offsets during training
+8. **Perturbation-aware evaluation**: NSC, cross-modality matching
 
 **Goal:** Match or exceed CellCLIP performance on perturbation retrieval.
 
 ### Phase 3: Ablations
 
-9. **LoRA fine-tuning** — rank 8–16 on DINOv3, using cached resized tensors
-10. **CrossChannelFormer depth** — 1 vs 2 vs 4 layers
-11. **Site aggregation** — mean vs attention pooling
-12. **Text granularity** — full vs name_target vs name_only prompts
-13. **Split strategy** — perturbation vs plate-level held-out
+9. **LoRA fine-tuning**: rank 8 to 16 on DINOv3, using cached resized tensors
+10. **CrossChannelFormer depth**: 1 vs 2 vs 4 layers
+11. **Site aggregation**: mean vs attention pooling
+12. **Text granularity**: full vs name_target vs name_only prompts
+13. **Split strategy**: perturbation vs plate-level held-out
 
 ---
 
@@ -403,24 +403,24 @@ scripts/
 
 ## Key Design Decisions
 
-1. **Pre-computed features, not end-to-end** — DINOv3 is frozen, so we extract and cache CLS tokens once (~3 GB/plate). Training iterates over `.pt` files, not raw images. This enables ~3-5 min/epoch on a single GPU.
+1. **Pre-computed features, not end-to-end.** DINOv3 is frozen, so CLS tokens are extracted and cached once (~3 GB/plate). Training iterates over `.pt` files, not raw images. That is what makes a ~3-5 min epoch possible on a single GPU.
 
-2. **Both text and image projection heads are trainable** — Unlike CellCLIP which only trains the text side, MorphoCLIP trains both projection heads. The CrossChannelFormer is also trainable.
+2. **Both text and image projection heads are trainable.** CellCLIP trains only the text side; MorphoCLIP trains both projection heads, and the CrossChannelFormer.
 
-3. **Cached 768-d BERT features** — Raw BERT outputs are cached and projected during training. This means the text ProjectionHead can be re-trained without re-running BERT (~10x speedup).
+3. **Cached 768-d BERT features.** Raw BERT outputs are cached and projected during training, so the text ProjectionHead can be re-trained without re-running BERT (~10x speedup).
 
-4. **Multi-perturbation training** — MorphoCLIP trains on compounds AND genetic perturbations (CRISPR + ORF) jointly, unlike CellCLIP which trains only on compounds. This enables cross-modality retrieval.
+4. **Multi-perturbation training.** MorphoCLIP trains on compounds and genetic perturbations (CRISPR + ORF) jointly; CellCLIP trains only on compounds. This enables cross-modality retrieval.
 
-5. **Stratified mixed splits** — The `pert_type` strategy distributes all perturbation types (compound, CRISPR, ORF) across train/val/test by hashing `broad_sample` IDs. This ensures the model sees every modality during training and eval loss is comparable to train loss. Wells sharing the same perturbation always land in the same split. Uses only local metadata — no external submodules needed.
+5. **Stratified mixed splits.** The `pert_type` strategy distributes all perturbation types (compound, CRISPR, ORF) across train/val/test by hashing `broad_sample` IDs. The model sees every modality during training, and eval loss is comparable to train loss. Wells sharing the same perturbation always land in the same split. Only local metadata is needed, no external submodules.
 
-6. **Well-level samples** — Each training sample is a well (multiple sites), not a single site. Site embeddings are mean-pooled. This reduces noise and matches the biological unit of interest.
+6. **Well-level samples.** Each training sample is a well (multiple sites), not a single site. Site embeddings are mean-pooled. This reduces noise and matches the biological unit of interest.
 
 ---
 
 ## References
 
-- **CellCLIP** (Ye et al., 2024) — Text-supervised contrastive learning for Cell Painting, compounds only
-- **CWCL** — Continuously Weighted Contrastive Learning for soft-positive handling
-- **CWA** — Cross-Well Alignment for batch effect correction
-- **DINOv3** — Self-supervised ViT for image feature extraction
-- **CPJUMP1** — Joint Undertaking in Morphological Profiling pilot dataset (56 plates)
+- **CellCLIP** (Ye et al., 2024): text-supervised contrastive learning for Cell Painting, compounds only
+- **CWCL**: Continuously Weighted Contrastive Learning for soft-positive handling
+- **CWA**: Cross-Well Alignment for batch effect correction
+- **DINOv3**: self-supervised ViT for image feature extraction
+- **CPJUMP1**: Joint Undertaking in Morphological Profiling pilot dataset (56 plates)

@@ -21,7 +21,7 @@ def split(
     ] = 0.75,
     group_columns: Annotated[
         list[str], typer.Option(help="Grouping columns before per-group well split (repeatable).")
-    ] = ["batch"],  # noqa: B006 — Typer materializes list defaults per invocation
+    ] = ["batch"],  # noqa: B006 (Typer materializes list defaults per invocation)
 ) -> None:
     """Create a deterministic train/test split from a labels.csv (plate+well key)."""
     full_label_df = load_and_prepare_labels(label_file)

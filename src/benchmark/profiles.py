@@ -1,9 +1,9 @@
 """The on-disk profile contract: where a plate's CSV lives and which columns are features.
 
-Both exporters and the benchmark harness read and write the same layout, so it is
-defined once here. Four predicates used to decide the metadata/feature split and
-they disagreed; :func:`metadata_columns` and :func:`feature_columns` are exact
-complements, so every column lands in exactly one set.
+Exporters and the benchmark harness share this layout, so it is defined once here.
+Four separate predicates used to decide the metadata/feature split, and they disagreed.
+Now :func:`metadata_columns` and :func:`feature_columns` are exact complements, so
+every column lands in exactly one set.
 """
 
 from pathlib import Path

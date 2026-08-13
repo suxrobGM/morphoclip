@@ -1,9 +1,8 @@
 """Text embedding precomputation and caching utilities.
 
-Provides functions to pre-encode all perturbation text once with the frozen
-BioClinical ModernBERT backbone, cache the results, and load them at training
-time.  The projection head is NOT included in cached features so that it can
-be retrained without invalidating the cache.
+Pre-encodes all perturbation text once with the frozen BioClinical ModernBERT
+backbone, caches the result, and loads it at training time. The projection
+head is NOT part of the cache, so it can be retrained without re-encoding.
 """
 
 from pathlib import Path
@@ -43,11 +42,11 @@ def _precompute_raw_text_embeddings(
     device: str = "cuda",
     show_progress: bool = True,
 ) -> torch.Tensor:
-    """Pre-compute raw BERT features (768-d) -- no projection head.
+    """Pre-compute raw 768-d BERT features, without the projection head.
 
     These are deterministic and stay valid when the projection head is
-    retrained.  During training, run ``encoder.projection(cached[k])``
-    to get 512-d embeddings.
+    retrained. At training time, run ``encoder.projection(cached[k])`` to get
+    512-d embeddings.
     """
     encoder = encoder.to(device)
     encoder.eval()
@@ -83,9 +82,9 @@ def precompute_and_cache_text_embeddings(
 ) -> dict:
     """Pre-compute raw BERT features and save to a single file.
 
-    Caches BERT output only -- NOT the projection head.  At training time
-    run ``encoder.projection(cache["embeddings"][k].unsqueeze(0))`` to get
-    512-d embeddings.
+    Caches BERT output only, not the projection head. At training time run
+    ``encoder.projection(cache["embeddings"][k].unsqueeze(0))`` to get 512-d
+    embeddings.
 
     Saves a dict with:
         embeddings:       ``[N, 768]`` tensor (raw BERT [CLS])

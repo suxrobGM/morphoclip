@@ -1,11 +1,9 @@
-"""PyTorch Dataset classes for MorphoCLIP training.
+"""PyTorch datasets for MorphoCLIP training.
 
-Provides Dataset implementations for pre-extracted DINOv3 features
-(default training path) and resized image tensors (LoRA experiments).
-Handles well-level aggregation and text description pairing.
-
-Each training sample is a *well*: all imaging sites within the well are
-stacked into a single tensor and paired with the well's text description.
+Each training sample is a well: every imaging site in the well stacked into
+one tensor, paired with the well's text description. Features mode reads
+pre-extracted DINOv3 features (the default training path); tensors mode reads
+resized image tensors (LoRA experiments).
 """
 
 import logging
@@ -64,9 +62,8 @@ class MorphoCLIPSample:
 class MorphoCLIPDataset(Dataset[MorphoCLIPSample]):
     """Dataset for MorphoCLIP contrastive training.
 
-    Loads pre-extracted DINOv3 features or resized image tensors,
-    paired with text descriptions from the metadata index.
-    Each sample is a well: all sites within the well are aggregated.
+    Each sample is a well: DINOv3 features or image tensors for every site,
+    plus a text description looked up in the metadata index.
 
     Usage::
 
@@ -114,11 +111,11 @@ class MorphoCLIPDataset(Dataset[MorphoCLIPSample]):
         self._pert_types = pert_types
         self._max_sites = max_sites_per_well
 
-        # Internal index: list of (plate_barcode, well, [site_paths])
+        # One entry per well: (plate_barcode, well, site_paths)
         self._index: list[tuple[str, str, list[Path]]] = []
         self._build_index()
 
-        # In-memory cache: path -> tensor (populated by preload())
+        # Filled by preload()
         self._cache: dict[Path, torch.Tensor] = {}
 
     def _build_index(self) -> None:
@@ -163,8 +160,8 @@ class MorphoCLIPDataset(Dataset[MorphoCLIPSample]):
         """Load feature tensors into memory for faster training.
 
         Args:
-            indices: If provided, only preload wells at these dataset
-                indices (e.g. train+val).  Otherwise preloads everything.
+            indices: Preload only these dataset indices (e.g. train+val).
+                Default: everything.
         """
         if self._cache:
             return

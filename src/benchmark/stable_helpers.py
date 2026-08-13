@@ -152,11 +152,14 @@ def apply_batch_correction(
 def run_with_unpaired_guard[**P](
     func: Callable[P, pd.DataFrame], *args: P.args, **kwargs: P.kwargs
 ) -> pd.DataFrame:
-    """Run an evaluation function and suppress copairs UnpairedException.
+    """Run an evaluation function, swallowing only copairs' UnpairedException.
 
-    ``P`` is not decoration: it forwards *func*'s signature so a stale keyword
-    at a call site is a type error. An untyped ``**kwargs: Any`` hid exactly
-    that bug through a whole refactor.
+    Only ``UnpairedException`` and the literal "dict_pairs empty" are swallowed;
+    everything else re-raises. Do not widen the except clause: that would turn a
+    broken call site into six all-zero result CSVs instead of a crash.
+
+    ``P`` forwards *func*'s signature, so a stale keyword at a call site is a
+    type error. An untyped ``**kwargs: Any`` hid exactly that bug once.
     """
     try:
         return func(*args, **kwargs)

@@ -1,19 +1,13 @@
 #!/usr/bin/env python
 """Generate label rows from CPJUMP image folders.
 
-Behavior:
-- Take a batch folder.
-- For each plate folder under batch, enter `<plate_folder>/Images`.
-- Parse files named like: `rXXcXXfXXp01-chXXsk1fk1fl1.tiff`.
-- Build `Well` from row/col (`r01,c01 -> A01`).
-- Group by `(platecode, row, col, site)` and count unique channels.
-- For each plate, load profile file:
-  `{platecode}_normalized_feature_select_negcon_batch.csv.gz`.
-- Keep metadata columns (prefix `Meta_` or `Metadata_`) and join on
-  `Well == Metadata_Well`.
-- If channel count >= 5, write to `output/labels.csv`.
-- If channel count < 5, write to `output/incomplete_channel_wells.csv`
-  with an extra `channel_count` column.
+Walks each plate's `Images/` folder, parses `rXXcXXfXXp01-chXXsk1fk1fl1.tiff`
+names, derives `Well` from row/col (`r01,c01 -> A01`), and counts unique
+channels per (platecode, row, col, site). Joins each plate's `Meta_`/`Metadata_`
+columns from `{platecode}_normalized_feature_select_negcon_batch.csv.gz` on
+`Well == Metadata_Well`. Sites with 5 or more channels go to
+`output/labels.csv`; the rest go to `output/incomplete_channel_wells.csv` with
+a `channel_count` column.
 """
 
 import re

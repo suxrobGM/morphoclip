@@ -1,1 +1,1 @@
-"""CellCLIP baseline — benchmark and local training."""
+"""CellCLIP baseline: benchmark and local training."""

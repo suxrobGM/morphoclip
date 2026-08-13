@@ -1,10 +1,10 @@
-"""Stable benchmark evaluation aligned to the 2024 Chandrasekaran reference pipeline.
+"""Stable benchmark evaluation, matching the 2024 Chandrasekaran reference pipeline.
 
-This module is the orchestration coordinator for the CPJUMP1 "stable copairs"
-benchmark. Config resolution lives in :mod:`benchmark.stable_config`, per-modality
-evaluation in :mod:`benchmark.stable_compound` and :mod:`benchmark.stable_genetic`,
-and result accumulation / persistence in :mod:`benchmark.stable_results`. The CLI
-wrapper (``morphoclip benchmark``) is a thin adapter over :func:`run_stable_benchmark`.
+This module only drives the CPJUMP1 "stable copairs" benchmark. Config resolution
+is in :mod:`benchmark.stable_config`, per-modality evaluation in
+:mod:`benchmark.stable_compound` and :mod:`benchmark.stable_genetic`, and result
+handling in :mod:`benchmark.stable_results`. The ``morphoclip benchmark`` CLI is a
+thin wrapper over :func:`run_stable_benchmark`.
 """
 
 import sys

@@ -1,13 +1,13 @@
 """Loss functions for MorphoCLIP training.
 
-Provides InfoNCE (standard symmetric CLIP loss), CWCL (Continuously
-Weighted Contrastive Loss with perturbation-identity soft labels), and an
-optional replicate-alignment image-image term.
+InfoNCE (standard symmetric CLIP loss), CWCL (Continuously Weighted
+Contrastive Loss with soft labels), and an optional image-image term that
+pulls replicate wells together.
 
-Naming: CellCLIP's "CWCL" is Channel-Wise Contrastive Loss (soft labels from
-per-channel image similarity). MorphoCLIP's is Continuously Weighted, with soft
-labels from perturbation identity (``broad_sample``) and optionally shared
-target genes.
+Naming trap: CellCLIP's "CWCL" is Channel-Wise Contrastive Loss, with soft
+labels from per-channel image similarity. MorphoCLIP's is Continuously
+Weighted, with soft labels from perturbation identity (``broad_sample``) and
+optionally shared target genes.
 """
 
 import torch
@@ -82,15 +82,15 @@ def build_affinity_matrix(
     """Build the un-normalized pairwise affinity matrix.
 
     Affinity is ``1.0`` for wells sharing a ``broad_sample``, *target_weight*
-    for wells whose canonical gene sets intersect, and ``0`` otherwise.  The
-    diagonal is always ``1.0``.  An empty gene key never matches anything.
+    for wells whose gene sets overlap, and ``0`` otherwise. The diagonal is
+    always ``1.0``. An empty gene key never matches anything.
 
     Args:
         broad_samples: Perturbation ID per sample (length B).
         target_keys: Optional canonical gene keys per sample, from
             :func:`morphoclip.data.perturbation.target_gene_key`.
-        target_weight: Affinity given to gene-overlapping pairs.  ``0.0``
-            (default) disables gene-aware weighting entirely.
+        target_weight: Affinity for gene-overlapping pairs. ``0.0`` (default)
+            disables gene-aware weighting.
         device: Target device.
 
     Returns:
@@ -128,9 +128,9 @@ def cwcl_loss(
     Instead of hard diagonal targets, uses a soft label matrix where wells
     sharing a perturbation (and optionally a target gene) are positive pairs.
 
-    Each direction normalizes its own target rows: i2t from ``A``, t2i from
-    ``A.t()``. Transposing a single row-normalized matrix would leave t2i rows
-    that do not sum to 1 once weights are continuous.
+    Each direction row-normalizes its own targets: i2t from ``A``, t2i from
+    ``A.t()``. Transposing one row-normalized matrix would leave t2i rows that
+    do not sum to 1 once weights are continuous.
 
     Args:
         image_features: ``(B, D)`` L2-normalized image embeddings.
@@ -221,7 +221,7 @@ def compute_loss(
         image_features: ``(B, D)`` L2-normalized image embeddings.
         text_features: ``(B, D)`` L2-normalized text embeddings.
         logit_scale: Scalar log-temperature parameter.
-        broad_samples: Required for CWCL — perturbation ID per sample.
+        broad_samples: Perturbation ID per sample. Required for CWCL.
         target_keys: Optional canonical gene keys per sample (CWCL only).
         target_weight: Affinity for gene-overlapping pairs (CWCL only).
 

@@ -2,15 +2,15 @@
 
 **Text-supervised contrastive learning for perturbation matching in Cell Painting images.**
 
-MorphoCLIP connects microscopy images of cells with text descriptions of biological treatments. Given an image of cells that have been treated with a drug or genetic modification, MorphoCLIP can identify what treatment was applied — by learning to match visual patterns with textual descriptions.
+MorphoCLIP connects microscopy images of cells with text descriptions of biological treatments. Given an image of cells treated with a drug or a genetic modification, it can identify the treatment. It does this by learning to match visual patterns with text descriptions.
 
 ## How It Works
 
 ![MorphoCLIP Architecture](/images/architecture.svg)
 
-MorphoCLIP uses two AI models working together:
+MorphoCLIP uses two models working together:
 
-1. **A vision model** (DINOv3) looks at microscopy images and extracts visual features — patterns in how cells look after treatment.
+1. **A vision model** (DINOv3) extracts visual features from microscopy images: patterns in how cells look after treatment.
 2. **A language model** (BioClinical ModernBERT) reads text descriptions of biological treatments and extracts their meaning.
 3. **Contrastive learning** trains the system to place matching image-text pairs close together in a shared space, so similar treatments cluster together.
 
@@ -18,7 +18,7 @@ MorphoCLIP uses two AI models working together:
 
 |                      |                                                    |
 | -------------------- | -------------------------------------------------- |
-| **Dataset**          | CPJUMP1 — 51 plates, 3M+ Cell Painting images      |
+| **Dataset**          | CPJUMP1: 51 plates, 3M+ Cell Painting images       |
 | **Compounds tested** | 303 chemical compounds                             |
 | **Genes tested**     | 160 genes (CRISPR knockouts + ORF overexpressions) |
 | **Image encoder**    | Frozen DINOv3 ViT-L/16 (300M parameters)           |
@@ -26,8 +26,8 @@ MorphoCLIP uses two AI models working together:
 
 ## Get Started
 
-- [**Installation**](/getting-started/installation) — Set up MorphoCLIP on your machine
-- [**Quick Start**](/getting-started/quick-start) — Run the training pipeline end-to-end
-- [**Training Pipeline**](/pipeline/training-pipeline) — Understand the model architecture and training process
-- [**Glossary**](/glossary) — Plain-language definitions of technical terms used throughout these docs
-- [**Project presentation**](/presentation.html) — Slide walkthrough of the method and results
+- [**Installation**](/getting-started/installation): set up MorphoCLIP on your machine
+- [**Quick Start**](/getting-started/quick-start): run the training pipeline end-to-end
+- [**Training Pipeline**](/pipeline/training-pipeline): the model architecture and training process
+- [**Glossary**](/glossary): plain-language definitions of the technical terms in these docs
+- [**Project presentation**](/presentation.html): slide walkthrough of the method and results

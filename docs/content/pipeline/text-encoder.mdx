@@ -4,7 +4,7 @@ The MorphoCLIP text encoder encodes perturbation metadata into 512-d embeddings 
 
 ## Architecture
 
-- **Base model**: BioClinical ModernBERT (frozen) — encodes text into 768-d embeddings
+- **Base model**: BioClinical ModernBERT (frozen), encodes text into 768-d embeddings
 - **Pooling**: CLS token pooling (default) or mean pooling (configurable via `pooling` parameter)
 - **Projection head** (trainable): Linear (768 → 512) → LayerNorm → GELU → Dropout → Linear (512 → 512) → L2 normalize
 - **Max sequence length**: 256 tokens
@@ -36,11 +36,11 @@ uv run morphoclip text precompute --metadata-dir data/metadata/external_metadata
 
 ## Metadata sources
 
-- **External TSVs** (recommended): `data/metadata/external_metadata/` — `JUMP-Target-1_compound_metadata_targets.tsv`, `JUMP-Target-1_crispr_metadata.tsv`, `JUMP-Target-1_orf_metadata.tsv`. Get via `uv run morphoclip data fetch --metadata`.
+- **External TSVs** (recommended): `data/metadata/external_metadata/` holds `JUMP-Target-1_compound_metadata_targets.tsv`, `JUMP-Target-1_crispr_metadata.tsv`, `JUMP-Target-1_orf_metadata.tsv`. Get them via `uv run morphoclip data fetch --metadata`.
 - **Profile CSVs**: If you have `*_normalized_feature_select_negcon_batch.csv.gz` with `Metadata_PlateType`, `Metadata_Name`, etc., use `load_metadata_from_csv()` and `metadata_from_cpjump1_row()`.
 
 ## Options
 
-- `--cell-line U2OS` — filter by cell line
-- `--limit N` — process first N perturbations only
-- `--cache-dir PATH` — HuggingFace model cache directory
+- `--cell-line U2OS`: filter by cell line
+- `--limit N`: process the first N perturbations only
+- `--cache-dir PATH`: HuggingFace model cache directory

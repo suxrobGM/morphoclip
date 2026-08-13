@@ -1,15 +1,13 @@
 """Diagnose DINOv3 feature extraction quality.
 
-Loads extracted CLS tokens, computes quantitative metrics, saves a JSON
-report, and generates diagnostic plots as PNGs.
-
-Outputs saved to ``data/visualizations/{plate}/``:
-- ``metrics.json``           — all quantitative measurements
-- ``similarity_heatmap.png`` — inter-channel cosine similarity matrix
-- ``norm_distributions.png`` — L2 norm histograms per channel
-- ``pca_channels.png``       — 2D PCA scatter colored by channel
-- ``pca_variance.png``       — PCA cumulative explained variance curve
-- ``variance_decomp.png``    — between-channel / between-site / residual
+Loads extracted CLS tokens, computes quantitative metrics, and writes to
+``data/visualizations/{plate}/``:
+- ``metrics.json``: all measurements
+- ``similarity_heatmap.png``: inter-channel cosine similarity matrix
+- ``norm_distributions.png``: L2 norm histograms per channel
+- ``pca_channels.png``: 2D PCA scatter colored by channel
+- ``pca_variance.png``: PCA cumulative explained variance curve
+- ``variance_decomp.png``: between-channel / between-site / residual
 
 Usage:
     uv run python scripts/features/diagnose_features.py
@@ -47,7 +45,7 @@ def load_features(
     """Load feature .pt files, randomly sampling if needed.
 
     Returns:
-        ``(features, names)`` — features shape ``(N, 5, D)``.
+        ``(features, names)``, features shaped ``(N, 5, D)``.
     """
     pt_files = sorted(feature_dir.glob("*.pt"))
     if len(pt_files) > max_sites:
@@ -71,10 +69,7 @@ def cosine_sim(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
 
 
 def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
-    """Compute all diagnostic metrics from a ``(N, 5, D)`` tensor.
-
-    Returns a JSON-serializable dict with all measurements.
-    """
+    """Compute all diagnostic metrics from a ``(N, 5, D)`` tensor as a JSON-ready dict."""
     n_sites, n_channels, dim = features.shape
     m: dict = {
         "n_sites": n_sites,
@@ -82,7 +77,6 @@ def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
         "feature_dim": dim,
     }
 
-    # 1. Per-channel statistics
     ch_stats = {}
     for i, ch in enumerate(FLUORESCENCE_CHANNELS):
         ch_feats = features[:, i, :]
@@ -97,7 +91,6 @@ def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
         }
     m["channel_statistics"] = ch_stats
 
-    # 2. Intra-site inter-channel cosine similarity
     sim_matrix = torch.zeros(n_channels, n_channels)
     sim_std_matrix = torch.zeros(n_channels, n_channels)
     for i in range(n_channels):
@@ -125,7 +118,6 @@ def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
     m["intra_site_similarity"]["off_diagonal_mean"] = round(float(np.mean(off_diag)), 4)
     m["intra_site_similarity"]["off_diagonal_std"] = round(float(np.std(off_diag)), 4)
 
-    # 3. Cross-site same-channel vs cross-channel
     n_pairs = min(5000, n_sites * (n_sites - 1) // 2)
     random.seed(seed)
     idx_a = torch.tensor([random.randint(0, n_sites - 1) for _ in range(n_pairs)])
@@ -153,7 +145,6 @@ def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
         "gap": round(same_mean - cross_mean, 4),
     }
 
-    # 4. Variance decomposition
     grand_mean = features.mean(dim=(0, 1))
     channel_means = features.mean(dim=0)
     site_means = features.mean(dim=1)
@@ -172,7 +163,6 @@ def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
         "residual_pct": round(100 * residual_var / total_var, 1),
     }
 
-    # 5. PCA explained variance
     flat = features.reshape(-1, dim).float()
     flat_centered = flat - flat.mean(dim=0)
     if flat_centered.shape[0] > 2000:
@@ -205,7 +195,6 @@ def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
         "n_components_90pct": n_90,
     }
 
-    # Summary verdicts
     verdicts = []
     off_mean = m["intra_site_similarity"]["off_diagonal_mean"]
     if off_mean > 0.95:
@@ -382,9 +371,6 @@ def plot_variance_decomp(metrics: dict, output_dir: Path) -> Path:
     return out
 
 
-# main
-
-
 def main(
     config: Annotated[Path, typer.Option(help="Dataset config YAML.")] = Path(
         "configs/dataset.yml"
@@ -414,21 +400,17 @@ def main(
         n_files = len(list(feature_dir.glob("*.pt")))
         console.rule(f"[bold blue]Diagnosing {plate} ({n_files} sites)")
 
-        # Load
         features, _names = load_features(feature_dir, max_sites=max_sites)
         console.print(f"  Loaded {features.shape[0]} sites, shape: {tuple(features.shape)}")
 
-        # Compute metrics
         console.print("  Computing metrics...")
         metrics = compute_metrics(features)
 
-        # Save JSON report
         metrics_path = out_dir / "metrics.json"
         with open(metrics_path, "w") as f:
             json.dump(metrics, f, indent=2)
         console.print(f"  [dim]{metrics_path}[/dim]")
 
-        # Generate plots
         console.print("  Generating plots...")
         for plot_fn in [
             plot_similarity_heatmap,
@@ -443,7 +425,6 @@ def main(
                 path = plot_fn(metrics, out_dir)
             console.print(f"  [dim]{path}[/dim]")
 
-        # Print verdicts
         console.print()
         for v in metrics["verdicts"]:
             if v.startswith("PASS"):
@@ -453,7 +434,6 @@ def main(
             else:
                 console.print(f"  [red]{v}[/red]")
 
-        # Key numbers
         console.print()
         off_diag_mean = metrics["intra_site_similarity"]["off_diagonal_mean"]
         console.print(f"  Inter-channel cosine (off-diag mean): {off_diag_mean}")

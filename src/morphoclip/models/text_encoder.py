@@ -1,12 +1,11 @@
 """MorphoCLIP text encoder: metadata -> BioClinical ModernBERT -> projection.
 
-Encodes perturbation metadata into dense embeddings using a frozen
-BioClinical ModernBERT backbone and a trainable projection head.
+A frozen BioClinical ModernBERT backbone plus a trainable projection head.
 
 Architecture::
 
     metadata dict
-        -> build_prompts() (constructs natural language descriptions)
+        -> build_prompts() (natural language prompt strings)
         -> BioClinical ModernBERT (frozen, 150M params, 8192 context)
         -> [CLS] pooling (768-d)
         -> ProjectionHead (768 -> 512, LayerNorm + GELU + Dropout)
@@ -29,14 +28,14 @@ class MorphoCLIPTextEncoder(nn.Module):
     BioClinical ModernBERT, and projects to the shared embedding space.
 
     Args:
-        model_name:   HuggingFace model ID for BioClinical ModernBERT.
-        output_dim:   dimension of the shared embedding space (must match image encoder).
-        hidden_dim:   hidden dimension in the projection head.
-        dropout:      dropout rate in the projection head.
-        freeze_bert:  if True, freeze all BERT parameters (default: True).
-        pooling:      how to pool BERT outputs -- "cls" or "mean".
-        max_length:   max token length for the tokenizer.
-        templates:    custom templates dict (or None for defaults).
+        model_name: HuggingFace model ID for BioClinical ModernBERT.
+        output_dim: Shared embedding dimension (must match the image encoder).
+        hidden_dim: Projection head hidden dimension.
+        dropout: Projection head dropout rate.
+        freeze_bert: Freeze all BERT parameters (default: True).
+        pooling: BERT output pooling, "cls" or "mean".
+        max_length: Max token length for the tokenizer.
+        templates: Custom templates dict, or None for the defaults.
 
     Example::
 
@@ -117,7 +116,7 @@ class MorphoCLIPTextEncoder(nn.Module):
         raise ValueError(f"Unknown pooling method: {self.pooling}")
 
     def encode_texts(self, texts: list[str]) -> torch.Tensor:
-        """Encode raw text strings (already constructed prompts) -> embeddings.
+        """Encode already-built prompt strings into embeddings.
 
         Returns:
             Embeddings of shape ``[B, output_dim]``, L2 normalized.
@@ -127,7 +126,7 @@ class MorphoCLIPTextEncoder(nn.Module):
         tokens = self.tokenize(texts)
         tokens = {k: v.to(device) for k, v in tokens.items()}
 
-        # ModernBERT does NOT use token_type_ids
+        # ModernBERT takes no token_type_ids.
         tokens.pop("token_type_ids", None)
 
         if self.freeze_bert:
@@ -141,11 +140,11 @@ class MorphoCLIPTextEncoder(nn.Module):
 
     @torch.no_grad()
     def encode_texts_raw(self, texts: list[str]) -> torch.Tensor:
-        """Encode texts through BERT only -- NO projection head.
+        """Encode texts through BERT only, skipping the projection head.
 
-        Returns raw 768-d [CLS] (or mean-pooled) features.  Use this for
-        caching: cached raw features are deterministic and reusable
-        regardless of how the projection head is trained.
+        Returns raw 768-d [CLS] (or mean-pooled) features. Use this for
+        caching: raw features stay valid however the projection head is
+        trained.
         """
         device = next(self.bert.parameters()).device
         tokens = self.tokenize(texts)
@@ -158,7 +157,7 @@ class MorphoCLIPTextEncoder(nn.Module):
         """Full pipeline: metadata dicts -> prompts -> BERT -> projection -> embeddings.
 
         Args:
-            metadata: list of dicts, each containing perturbation metadata.
+            metadata: Perturbation metadata dicts.
 
         Returns:
             Embeddings of shape ``[B, output_dim]``, L2 normalized.

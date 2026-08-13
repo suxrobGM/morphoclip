@@ -13,7 +13,7 @@ workspace/metadata/external_metadata/
 Example Plate S3 URI:
 s3://cellpainting-gallery/cpg0000-jump-pilot/source_4/images/2020_11_04_CPJUMP1/images/
 
-The folder for each 384-well plate typically contains images from nine sites for each well (for some wells 7,8 or 16 sites were imaged). The (x,y) coordinates of sites are available in the Metadata_PositionX and Metadata_PositionY columns of the load_data.csv.gz files in the load_data_csv folder. There are eight images per site (five from the fluorescent channels and three brightfield images). The names of the image files follow the naming convention - rXXcXXfXXp01-chXXsk1fk1fl1.tiff where
+The folder for each 384-well plate typically contains images from nine sites per well (some wells were imaged at 7, 8, or 16 sites). Site (x,y) coordinates are in the Metadata_PositionX and Metadata_PositionY columns of the load_data.csv.gz files in the load_data_csv folder. There are eight images per site: five fluorescent channels and three brightfield images. Image file names follow the convention rXXcXXfXXp01-chXXsk1fk1fl1.tiff, where
 
     rXX is the row number of the well that was imaged. rXX ranges from r01 to r16.
     cXX is the column number of the well that was imaged. cXX ranges from c01 to c24.
@@ -24,7 +24,7 @@ The folder for each 384-well plate typically contains images from nine sites for
         ch03 - Alexa 488 long (Golgi / WGA)
         ch04 - Alexa 488 (ER / Concanavalin A)
         ch05 - Hoechst 33342 (DNA / Nucleus)
-        ch06-8 - three brighfield z planes.
+        ch06-8 - three brightfield z planes.
 
 Cell bounding boxes and segmentation masks have not been provided.
 
@@ -90,7 +90,7 @@ Generated via `uv run morphoclip data check-plates` (51 plates, 3.31 TiB total).
 Notable observations:
 
 - Most plates are ~58-65 GiB with 27,651 files each (5 fluorescent + 3 brightfield channels x 9 sites x 384 wells)
-- 4 plates (BR00117015-BR00117019) are ~2x larger (~108 GiB, 49,155 files) — likely 16 sites per well
+- 4 plates (BR00117015-BR00117019) are ~2x larger (~108 GiB, 49,155 files), likely 16 sites per well
 - BR00118042 is the largest single plate at 118.47 GiB (55,302 files)
 - BR00117005 has one extra file (27,652 vs 27,651)
 
