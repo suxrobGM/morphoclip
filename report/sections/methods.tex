@@ -80,11 +80,11 @@ where $\tilde{w}_{ij} = w_{ij} / \sum_k w_{ik}$ normalizes weights row-wise. The
 \end{equation}
 The temperature $\tau$ is a learnable parameter (LogitScale module), initialized to $\ln(1/0.07)$ and clamped at $\ln(100)$.
 
-\paragraph{Cross-Well Alignment (CWA).} Batch effects are a dominant confound in Cell Painting. As an optional component, MorphoCLIP supports cross-well alignment: image embeddings are grouped by plate within each batch, the per-plate mean is subtracted, and the result is re-normalized to the unit sphere,
+\paragraph{Cross-Well Alignment (CWA).} Batch effects are a dominant confound in Cell Painting, but in CPJUMP1 a plate is nearly synonymous with an experimental condition (one cell line, one perturbation modality, one timepoint), so subtracting a full per-plate mean would delete the very signal the text prompts encode. As an optional component, MorphoCLIP therefore corrects each plate only relative to its replicate plates: at the start of every epoch a gradient-free pass over the training wells computes each plate's mean embedding $\bar{\mathbf{f}}_p$, and each well is shifted by its plate's offset from the condition mean,
 \begin{equation}
-    \tilde{\mathbf{f}}_w = \frac{\mathbf{f}_w - \bar{\mathbf{f}}_{p(w)}}{\|\mathbf{f}_w - \bar{\mathbf{f}}_{p(w)}\|_2}, \quad \bar{\mathbf{f}}_p = \frac{1}{|W_p|} \sum_{w \in W_p} \mathbf{f}_w,
+    \tilde{\mathbf{f}}_w = \frac{\mathbf{f}_w - \boldsymbol{\delta}_{p(w)}}{\|\mathbf{f}_w - \boldsymbol{\delta}_{p(w)}\|_2}, \quad \boldsymbol{\delta}_p = \bar{\mathbf{f}}_p - \frac{1}{|C(p)|} \sum_{q \in C(p)} \bar{\mathbf{f}}_q,
 \end{equation}
-where $p(w)$ is the plate of well $w$ and $W_p$ is the set of wells from plate $p$ in the current batch. CWA is applied to image embeddings only and requires a batch sampler that draws from multiple plates. It is disabled in the runs reported here and is isolated in the planned ablation (Section~\ref{sec:ablation_design}).
+where $p(w)$ is the plate of well $w$ and $C(p)$ is the set of plates sharing plate $p$'s condition (cell line, perturbation modality, timepoint). Offsets within a condition sum to zero by construction, so the correction removes replicate-to-replicate drift while leaving condition-level signal intact. Offsets are treated as constants (no gradient flows through them), applied to image embeddings only, and stored with the checkpoint so evaluation and profile export apply the same correction as training. CWA is disabled in the runs reported here and is isolated in the planned ablation (Section~\ref{sec:ablation_design}).
 
 \subsection{Optimization}
 

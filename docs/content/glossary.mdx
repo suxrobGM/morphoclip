@@ -90,7 +90,7 @@ MorphoCLIP's training loss function. Unlike standard contrastive loss (which tre
 
 ### CWA (Cross-Well Alignment)
 
-A batch correction technique applied during training to reduce plate-to-plate variation. It aligns embeddings from different experimental wells so the model focuses on biological signal rather than technical noise.
+An optional batch correction applied during training to reduce plate-to-plate variation. Each plate's embeddings are shifted by a precomputed offset (the plate's mean embedding minus the mean of its replicate plates, those sharing the same cell line, modality, and timepoint), refreshed once per epoch. Correcting relative to replicate plates removes technical drift without deleting the condition-level signal the text prompts describe.
 
 ### CrossChannelFormer
 

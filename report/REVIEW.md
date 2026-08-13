@@ -123,7 +123,9 @@ cautious ("we present / we evaluate / preliminary results suggest").
 - [ ] **≥3 seeds** (42, 1337, 2024); report mean ± sd for R@1/5/10 and median rank.
 - [ ] Report the headline on the **held-out test split** after validation-based model selection.
 - [ ] Same-data **head-to-head vs CWA-MSN** (CORUM / HuMAP / Reactome) and CellCLIP.
-- [ ] **Enable CWA and measure it**, or drop it from the contribution list. *(In the campaign.)*
+- [x] **Enable CWA and measure it**, or drop it from the contribution list. *(Measured,
+      found catastrophic, rebuilt as condition-relative plate offsets, re-measured at
+      control level; see the 2026-08-12 addendum. Benchmark replicability still pending.)*
 - [x] ~~Investigate why **image→text is below chance**~~ — it never was; see the addendum.
 - [ ] Add qualitative **nearest-neighbor examples** with biological interpretation.
 - [ ] Regenerate the **architecture figure** if it shows channel mean-pooling.
@@ -218,6 +220,10 @@ Three findings, in order of importance:
    current framing ("optional / evaluated in ablation") is no longer sufficient now that the
    ablation exists and is strongly negative.
 
+   *(Superseded in part: the component was rebuilt on exactly this diagnosis and re-measured;
+   see the 2026-08-12 addendum below. The negative result above describes the original
+   in-batch mechanism, which no longer exists in the code.)*
+
 ### The winning run on the standard benchmark — and why the gain needs a caveat
 
 `abl_imgimg` exported and benchmarked against the `ccf_preload` baseline, fraction retrieved:
@@ -263,3 +269,66 @@ buying the cross-modality structure that would make compound→gene matching wor
   is defensible — `target_list` would link any two calcium-channel blockers through a 26-gene
   list — but it is a deliberate choice worth stating, and a candidate ablation given that
   cross-modality retrieval is currently at zero.
+
+---
+
+## Addendum: CWA rebuilt and re-measured (2026-08-12)
+
+The catastrophic CWA result above prompted a rebuild of the component on the diagnosed
+mechanism, followed by a rerun of the ablation. The in-batch version no longer exists in
+the code.
+
+### What changed
+
+The old CWA subtracted the mean of whichever wells of a plate landed in the current batch,
+which deleted condition-level signal (a CPJUMP1 plate is nearly one condition) and estimated
+it from a handful of wells. The rebuilt CWA subtracts a precomputed per-plate offset:
+
+- `offset(plate) = plate mean embedding - condition mean embedding`, where the condition is
+  the group of replicate plates sharing (cell line, perturbation modality, timepoint), read
+  from the committed `data/reference/cpjump1/cpjump1_metadata.csv`. The condition mean
+  weights member plates equally, so offsets within a condition sum to zero: the correction
+  removes replicate-to-replicate drift and cannot delete condition-level signal.
+- Offsets are recomputed once per epoch by a gradient-free fp32 pass over the training
+  wells, frozen within the epoch, and stored in the checkpoint so evaluation, inference,
+  and profile export apply exactly the training-time correction.
+
+### Result (same campaign settings: seed 42, 30-epoch schedule, patience 8)
+
+| Run | pert i2t R@10 | pert t2i R@10 | pert i2t median rank | Epochs (best) |
+|---|---|---|---|---|
+| `abl_repro` (control) | 0.378 | 0.378 | 19 | 19 (11) |
+| `abl_cwa` (old, in-batch) | 0.153 | 0.102 | — | 12 (4) |
+| `abl_cwa_offsets` (rebuilt, 40/51 plates covered) | 0.367 | 0.398 | 13 | 16 (8) |
+| `abl_cwa_offsets_full` (rebuilt, all 51 covered) | **0.418** | 0.388 | 13 | 15 (7) |
+| *random* | 0.102 | 0.102 | 49.5 | — |
+
+The failure mode is gone. Both rebuilt runs converge normally (best eval loss 5.4355 and
+5.4426 vs the control's 5.4383). With partial plate coverage the result is control-level;
+with the condition map extended to all 51 plates (see below), image→text rises to 0.418 vs
+the control's 0.378 (+4 perturbations of 98; one perturbation is 0.0102), text→image is
+within one perturbation of control, and the median rank improves from 19 to 13. Read as
+modestly positive at this metric, pending seeds: within-split retrieval was never where
+plate correction should pay off most, since the batch sampler already mixes plates.
+
+### What is still open before CWA can be claimed
+
+- **The decisive measurement is the standard benchmark's replicability tracks**, which
+  compare wells across plates directly. `export-profiles` + benchmark on
+  `abl_cwa_offsets` vs the control has not been run yet.
+- **The first `abl_cwa_offsets` run trained with 11 of 51 plates at a zero offset**
+  (BR00117001/2/8/9, BR00117050–55): they are outside the 40 benchmark-eligible plates the
+  official reference CSV covers, exactly the non-standard conditions (different seeding
+  density, antibiotics, Cas9 compound plates). Fixed: the condition map now falls back to
+  the vendored `experiment-metadata.tsv`, keying those plates on every condition axis
+  (density, antibiotics, cell line, time delay included, so they are not merged into the
+  standard-condition groups). `abl_cwa_offsets_full` reran with full coverage and no
+  zero-offset warnings; covering the last 11 plates moved image→text from 0.367 to 0.418.
+- Single seed, validation split, as with every number in the campaign table.
+
+**Manuscript consequence:** the framing can move from "negative result or drop it" to
+"rebuilt, modestly positive at perturbation-level retrieval (+0.04 image→text over
+control with full plate coverage), benchmark effect pending". CWA still cannot be listed
+as a delivered win until the replicability numbers and at least a second seed exist: the
+single-seed gain is four perturbations, comparable to the run-to-run spread seen across
+the other campaign variants.

@@ -21,16 +21,17 @@ uv sync --extra benchmark
 rclone copy :s3,provider=AWS,region=us-east-1,no_check_bucket=true:cellpainting-gallery/cpg0000-jump-pilot/source_4/workspace/profiles data/profiles
 ```
 
-4. Stage the benchmark metadata into `output/benchmark/input/`. The CPJUMP1
-   reference metadata ships in this repo under `data/reference/cpjump1/`.
-   `experiment-metadata.tsv` is **not** vendored — generate it with the upstream
-   `0.create-experiment-metadata.ipynb` (Chandrasekaran 2024 repo) or download it
-   from the JUMP source, then place it in the same folder:
+4. Stage the benchmark metadata into `output/benchmark/input/`. Everything needed
+   ships in this repo under `data/reference/cpjump1/`, including a vendored
+   `experiment-metadata.tsv` (originally produced by the upstream
+   `0.create-experiment-metadata.ipynb` in the Chandrasekaran 2024 repo; rerun
+   that notebook if you need to regenerate it, a copy in
+   `output/benchmark/input/` takes precedence over the vendored one):
 
 ```bash
 mkdir -p output/benchmark/input
 cp data/reference/cpjump1/JUMP-Target-1_compound_metadata_additional_annotations.tsv output/benchmark/input/
-# provide experiment-metadata.tsv in output/benchmark/input/ (see note above)
+cp data/reference/cpjump1/experiment-metadata.tsv output/benchmark/input/
 ```
 
 5. Run the stable benchmark test mode:

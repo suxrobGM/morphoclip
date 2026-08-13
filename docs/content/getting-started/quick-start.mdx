@@ -51,7 +51,8 @@ The default config is at `configs/train/base.yaml`. Key options:
 - `loss_type`: `"infonce"` (standard contrastive) or `"cwcl"` (soft-label contrastive)
 - `aggregator`: how channels and sites are pooled into a well embedding —
   `"ccf-mean"` (default), `"meanpool-mean"`, `"ccf-attn"`, or `"wellformer"`
-- `use_cwa`: `true` to enable Cross-Well Alignment batch correction (disabled by default)
+- `use_cwa`: `true` to enable Cross-Well Alignment, a batch correction that subtracts
+  precomputed per-plate offsets relative to each plate's replicate plates (disabled by default)
 - Outputs saved to `output/morphoclip_runs/<run_name>/`
 
 Alternative configs:

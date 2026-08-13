@@ -61,9 +61,12 @@ raw 768-d BERT features are cached separately from the projected 512-d output, s
 changing the projection does not mean re-encoding text.
 
 **Training.** CWCL (Continuously Weighted Contrastive Loss) handles soft positives;
-CWA (Cross-Well Alignment) corrects batch effects and is off by default. Temperature
-is learnable, clamped to ln(100). Unlike CellCLIP, MorphoCLIP trains on compounds and
-genetic perturbations together.
+CWA (Cross-Well Alignment) subtracts a per-plate offset, the plate mean embedding minus
+the mean over the replicate plates sharing its condition (cell line, experiment type,
+timepoint), recomputed at each epoch start and stored in the checkpoint. That removes
+plate-to-plate drift without deleting the condition signal the prompts encode. It is off
+by default. Temperature is learnable, clamped to ln(100). Unlike CellCLIP, MorphoCLIP
+trains on compounds and genetic perturbations together.
 
 `configs/train/base.yaml` sets batch_size=512, lr=1e-4, weight_decay=0.2, 100 epochs,
 sized for a single RTX 5080 (16 GB). The dataclass fallbacks are smaller and only

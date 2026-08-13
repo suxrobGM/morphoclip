@@ -58,7 +58,7 @@ IMAGE BRANCH                              TEXT BRANCH
         └────────────┬───────────────────────────┘
                      │
               CWCL Contrastive Loss
-              + CWA batch correction
+              + optional CWA plate-offset correction
 ```
 
 ---
@@ -161,20 +161,20 @@ Output: scalar loss
 
 ### 5. CWA Batch Correction (`src/morphoclip/training/batch_correction.py`)
 
-**Cross-Well Alignment** — removes plate-specific technical artifacts from image embeddings during training.
+**Cross-Well Alignment** — removes replicate-to-replicate plate drift from image embeddings while preserving condition-level signal.
 
-Cell Painting images have significant batch effects (plate-to-plate variation from staining, imaging conditions). Without correction, the model learns to cluster by plate rather than by perturbation.
+Cell Painting images have significant batch effects (plate-to-plate variation from staining, imaging conditions). But in CPJUMP1 a plate is nearly one condition (one cell line, one modality, one timepoint), so naively subtracting the full per-plate mean deletes exactly the biology the text prompts describe. CWA therefore corrects each plate only relative to its replicate plates.
 
 **Algorithm:**
 
-1. Within each training batch, group image embeddings by plate
-2. Compute per-plate mean embedding: `mu_p = mean(embeds[plate == p])`
-3. Subtract plate mean: `embeds_corrected = embeds - mu_p`
-4. Re-normalize to unit sphere: `embeds_corrected = L2_norm(embeds_corrected)`
+1. At the start of each epoch, run a no-grad fp32 pass over the training wells and compute each plate's mean embedding
+2. Group plates by condition (cell line, experiment type, timepoint) using the committed CPJUMP1 reference metadata
+3. Each plate's offset is `plate mean - condition mean`, where the condition mean weights member plates equally; offsets within a condition sum to zero
+4. During the epoch, subtract each well's plate offset and re-normalize to the unit sphere; offsets are constants, no gradient flows through them
 
 **When applied:** After the image projection head, before loss computation. Text embeddings are not corrected (no batch effect in text).
 
-**Requires:** Batch sampler that ensures each batch contains wells from multiple plates (see Data Loading below).
+**Persistence:** The offsets are stored in the checkpoint (`plate_offsets`), so evaluation, inference, and profile export apply the same correction the model was trained under. Plates without an offset (held-out plates, or plates missing from the reference metadata) are left uncorrected with a logged warning.
 
 ### 6. Full Image Encoder (`src/morphoclip/models/image_encoder.py`)
 
@@ -245,7 +245,7 @@ represented in every split, ensuring the model trains and evaluates on all pertu
 modalities. Benchmark-aligned strategies (`cpjump1_official_*`, `cellclip_cpjump_style`)
 are available in `benchmark.splits` for comparison with published baselines.
 
-**Note:** CWA is disabled by default (`use_cwa: false` in base config). When enabled, each batch needs wells from multiple plates. With 51 plates and batch_size=512, random shuffling provides sufficient plate diversity.
+**Note:** CWA is disabled by default (`use_cwa: false` in base config). When enabled, it adds one forward-only pass over the training wells per epoch to refresh the plate offsets; it places no constraint on batch composition.
 
 **Data loading:** With `preload: true` (default), all features are loaded into RAM at startup with `num_workers: 0`. Set `preload: false` and increase `num_workers` if RAM is constrained.
 
@@ -269,8 +269,8 @@ for batch in train_loader:
     text_raw = lookup_cached_embeddings(batch["pert_info"])  # (B, 768)
     text_embeds = text_projection_head(text_raw)             # (B, 512)
 
-    # Batch correction (CWA)
-    image_embeds = cross_well_align(image_embeds, batch["plates"])
+    # Batch correction (CWA, optional): subtract precomputed plate offsets
+    image_embeds = plate_offsets.apply(image_embeds, batch["plates"])
 
     # Loss
     loss = cwcl_loss(image_embeds, text_embeds, batch["pert_info"])
@@ -364,7 +364,7 @@ Build the minimum viable training loop with standard CLIP loss.
 Add the MorphoCLIP-specific components.
 
 6. **CWCL loss** — soft positive weighting based on perturbation identity
-7. **CWA batch correction** — per-plate mean subtraction during training
+7. **CWA batch correction** — condition-relative plate offsets during training
 8. **Perturbation-aware evaluation** — NSC, cross-modality matching
 
 **Goal:** Match or exceed CellCLIP performance on perturbation retrieval.
