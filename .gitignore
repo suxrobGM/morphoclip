@@ -18,21 +18,22 @@ checkpoints/
 *.pth
 *.ckpt
 
-# Data (keep structure via .gitkeep)
+# Data
 # `data/**/` excludes directories outright, so git never descends into them and a bare
 # `!data/<dir>/` negation cannot re-include anything. Un-ignoring a subtree needs both the
-# directory and its contents, as `data/reference/` does below. The platemap tree the tests
+# directory and its contents, as the negations below do. The platemap tree the tests
 # need is committed under tests/fixtures/ instead, so it lives with the tests that read it.
 data/**/
 data/.cache/
-!data/**/.gitkeep
-!data/features/.gitkeep
-!data/tensors/.gitkeep
-!data/visualizations/**
 
-# First-party reference metadata (small, required by the benchmark harness)
+# Reference metadata (small, required by the benchmark harness and splits)
 !data/reference/
 !data/reference/**
+
+# CPJUMP1 platemaps and JUMP-Target annotations (small, required by MetadataIndex;
+# `morphoclip data fetch --metadata` refreshes them from the public S3 bucket)
+!data/metadata/
+!data/metadata/**
 
 # Environment / secrets
 .env
