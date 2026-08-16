@@ -143,7 +143,7 @@ def main() -> None:
         ws[0],
         hb,
         "Site image",
-        ["5 channels", "1080 x 1080 to 384", "each channel as RGB"],
+        ["5 channels", "1080 x 1080 to 224", "each channel as RGB"],
         IMG,
     )
     box(
@@ -233,7 +233,7 @@ def main() -> None:
     ax.text(
         7.0,
         0.12,
-        "Trained: CrossChannelFormer and the two projection heads (about 14M parameters). "
+        "Trained: CrossChannelFormer, two projection heads, and logit scale (about 14M parameters). "
         "Frozen: DINOv3 and ModernBERT, run once and cached.",
         ha="center",
         va="bottom",

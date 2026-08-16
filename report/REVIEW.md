@@ -417,3 +417,36 @@ schema rejects. Their embedded configs were rewritten in place to
 - A task the replicate loss does not optimize that shows a gain.
 - Cross-modality: `target` vs `target_list` soft labels, prompt ablation.
 - Nearest-neighbor examples.
+
+---
+
+## Addendum: final fidelity corrections (2026-08-15)
+
+The current draft supersedes the claims summarized immediately above.
+
+- The extractor follows the DINOv3 processor's native 224 x 224 size; the
+  manuscript and architecture figure no longer state 384 x 384.
+- The trainable set includes the learned logit-scale scalar as well as the CCF
+  and two projection heads. `configs/train/base.yaml` and its golden fixtures
+  now use the reported batch size of 256.
+- Benchmark summary fractions remain unweighted track means, while the
+  parenthetical summary mAP values are explicitly labelled as pooled over
+  scored rows and therefore weighted by track size.
+- Fraction retrieved is treated as descriptive throughout. The paper makes no
+  parity or superiority claim from the separate CellCLIP run. For CellProfiler,
+  it states that the four-track compound target-matching mean is within the
+  published range while one individual track is above it.
+- The deterministic claim is limited to replicability mAP: the replicate loss
+  increases all 12 tracks from pooled 0.298 to 0.343. Retrieval differences
+  remain unresolved at one seed, and the replicability caveat remains partly
+  definitional.
+- Historical 7.1%, 10.4% and observed-rank claims without retained artifacts
+  were removed. The duplicated-candidate section keeps only the reproducible
+  arithmetic, 12 x 24 + 1 = 289.
+- Cached-feature metrics are regenerated from 500 sites on BR00116991 with seed
+  42 and stored in `figures/feature_metrics.json`. The PCA caption now describes
+  the plotted two-dimensional projection; the invalid 90%-at-23-components
+  claim was removed and the diagnostic variance denominator was corrected.
+- `epoch_seconds` is described as training-loop time only, excluding validation
+  and the offset refresh. The final PDF uses hidden hyperlinks and a manually
+  balanced bibliography.

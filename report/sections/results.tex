@@ -5,7 +5,7 @@ All numbers come from a single seed. Retrieval numbers are on the validation and
 
 \subsection{Cross-Modal Retrieval}
 
-Table~\ref{tab:retrieval} reports the base model on both splits. On validation, ranking the 98 perturbation profiles against the 98 texts gives Recall@10 of 38.8\% image-to-text and 39.8\% text-to-image, against a random 10.2\%, with a median rank of 13. On the 86 test perturbations the same checkpoint gives 37.2\% and 44.2\% against a random 11.6\%. The two directions are within a few perturbations of each other on both splits, and both sit close to four times chance.
+Table~\ref{tab:retrieval} reports the base model on both splits. On validation, ranking the 98 perturbation profiles against the 98 texts gives Recall@10 of 38.8\% image-to-text and 39.8\% text-to-image, against a random 10.2\%, with a median rank of 13. On the 86 test perturbations the same checkpoint gives 37.2\% and 44.2\% against a random 11.6\%. These recalls are 3.2 to 3.9 times their analytic chance rates.
 
 \begin{table}[t]
 \centering
@@ -40,7 +40,7 @@ Well-level text-to-image is the one direction that looks weak in Recall@10 (23.5
 
 \subsection{Ablations}
 
-Table~\ref{tab:ablation} lists the single-factor runs. Three points come out of it.
+Table~\ref{tab:ablation} lists the single-factor runs.
 
 \begin{table*}[t]
 \centering
@@ -66,19 +66,19 @@ All three & soft $+$ replicate $+$ offsets & 42.9 & 43.9 & 13 & 46.5 & 45.3 & 11
 }
 \end{table*}
 
-First, the retrieval effects of the three additions are within the noise of one seed. On validation the replicate loss adds 7 points of image-to-text recall over the control and soft labels add 5 points of text-to-image recall, but on the test split the control scores highest on image-to-text and the ordering of the four runs changes. A difference of 5 points at 98 candidates is five perturbations, and the same checkpoint moves by more than that between the two splits. We therefore do not claim a retrieval gain for any single addition on this evidence. The replicate loss does converge faster: its best epoch is 7 against 11 for the control.
+The retrieval differences among the three additions are unresolved at one seed. The ordering changes on the test split, and changes of several percentage points represent only a few perturbations. We therefore do not claim a retrieval gain for any single addition. The replicate-loss checkpoint is selected at epoch 7 and the control at epoch 11, but one run per condition does not establish a difference in convergence rate.
 
-Second, the in-batch version of the plate offset destroyed the model. Subtracting the mean of whichever wells of a plate happened to share a batch cut perturbation-level retrieval to 15\% against a 10\% floor, and the model stopped improving after four epochs. Evaluating that checkpoint with the correction switched off at inference did not help (12\%), so the training itself was harmed. The mechanism is the one Section~\ref{sec:ablation_design} anticipates: in CPJUMP1 a plate is nearly one condition, and the plate mean carries the modality and cell line that the prompt names. The condition-relative offset removes that failure. With offsets for all 51 plates the run trains normally, its validation loss matches the control, and its retrieval is at control level. Extending the condition map from 40 to all 51 plates moved image-to-text from 36.7 to 41.8 on validation, which is five perturbations and again within noise.
+The in-batch offset version yields perturbation-level image-to-text Recall@10 of 15.3\%, compared with 37.8\% for its control, and its best checkpoint occurs at epoch 4. Evaluating that checkpoint with correction disabled at inference gives 12\%, so the degradation arose during training. In CPJUMP1 a plate is nearly one condition, and the plate mean carries modality and cell-line information named by the prompt. The condition-relative offset avoids this degradation. Extending the condition map from 40 to all 51 plates changes validation image-to-text recall by five perturbations, which remains unresolved at one seed.
 
-Third, turning all three on together gives 42.9 and 43.9 on validation and 46.5 and 45.3 on test, with the lowest validation text loss of the campaign (5.396 against the control's 5.438) at its best epoch. Those figures are among the best in the table on both splits, but they are not additive: the combined run does not reach the replicate-loss run's 44.9 on validation image-to-text or the control's 50.0 on test. On this evidence the three additions are compatible and none of them hurts, and that is as far as retrieval alone lets us go.
+The combined run is among the higher-scoring rows on both splits but is not uniformly best. Its best validation text loss is 5.396, compared with 5.438 for the control. These single-seed results show that the three additions can be trained together; they do not establish an additive retrieval benefit.
 
 \subsection{Standard CPJUMP1 Benchmark}
 
-Table~\ref{tab:benchmark} reports fraction retrieved and mean mAP on the standard benchmark for the base model, the replicate-loss run, the plate-offset run and the combined run.
+Table~\ref{tab:benchmark} reports fraction retrieved and mAP on the standard benchmark for the base model, the replicate-loss run, the plate-offset run and the combined run.
 
 \begin{table*}[t]
 \centering
-\caption{Standard CPJUMP1 benchmark on the 40 eligible plates. Replicability per modality, cell line and timepoint: fraction retrieved at $q<0.05$ with mean mAP in parentheses. Target matching and gene--compound matching are means over their tracks. Fraction retrieved varies between runs of identical code; only replicability mAP is deterministic.}
+\caption{Standard CPJUMP1 benchmark on the 40 eligible plates. Per-track rows give fraction retrieved at $q<0.05$ with track mAP in parentheses. Summary fractions are unweighted means over tracks; parenthetical summary mAP is pooled over the scored rows and is weighted by track size. Fraction retrieved varies between identical runs; only replicability mAP is deterministic.}
 \label{tab:benchmark}
 \begin{tabular}{@{}llrrrr@{}}
 \toprule
@@ -97,24 +97,24 @@ Track & & Base & Replicate loss & Plate offsets & All three \\
 \multirow{2}{*}{ORF U2OS} & short & 0.043 (0.171) & 0.099 (0.223) & 0.062 (0.209) & 0.099 (0.221) \\
  & long & 0.006 (0.133) & 0.012 (0.146) & 0.012 (0.140) & 0.031 (0.160) \\
 \midrule
-Replicability, mean of 12 & & 0.178 (0.298) & 0.248 (0.343) & 0.172 (0.292) & 0.277 (0.369) \\
-Target matching, mean of 8 & & 0.339 (0.197) & 0.262 (0.160) & 0.420 (0.194) & 0.172 (0.148) \\
-Gene--compound, mean of pairs & & 0.005 (0.123) & 0.000 (0.082) & 0.010 (0.140) & 0.029 (0.082) \\
+Replicability summary (12 tracks) & & 0.178 (0.298) & 0.248 (0.343) & 0.172 (0.292) & 0.277 (0.369) \\
+Target-matching summary (8 tracks) & & 0.339 (0.197) & 0.262 (0.160) & 0.420 (0.194) & 0.172 (0.148) \\
+Gene--compound summary & & 0.005 (0.123) & 0.000 (0.082) & 0.010 (0.140) & 0.029 (0.082) \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\paragraph{Replicability.} The base model replicates compounds well (fraction retrieved 0.30 to 0.51, mAP 0.34 to 0.53), CRISPR less well (0.03 to 0.18) and ORF hardly at all (below 0.05). The replicate loss raises fraction retrieved on all twelve tracks and mAP on all twelve, from a mean of 0.178 to 0.248 and 0.298 to 0.343. This is the one effect in the paper that is consistent across every track and both metrics, and mAP is the deterministic one. It is also partly definitional: the loss pulls replicate wells of one perturbation together, and replicability measures whether replicate wells retrieve each other. The gain says the loss does what it was designed to do. It does not by itself say the embedding is more biologically informative. Plate offsets on their own leave replicability where the control has it (mean mAP 0.292 against 0.298), so the correction that was meant to help cross-plate matching does not show up in the cross-plate metric. The combined run has the highest replicability of the campaign, mean mAP 0.369 and fraction retrieved 0.277, and its mAP is above the replicate-loss run on ten of the twelve tracks and level on the two ORF tracks it does not beat. On this benchmark the replicate loss is doing the work and the other two additions do not undo it.
+\paragraph{Replicability.} The replicate loss increases mAP on all twelve tracks; pooled mAP rises from 0.298 to 0.343. This deterministic metric is the clearest change in the study. It is also partly definitional: the loss pulls replicate wells of one perturbation together, and replicability measures whether those wells retrieve one another. The result shows that the loss achieves its direct objective, not that the embedding is more biologically informative. Plate offsets alone give pooled mAP 0.292. The combined run has pooled mAP 0.369 and exceeds the replicate-loss run on ten tracks while being slightly lower on two ORF tracks. Fraction-retrieved values are descriptive because their significance gate is stochastic.
 
-\paragraph{Target matching.} Mean fraction retrieved falls from 0.339 for the base model to 0.262 with the replicate loss and 0.172 for the combined run, but the population being scored is not the same. The benchmark only admits perturbations that passed the replicability gate into target matching, so the base model is scored on 536 consensus profiles, the replicate-loss model on 748 and the combined model on 856. The added profiles are the ones that were only just replicable, and they lower the mean. The CRISPR tracks have between 2 and 30 targets each (the U2OS short track has two or three), so their fractions move by whole steps and should not be read at all; the plate-offset run's 0.420 mean is two CRISPR tracks at 1.0 with a handful of targets each. On the compound tracks, which have 94 to 250 targets, mean mAP runs from 0.13 to 0.28 for the base model and 0.11 to 0.21 for the replicate-loss run, and no variant is consistently ahead.
+\paragraph{Target matching.} The scored population changes with the replicability gate: the base, replicate-loss and combined runs admit 536, 748 and 856 consensus profiles. The CRISPR tracks contain only 2 to 30 targets, so their stochastic fractions move in large steps. Across the larger compound tracks, no variant is consistently ahead in mAP. The target-matching rows therefore do not establish a downstream benefit from the replicate loss or plate offsets.
 
-\paragraph{Gene--compound matching.} At or near zero for every variant we ran. Mean fraction retrieved over the admitted pairs is 0.005 for the base model (2 of 219 pairs pass the gate), 0.000 with the replicate loss (0 of 385), 0.010 with plate offsets (3 of 179) and 0.029 for the combined run (3 of 480, and that figure is one compound--ORF pair at 0.4 with five targets in it). The compound--CRISPR pairs, which have 16 to 33 targets, reach 0.06 at most, and no pair is nonzero in more than two of the four runs. Mean mAP on the admitted pairs is 0.08 to 0.14. The plate-offset run is the only one whose nonzero pairs are all compound--CRISPR, and its gene--compound mAP (0.140) is the highest of the four; that is the direction a cross-plate correction should push, but three pairs at one seed is not a result. Cross-modality matching is the task this line of work is aimed at, and none of the training changes moved it beyond that. We report it as an open failure and return to it in Section~\ref{sec:conclusion}.
+\paragraph{Gene--compound matching.} Fraction retrieved is at or near zero for every variant. Across the runs, zero to three admitted pairs pass the stochastic significance gate. The nonzero compound--CRISPR pairs have 16 to 33 targets and reach 0.06 at most; no pair is nonzero in more than two runs. Pooled mAP is 0.08 to 0.14, with no consistent ordering. The training changes therefore provide no positive cross-modality result at this seed count.
 
 \subsection{Comparison with Baselines}
 
-\paragraph{CellProfiler.} The published CellProfiler fraction retrieved on CPJUMP1 sister-perturbation matching is 4.3 to 25.1\%~\cite{chandrasekaran2024jump}. That is a target-matching figure, so the like-for-like rows in Table~\ref{tab:benchmark} are the target-matching tracks, not replicability. There the base model's compound tracks span 0.07 to 0.31 (mean 0.16), inside the published range, and its CRISPR tracks are too small to read. We did not rerun CellProfiler on our harness, so this is our run against the published one, and we do not claim an advantage over CellProfiler from it. Replicability, the task on which our numbers are highest, is easier than target matching and is not what the published range measures.
+\paragraph{CellProfiler.} The published CellProfiler fraction retrieved on CPJUMP1 target matching is 4.3 to 25.1\%~\cite{chandrasekaran2024jump}. The base model's four compound target-matching tracks have an unweighted mean of 16.3\%, which lies within that range; three individual tracks lie within it and one is higher at 31.5\%. We did not rerun CellProfiler, and the harness comparison is not paired, so these values do not establish an advantage. Replicability is a different task and is not comparable with the published range.
 
-\paragraph{CellCLIP.} Table~\ref{tab:cellclip} sets our short-timeline replicability against the released CellCLIP checkpoint run through the same harness. CellCLIP's evaluation recipe fits a KernelPCA on control wells before scoring; ours applies no such step, and the two rows are separate runs of the harness. On compounds the base model is close to CellCLIP (0.353 and 0.297 against 0.366 and 0.353) and the replicate-loss and combined runs are above it (0.435 and 0.379; 0.497 and 0.422). On CRISPR the picture splits by cell line: MorphoCLIP is well ahead on A549 (0.173 to 0.340 against 0.020) and behind on U2OS (0.026 to 0.078 against 0.118), and CellCLIP is ahead on U2OS ORF (0.119 against 0.043 to 0.099). Both models are at or near zero on gene--compound matching. Given the harness variance and the batch-correction difference, we read this as parity or better on compounds with a much smaller model, and as no evidence either way on the genetic tracks.
+\paragraph{CellCLIP.} Table~\ref{tab:cellclip} reports short-timeline fraction retrieved from separate runs of the same harness. CellCLIP's recipe fits a KernelPCA on control wells before scoring, whereas ours does not, and the significance gate is stochastic. The numerical values differ by track, but these unpaired fractions do not support claims of parity, superiority or inferiority. The table is included as a same-harness reference, not a ranking.
 
 \begin{table}[t]
 \centering
@@ -138,11 +138,11 @@ ORF U2OS & 0.119 & 0.043 & 0.099 & 0.099 \\
 \subsection{Evaluation Pitfall: Duplicated Candidates}
 \label{sec:pitfall}
 
-The first version of our evaluation ranked each well against all 2,220 well-texts. Replicate wells share one text vector, so that pool contained 98 distinct vectors, each present about 24 times. A model scores identical vectors identically, so the copies of the correct text always occupy a run of consecutive ranks. If the correct text ranks first among the 98 distinct texts, its copies fill ranks 1 to 24, and Recall@5 and Recall@10 collapse to Recall@1. Against that pool the base model scored Recall@10 of 7.1\% while a random ranking, which interleaves the copies, scored 10.4\%, and we concluded that image-to-text retrieval was below chance. The observed median rank of 289 is what the arithmetic predicts for a median unique rank of about 13 with 24 copies each ($12 \times 24 + 1$). Ranking the 98 unique texts instead gives the 39.4\% in Table~\ref{tab:retrieval}. Text-to-image did not have this problem, because its candidates are the wells, which are all distinct. The mask of positives is symmetric between the two directions; the multiplicity of candidates is not, and the random baseline has to follow the candidates.
+The first version of our evaluation ranked each well against all 2,220 well-texts. Replicate wells share one text vector, so that pool contained 98 distinct vectors, each present about 24 times. A model scores identical vectors identically, so the copies of the correct text occupy consecutive ranks. If the correct text ranks first among the distinct texts, its copies fill ranks 1 to 24, and Recall@5 and Recall@10 collapse to Recall@1. More generally, a unique-text rank of 13 maps to the first duplicate at rank $12 \times 24 + 1 = 289$. The corrected protocol ranks the 98 unique texts. Text-to-image does not have this problem because its candidates are distinct wells. The random baseline must follow the multiplicity of the candidate pool.
 
 \subsection{Cached Feature Analysis}
 
-We checked that channel identity survives the frozen backbone. On plate BR00116991 (500 sites) a variance decomposition of the cached tokens attributes 31.1\% of variance to differences between channels, 37.1\% to differences between sites and 31.8\% to the residual (Figure~\ref{fig:variance}). Same-channel tokens from different sites have mean cosine similarity 0.84; different-channel tokens from the same site have 0.75, and the gap holds for every channel pair (Figure~\ref{fig:channelsim}). The DNA channel is the most distinct at 0.73 to the other four. A PCA of the $5 \times 1024$ space reaches 90\% of variance at 23 components (Figure~\ref{fig:pca}). Channel structure is present in the input, which is what the CCF's channel embedding is there to use.
+We checked whether channel identity survives the frozen backbone using 500 sites sampled with seed 42 from plate BR00116991. The reproducible diagnostic output is stored with the figure sources. A variance decomposition attributes 31.1\% of variance to between-channel differences, 37.1\% to between-site differences and 31.8\% to the residual (Figure~\ref{fig:variance}). Same-channel tokens from different sites have mean cosine similarity 0.84, while cross-channel tokens from different sites average 0.75 (Figure~\ref{fig:channelsim}). The two-dimensional PCA projection in Figure~\ref{fig:pca} provides a qualitative view of this channel structure.
 
 \begin{figure}[t]
     \centering
@@ -161,10 +161,10 @@ We checked that channel identity survives the frozen backbone. On plate BR001169
 \begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{figures/pca_channels.png}
-    \caption{Cumulative explained variance of a PCA over the $5 \times 1024$-d token space; 90\% is reached at 23 components.}
+    \caption{First two principal components of the cached 1024-d channel tokens, colored by fluorescence channel.}
     \label{fig:pca}
 \end{figure}
 
 \subsection{Cost}
 
-The DINOv3 forward pass is the expensive step and it runs once: about seven minutes per plate, six hours for the dataset. After that the cost of training is dominated by reading the 3.8\,GB cache into memory. With the cache in RAM, an epoch of 55 steps at batch size 256 takes about four seconds on the RTX 5080 and a few gigabytes of GPU memory, so a full ablation run is a matter of minutes and the whole campaign in this paper fits in an afternoon on one card. Both backbones stay frozen; the CrossChannelFormer and the two projection heads are the only trained parts.
+For the no-offset ablation runs, \texttt{metrics.csv} records about four seconds for the training-loop phase of an epoch with 55 steps at batch size 256 on the RTX 5080. This excludes validation, data loading outside the timer and the offset-refresh pass used by offset variants, so it is not an end-to-end run-time measurement. Both backbones stay frozen; the trainable components are the CrossChannelFormer, two projection heads and one logit-scale scalar.

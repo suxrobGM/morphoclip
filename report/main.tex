@@ -3,8 +3,7 @@
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
-\usepackage{textcomp}
-\usepackage{hyperref}
+\usepackage[hidelinks]{hyperref}
 \usepackage{booktabs}
 \usepackage{multirow}
 
@@ -41,10 +40,10 @@
 
 \begin{abstract}
   Cell Painting images record how cells respond to a chemical or genetic perturbation, and matching an image back to the perturbation that produced it is a basic step in phenotypic drug discovery that current methods still do poorly.
-  We present MorphoCLIP, a contrastive model that places Cell Painting wells and text descriptions of perturbations in a shared 512-dimensional space. Each fluorescence channel passes through a frozen DINOv3 ViT-L/16, a one-layer CrossChannelFormer merges the five channel tokens, and a frozen BioClinical ModernBERT encodes the prompt; only the channel transformer and two projection heads are trained, about 14M parameters, and one model covers compounds, CRISPR knockouts and ORF overexpressions. With both backbones cached, an epoch over the CPJUMP1 pilot takes seconds on one 16\,GB GPU.
+  We present MorphoCLIP, a contrastive model that places Cell Painting wells and text descriptions of perturbations in a shared 512-dimensional space. Each fluorescence channel passes through a frozen DINOv3 ViT-L/16, a one-layer CrossChannelFormer merges the five channel tokens, and a frozen BioClinical ModernBERT encodes the prompt. The channel transformer, two projection heads and one logit-scale scalar are trained, about 14M parameters in total, and one model covers compounds, CRISPR knockouts and ORF overexpressions.
   Ranking held-out perturbation profiles against 98 candidate texts gives Recall@10 near 39\% in both directions on the validation split (random: 10\%), and 37\% image-to-text and 44\% text-to-image on the test split (random: 12\%).
-  We add three terms to the training signal, a replicate-alignment image loss, gene-aware soft labels and per-plate offsets measured against replicate plates, and measure each alone. Their effect on retrieval is within the spread a single checkpoint shows between splits at one seed. The replicate loss does raise replicability on the standard CPJUMP1 benchmark on all twelve tracks (mean fraction retrieved 0.18 to 0.25, and 0.28 with all three additions), a gain that is partly definitional; plate offsets alone leave the benchmark unchanged.
-  On the same harness, compound replicability is level with or above the released CellCLIP checkpoint at one hundredth of its size, and compound target matching falls inside the published CellProfiler range. Cross-modality gene--compound matching is at or near zero for every variant (at most three of 179 to 480 compound--gene pairs pass the significance gate), and we report that as an open failure.
+  We test a replicate-alignment image loss, gene-aware soft labels and per-plate offsets measured against replicate plates. Their retrieval differences are unresolved at one seed. The replicate loss raises deterministic replicability mAP on all twelve standard CPJUMP1 tracks, from a pooled 0.298 to 0.343; this gain is partly definitional because the loss directly optimizes replicate proximity. Plate offsets alone do not improve this metric.
+  In separate runs of the same stochastic harness, MorphoCLIP and the released CellCLIP checkpoint give numerically comparable compound replicability fractions, but the runs do not support a ranking. The four-track mean compound target-matching fraction is within the published CellProfiler range, although one track exceeds that range. Gene--compound fraction retrieved is at or near zero for every variant (at most three admitted pairs pass the significance gate), which remains an open failure.
   We also document an evaluation pitfall: ranking wells against a text pool in which each text appears once per replicate well caps recall and made image-to-text retrieval look worse than chance.
 \end{abstract}
 
@@ -60,6 +59,7 @@
 \input{sections/results}
 \input{sections/conclusion}
 
+\IEEEtriggeratref{11}
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 

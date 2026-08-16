@@ -4,7 +4,7 @@
 
 Cell Painting~\cite{bray2016cellpainting} fixed the five-stain protocol that most high-content morphological profiling now uses~\cite{seal2024cellpainting}. The classical analysis tool, CellProfiler~\cite{carpenter2006cellprofiler}, measures more than 1,000 handcrafted features per cell. On CPJUMP1~\cite{chandrasekaran2024jump} that pipeline retrieves 5 to 25\% of the expected sister perturbations within a modality and 7 to 17\% of CRISPR guide matches, and cross-modal compound-to-gene matching is harder still.
 
-Handcrafted features can only measure what their authors thought to measure. Self-supervised vision transformers trained with DINO beat CellProfiler on drug-target and gene-family classification with zero-shot transfer~\cite{moshkov2025ssl}, which is the case for building on frozen foundation-model features.
+Handcrafted pipelines encode a fixed set of measurements. Self-supervised vision transformers trained with DINO outperform CellProfiler on drug-target and gene-family classification with zero-shot transfer~\cite{moshkov2025ssl}, motivating our use of frozen foundation-model features.
 
 \subsection{Contrastive Learning for Cell Painting}
 

@@ -1,0 +1,413 @@
+{
+  "n_sites": 500,
+  "n_channels": 5,
+  "feature_dim": 1024,
+  "channel_statistics": {
+    "Mitochondria": {
+      "l2_norm_mean": 15.1817,
+      "l2_norm_std": 0.7582,
+      "mean": 0.008075,
+      "std": 0.4749,
+      "min": -2.5127,
+      "max": 2.0176
+    },
+    "Actin": {
+      "l2_norm_mean": 16.0108,
+      "l2_norm_std": 0.4179,
+      "mean": 0.008422,
+      "std": 0.5004,
+      "min": -2.5657,
+      "max": 2.0864
+    },
+    "Golgi/Plasma Membrane": {
+      "l2_norm_mean": 15.764,
+      "l2_norm_std": 0.4724,
+      "mean": 0.009557,
+      "std": 0.4928,
+      "min": -2.4814,
+      "max": 2.0566
+    },
+    "Endoplasmic Reticulum": {
+      "l2_norm_mean": 16.0331,
+      "l2_norm_std": 0.4212,
+      "mean": 0.00919,
+      "std": 0.5011,
+      "min": -2.395,
+      "max": 1.9827
+    },
+    "DNA/Nucleus": {
+      "l2_norm_mean": 15.2207,
+      "l2_norm_std": 0.6477,
+      "mean": 0.005354,
+      "std": 0.476,
+      "min": -2.4013,
+      "max": 2.3844
+    }
+  },
+  "intra_site_similarity": {
+    "matrix": [
+      [
+        1.0,
+        0.8288,
+        0.8211,
+        0.8339,
+        0.7335
+      ],
+      [
+        0.8288,
+        1.0,
+        0.9094,
+        0.9123,
+        0.7432
+      ],
+      [
+        0.8211,
+        0.9094,
+        1.0,
+        0.9444,
+        0.7104
+      ],
+      [
+        0.8339,
+        0.9123,
+        0.9444,
+        1.0,
+        0.7255
+      ],
+      [
+        0.7335,
+        0.7432,
+        0.7104,
+        0.7255,
+        1.0
+      ]
+    ],
+    "matrix_std": [
+      [
+        0.0,
+        0.0772,
+        0.0817,
+        0.0827,
+        0.0674
+      ],
+      [
+        0.0772,
+        0.0,
+        0.038,
+        0.0355,
+        0.0678
+      ],
+      [
+        0.0817,
+        0.038,
+        0.0,
+        0.0323,
+        0.0682
+      ],
+      [
+        0.0827,
+        0.0355,
+        0.0323,
+        0.0,
+        0.0714
+      ],
+      [
+        0.0674,
+        0.0678,
+        0.0682,
+        0.0714,
+        0.0
+      ]
+    ],
+    "channel_labels": [
+      "Mitochondria",
+      "Actin",
+      "Golgi/Plasma Membrane",
+      "Endoplasmic Reticulum",
+      "DNA/Nucleus"
+    ],
+    "off_diagonal_mean": 0.8162,
+    "off_diagonal_std": 0.0815
+  },
+  "cross_site_similarity": {
+    "same_channel": {
+      "Mitochondria": 0.8067,
+      "Actin": 0.8543,
+      "Golgi/Plasma Membrane": 0.8455,
+      "Endoplasmic Reticulum": 0.8531,
+      "DNA/Nucleus": 0.8403
+    },
+    "same_channel_mean": 0.84,
+    "cross_channel_mean": 0.75,
+    "gap": 0.09
+  },
+  "variance_decomposition": {
+    "total": 0.055063,
+    "between_channel": 0.017146,
+    "between_channel_pct": 31.1,
+    "between_site": 0.020411,
+    "between_site_pct": 37.1,
+    "residual": 0.017506,
+    "residual_pct": 31.8
+  },
+  "pca": {
+    "components": [
+      {
+        "pc": 1,
+        "variance_explained": 23.1,
+        "cumulative": 23.1
+      },
+      {
+        "pc": 2,
+        "variance_explained": 11.12,
+        "cumulative": 34.22
+      },
+      {
+        "pc": 3,
+        "variance_explained": 8.55,
+        "cumulative": 42.76
+      },
+      {
+        "pc": 4,
+        "variance_explained": 6.07,
+        "cumulative": 48.83
+      },
+      {
+        "pc": 5,
+        "variance_explained": 4.9,
+        "cumulative": 53.73
+      },
+      {
+        "pc": 6,
+        "variance_explained": 3.04,
+        "cumulative": 56.77
+      },
+      {
+        "pc": 7,
+        "variance_explained": 2.49,
+        "cumulative": 59.26
+      },
+      {
+        "pc": 8,
+        "variance_explained": 2.35,
+        "cumulative": 61.62
+      },
+      {
+        "pc": 9,
+        "variance_explained": 1.76,
+        "cumulative": 63.37
+      },
+      {
+        "pc": 10,
+        "variance_explained": 1.52,
+        "cumulative": 64.9
+      },
+      {
+        "pc": 11,
+        "variance_explained": 1.34,
+        "cumulative": 66.23
+      },
+      {
+        "pc": 12,
+        "variance_explained": 1.23,
+        "cumulative": 67.46
+      },
+      {
+        "pc": 13,
+        "variance_explained": 1.11,
+        "cumulative": 68.57
+      },
+      {
+        "pc": 14,
+        "variance_explained": 1.05,
+        "cumulative": 69.62
+      },
+      {
+        "pc": 15,
+        "variance_explained": 0.93,
+        "cumulative": 70.55
+      },
+      {
+        "pc": 16,
+        "variance_explained": 0.9,
+        "cumulative": 71.45
+      },
+      {
+        "pc": 17,
+        "variance_explained": 0.79,
+        "cumulative": 72.24
+      },
+      {
+        "pc": 18,
+        "variance_explained": 0.75,
+        "cumulative": 72.99
+      },
+      {
+        "pc": 19,
+        "variance_explained": 0.71,
+        "cumulative": 73.69
+      },
+      {
+        "pc": 20,
+        "variance_explained": 0.69,
+        "cumulative": 74.38
+      },
+      {
+        "pc": 21,
+        "variance_explained": 0.62,
+        "cumulative": 75.0
+      },
+      {
+        "pc": 22,
+        "variance_explained": 0.58,
+        "cumulative": 75.58
+      },
+      {
+        "pc": 23,
+        "variance_explained": 0.55,
+        "cumulative": 76.13
+      },
+      {
+        "pc": 24,
+        "variance_explained": 0.5,
+        "cumulative": 76.63
+      },
+      {
+        "pc": 25,
+        "variance_explained": 0.47,
+        "cumulative": 77.1
+      },
+      {
+        "pc": 26,
+        "variance_explained": 0.45,
+        "cumulative": 77.55
+      },
+      {
+        "pc": 27,
+        "variance_explained": 0.43,
+        "cumulative": 77.98
+      },
+      {
+        "pc": 28,
+        "variance_explained": 0.42,
+        "cumulative": 78.4
+      },
+      {
+        "pc": 29,
+        "variance_explained": 0.4,
+        "cumulative": 78.8
+      },
+      {
+        "pc": 30,
+        "variance_explained": 0.38,
+        "cumulative": 79.18
+      },
+      {
+        "pc": 31,
+        "variance_explained": 0.37,
+        "cumulative": 79.55
+      },
+      {
+        "pc": 32,
+        "variance_explained": 0.35,
+        "cumulative": 79.9
+      },
+      {
+        "pc": 33,
+        "variance_explained": 0.33,
+        "cumulative": 80.23
+      },
+      {
+        "pc": 34,
+        "variance_explained": 0.32,
+        "cumulative": 80.55
+      },
+      {
+        "pc": 35,
+        "variance_explained": 0.32,
+        "cumulative": 80.87
+      },
+      {
+        "pc": 36,
+        "variance_explained": 0.31,
+        "cumulative": 81.18
+      },
+      {
+        "pc": 37,
+        "variance_explained": 0.3,
+        "cumulative": 81.48
+      },
+      {
+        "pc": 38,
+        "variance_explained": 0.29,
+        "cumulative": 81.76
+      },
+      {
+        "pc": 39,
+        "variance_explained": 0.27,
+        "cumulative": 82.04
+      },
+      {
+        "pc": 40,
+        "variance_explained": 0.26,
+        "cumulative": 82.3
+      },
+      {
+        "pc": 41,
+        "variance_explained": 0.25,
+        "cumulative": 82.55
+      },
+      {
+        "pc": 42,
+        "variance_explained": 0.24,
+        "cumulative": 82.8
+      },
+      {
+        "pc": 43,
+        "variance_explained": 0.24,
+        "cumulative": 83.03
+      },
+      {
+        "pc": 44,
+        "variance_explained": 0.22,
+        "cumulative": 83.25
+      },
+      {
+        "pc": 45,
+        "variance_explained": 0.2,
+        "cumulative": 83.45
+      },
+      {
+        "pc": 46,
+        "variance_explained": 0.19,
+        "cumulative": 83.64
+      },
+      {
+        "pc": 47,
+        "variance_explained": 0.18,
+        "cumulative": 83.82
+      },
+      {
+        "pc": 48,
+        "variance_explained": 0.18,
+        "cumulative": 84.0
+      },
+      {
+        "pc": 49,
+        "variance_explained": 0.16,
+        "cumulative": 84.16
+      },
+      {
+        "pc": 50,
+        "variance_explained": 0.15,
+        "cumulative": 84.31
+      }
+    ],
+    "n_components_90pct": null
+  },
+  "verdicts": [
+    "PASS: good channel separation (cosine < 0.85)",
+    "PASS: channels distinguishable across sites",
+    "PASS: channel identity explains >5% of variance"
+  ]
+}

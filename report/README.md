@@ -13,11 +13,11 @@ built `main.pdf` are tracked. For an arXiv upload, submit `main.tex`,
 `sections/`, `references.bib` (or the generated `main.bbl`) and `figures/`, and
 leave the build artifacts out.
 
-Every number in the paper traces to a file under `output/` (gitignored, on the
-training machine): `output/morphoclip_runs/<run>/eval_{val,test}.json` for
-retrieval and `output/benchmark_<run>/` for the standard CPJUMP1 benchmark.
-`REVIEW.md` records the review passes and which findings each rewrite closed.
-Figures in `figures/` come from `scripts/features/diagnose_features.py`.
+Retrieval numbers trace to `output/morphoclip_runs/<run>/eval_{val,test}.json`;
+standard benchmark numbers trace to `output/benchmark_<run>/`. The cached-feature
+figures come from `scripts/features/diagnose_features.py`, and their sampled-plate
+metrics are preserved as `figures/feature_metrics.json`. `REVIEW.md` records the
+review passes and which findings each rewrite closed.
 
 One caveat on the numbers: the benchmark harness is not reproducible run to run.
 Only replicability `mean_average_precision` is deterministic. Fraction-retrieved

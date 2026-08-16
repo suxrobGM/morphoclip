@@ -1,17 +1,17 @@
 \section{Method}
 
-MorphoCLIP has two encoders and one contrastive objective. The image encoder turns a well of five-channel Cell Painting sites into a 512-dimensional unit vector. The text encoder does the same for a prompt that describes the perturbation. Figure~\ref{fig:architecture} shows the pipeline.
+MorphoCLIP has image and text encoders trained with a contrastive text objective and optional replicate and plate-offset terms. The image encoder turns a well of five-channel Cell Painting sites into a 512-dimensional unit vector. The text encoder does the same for a prompt that describes the perturbation. Figure~\ref{fig:architecture} shows the pipeline.
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/architecture.pdf}
-    \caption{MorphoCLIP. Each fluorescence channel of a site is encoded on its own by a frozen DINOv3 ViT-L/16, giving five 1024-d CLS tokens. A one-layer CrossChannelFormer attends over the five channel tokens and a learned aggregation token, and the aggregation token's output is the site vector. Site vectors are mean-pooled into a well vector and projected to the shared 512-d space. The prompt is encoded by a frozen BioClinical ModernBERT and projected to the same space. When plate offsets are on, the image embedding is shifted by its plate's offset and re-normalized before the losses. Only the CrossChannelFormer and the two projection heads are trained, about 14M parameters.}
+    \caption{MorphoCLIP. Each fluorescence channel of a site is encoded on its own by a frozen DINOv3 ViT-L/16, giving five 1024-d CLS tokens. A one-layer CrossChannelFormer attends over the five channel tokens and a learned aggregation token, and the aggregation token's output is the site vector. Site vectors are mean-pooled into a well vector and projected to the shared 512-d space. The prompt is encoded by a frozen BioClinical ModernBERT and projected to the same space. When plate offsets are on, the image embedding is shifted by its plate's offset and re-normalized before the losses. The trainable components are the CrossChannelFormer, the two projection heads and one logit-scale scalar, about 14M parameters in total.}
     \label{fig:architecture}
 \end{figure*}
 
 \subsection{Image Encoder}
 
-A Cell Painting site has five fluorescence channels (Table~\ref{tab:channels}). We encode each channel on its own: the single-channel image is resized to $384 \times 384$, copied to three channels, and passed through a frozen DINOv3 ViT-L/16~\cite{simeoni2025dinov3} (300M parameters). The result is five 1024-dimensional CLS tokens per site,
+A Cell Painting site has five fluorescence channels (Table~\ref{tab:channels}). We encode each channel on its own: the single-channel image is resized to the Hugging Face processor's native $224 \times 224$ input, copied to three channels, normalized with the processor statistics, and passed through a frozen DINOv3 ViT-L/16~\cite{simeoni2025dinov3} (300M parameters). The result is five 1024-dimensional CLS tokens per site,
 \begin{equation}
     \{\mathbf{z}_c\}_{c=1}^{5}, \quad \mathbf{z}_c \in \mathbb{R}^{1024}.
 \end{equation}
@@ -33,7 +33,7 @@ Ch & Stain & Target \\
 \end{tabular}
 \end{table}
 
-We chose DINOv3 ViT-L over the DINOv2-g backbone of CellCLIP because it is about $4\times$ smaller at similar transfer quality, which lets one RTX 5080 encode a full plate in about seven minutes. The channel tokens are written to disk once, about 75\,MB per plate, and every training run reads from that cache. The backbone never runs during training.
+We use DINOv3 ViT-L rather than the larger DINOv2-g backbone used by CellCLIP. The channel tokens are written to disk once, and every training run reads from that cache. The backbone never runs during training.
 
 \paragraph{CrossChannelFormer (CCF).} A one-layer transformer encoder~\cite{vaswani2017attention} with 4 heads merges the five channel tokens into one site vector, following the channel-aware design of CellCLIP~\cite{lu2025cellclip} and Channel ViT~\cite{bao2024channelvit}. Each token is L2-normalized so the five channels enter at a common scale, then a learned channel embedding $\mathbf{e}_c$ is added so the transformer can tell the stains apart. A learned aggregation token $\mathbf{q}$ is prepended and its output is the site vector:
 \begin{equation}
@@ -82,7 +82,7 @@ where $p_{ij}$ is the softmax of row $i$ of $\mathbf{S}$, $\tilde{w}_{ij} = w_{i
 \end{equation}
 Wells with no in-batch replicate are dropped from the mean, and the term shares the learned temperature with the text loss. The training loss is $\mathcal{L} = \mathcal{L}_{\text{CWCL}} + \lambda_{\text{rep}} \mathcal{L}_{\text{rep}}$; the base model uses $\lambda_{\text{rep}} = 0$ and the ablation uses $0.3$. Validation loss is the text term alone, so model selection is not influenced by the added term.
 
-\paragraph{Perturbation-aware batches.} For the replicate term to have positives, replicate wells must share a batch. Our sampler groups the training wells by perturbation, cuts each group into chunks of two wells, shuffles the chunks and packs them into batches of 256. A repair pass then swaps chunks so that every batch spans at least two plates where that is possible, which keeps in-batch negatives from being confounded with plate. Every ablation run uses this sampler; the base model uses uniform random batches.
+\paragraph{Perturbation-aware batches.} For the replicate term to have positives, replicate wells must share a batch. Our sampler groups the training wells by perturbation, cuts each group into chunks of two wells, shuffles the chunks and packs them into batches of 256. A repair pass swaps chunks so that every batch spans at least two plates where possible. This is a batch-composition constraint; it does not guarantee that individual negative pairs are free of plate confounding. Every ablation run uses this sampler; the base model uses uniform random batches.
 
 \paragraph{Plate offsets (cross-well alignment).} Batch effects are the main confound in Cell Painting, but in CPJUMP1 a plate is close to synonymous with an experimental condition (one cell line, one perturbation modality, one timepoint). Subtracting a plate's mean embedding would therefore also subtract the condition, which is exactly what the prompt describes. Our correction is relative to replicate plates instead. At the start of each epoch a gradient-free pass over the training wells computes each plate's mean embedding $\bar{\mathbf{f}}_p$, and every well is shifted by its plate's offset from the mean of the plates in the same condition:
 \begin{equation}
@@ -92,4 +92,4 @@ where $p(w)$ is the plate of well $w$ and $C(p)$ is the set of plates that share
 
 \subsection{Optimization}
 
-We train with AdamW~\cite{loshchilov2019adamw} at learning rate $10^{-4}$, weight decay $0.2$ on weight matrices and none on biases, norms and the temperature, $(\beta_1, \beta_2) = (0.9, 0.999)$ and $\varepsilon = 10^{-8}$. The learning rate warms up linearly for 100 steps and then follows a cosine to zero. We use FP16 mixed precision, gradient clipping at norm $1.0$ and a batch of 256 wells. The base model trained on a 100-epoch schedule and its best validation loss came at epoch 9; the ablation runs use a 30-epoch schedule with early stopping after 8 epochs without improvement. With the cache held in RAM an epoch of 55 optimizer steps takes about four seconds on the RTX 5080, so a 30-epoch ablation run finishes in under two minutes of GPU time. Loading the cache into memory takes longer than the training that follows.
+We train with AdamW~\cite{loshchilov2019adamw} at learning rate $10^{-4}$, $(\beta_1, \beta_2) = (0.9, 0.999)$ and $\varepsilon = 10^{-8}$. Weight decay 0.2 is applied to parameters with at least two dimensions except parameters whose names identify biases or normalization layers; it is not applied to one-dimensional parameters or the learned temperature. The learning rate warms up linearly for 100 steps and then follows a cosine schedule to zero. We use FP16 mixed precision, gradient clipping at norm $1.0$ and a batch of 256 wells. The base model trained on a 100-epoch schedule and its best validation loss came at epoch 9; the ablation runs use a 30-epoch schedule with early stopping after 8 epochs without improvement. The recorded \texttt{epoch\_seconds} is about four seconds for 55 optimizer steps on an RTX 5080 with the cache in RAM. That timer excludes validation and, for offset runs, the gradient-free offset refresh, so it is not end-to-end epoch or run time.

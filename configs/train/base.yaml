@@ -10,8 +10,8 @@ dataset:
   exclude_controls: true                          # Drop NEGCON/POSCON wells from training
   split_strategy: "pert_type"                     # Hash each broad_sample into 80/10/10; all modalities in every split
   val_fraction: 0.1                               # 10% validation (also used for test split)
-  batch_size: 512                                 # Training batch size (wells per batch)
-  eval_batch_size: 512                            # Evaluation batch size
+  batch_size: 256                                 # Training batch size (wells per batch)
+  eval_batch_size: 256                            # Evaluation batch size
   preload: true                                   # Preload all features into RAM (faster but more memory)
   # num_workers and pin_memory are derived automatically: 0 workers when
   # preload=true (data already in RAM) else 4, pin_memory on iff device is cuda.

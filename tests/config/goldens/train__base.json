@@ -1,9 +1,9 @@
 {
   "dataset": {
     "batch_sampler": "random",
-    "batch_size": 512,
+    "batch_size": 256,
     "dataset_config_path": "configs/dataset.yml",
-    "eval_batch_size": 512,
+    "eval_batch_size": 256,
     "exclude_controls": true,
     "feature_root": "data/features",
     "max_sites_per_well": null,

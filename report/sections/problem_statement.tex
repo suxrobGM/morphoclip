@@ -1,6 +1,6 @@
 \section{Problem Statement}
 
-Given a Cell Painting image $\mathbf{x} \in \mathbb{R}^{5 \times H \times W}$ (five fluorescence channels, acquired at $1080 \times 1080$ pixels and resized to $384 \times 384$ for the backbone) and a text description $t$ of the perturbation applied to the imaged cells, we learn encoders $f_{\text{img}}$ and $f_{\text{txt}}$ that map both into a shared unit sphere:
+Given a Cell Painting image $\mathbf{x} \in \mathbb{R}^{5 \times H \times W}$ (five fluorescence channels, acquired at $1080 \times 1080$ pixels and resized to the backbone processor's native $224 \times 224$ input) and a text description $t$ of the perturbation applied to the imaged cells, we learn encoders $f_{\text{img}}$ and $f_{\text{txt}}$ that map both into a shared unit sphere:
 \begin{equation}
     f_{\text{img}}(\mathbf{x}), \; f_{\text{txt}}(t) \in \mathbb{R}^d, \quad \|f_{\text{img}}(\mathbf{x})\|_2 = \|f_{\text{txt}}(t)\|_2 = 1.
 \end{equation}

@@ -20,6 +20,9 @@ import random
 from pathlib import Path
 from typing import Annotated
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -170,8 +173,9 @@ def compute_metrics(features: torch.Tensor, *, seed: int = 42) -> dict:
         idx = random.sample(range(flat_centered.shape[0]), 2000)
         flat_centered = flat_centered[idx]
 
+    torch.manual_seed(seed)
     _, s, _ = torch.svd_lowrank(flat_centered, q=50)
-    explained = (s**2) / (s**2).sum()
+    explained = (s**2) / flat_centered.square().sum()
     cumulative = explained.cumsum(dim=0)
 
     pca_components = []
@@ -290,6 +294,7 @@ def plot_pca_channels(features: torch.Tensor, output_dir: Path, *, seed: int = 4
     else:
         ch_labels = np.tile(np.arange(n_channels), n_sites)
 
+    torch.manual_seed(seed)
     _, _s, v = torch.svd_lowrank(flat_centered, q=10)
     proj = (flat_centered @ v[:, :2]).numpy()
 
