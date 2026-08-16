@@ -47,9 +47,9 @@ plus the `data`, `features`, `text` and `cellclip` sub-apps.
 ## Scripts
 
 `scripts/` holds one-off dev and exploration scripts, organised by domain
-(`data/`, `features/`, `text/`, `benchmark/`, `sanitycheck/`). They are not
-part of the installed package, so each one starts with
-`sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))`.
+(`data/`, `features/`, `text/`, `benchmark/`, `report/`, `sanitycheck/`). They
+are not part of the installed package, so one that imports from `src/` starts
+with `sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))`.
 
 Do not add a pipeline entry point here. Add a `morphoclip.cli` command
 instead.
@@ -95,7 +95,8 @@ Every committed config has a resolution golden in `tests/config/goldens/`.
 
 `[tool.poe.tasks]` holds the dev loop (`test`, `lint`, `format`, `typecheck`,
 `check`), the two commands that supply a default config (`train`,
-`benchmark`), `tensorboard`, and the script runners. Pipeline commands are
+`benchmark`), `tensorboard`, the paper build (`report`, `report-arxiv`,
+`report-clean`) and the script runners. Pipeline commands are
 deliberately not aliased there: a second name for each command only gave the
 docs something to drift out of sync with.
 

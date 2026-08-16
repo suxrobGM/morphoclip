@@ -37,6 +37,10 @@ uv run torchrun --nproc_per_node=4 -m morphoclip.cli train \
 uv run poe check                # format-check, lint, typecheck, test
 uv run poe test
 
+# Paper (needs latexmk and a TeX distribution)
+uv run poe report               # build report/build/main.pdf
+uv run poe report-arxiv         # pack report/build/arxiv.tar.gz
+
 # Docs site
 cd docs && bun install && bun run dev       # http://localhost:4000
 ```

@@ -67,20 +67,6 @@ htmlcov/
 output/
 .VSCodeCounter/
 
-# LaTeX build files
-*.aux
-*.bbl
-*.blg
-*.fdb_latexmk
-*.fls
-*.lof
-*.lot
-*.out
-*.toc
-*.synctex.gz
-*.synctex(busy)
-*.nav
-*.snm
-*.vrb
-*.dvi
-*.ps
+# LaTeX build output. `.latexmkrc` sends every artifact, including main.pdf and
+# the arXiv tarball, into this one directory.
+report/build/

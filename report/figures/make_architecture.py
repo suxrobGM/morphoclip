@@ -233,8 +233,8 @@ def main() -> None:
     ax.text(
         7.0,
         0.12,
-        "Trained: CrossChannelFormer, two projection heads, and logit scale (about 14M parameters). "
-        "Frozen: DINOv3 and ModernBERT, run once and cached.",
+        "Trained: CrossChannelFormer, two projection heads, and logit scale "
+        "(about 14M parameters). Frozen: DINOv3 and ModernBERT, run once and cached.",
         ha="center",
         va="bottom",
         fontsize=8.2,

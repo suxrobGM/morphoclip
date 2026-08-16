@@ -122,6 +122,10 @@ train = "morphoclip train --config configs/train/base.yaml"
 benchmark = "morphoclip benchmark --config configs/benchmark.yml"
 tensorboard = "python -m tensorboard.main --logdir output/morphoclip_runs"
 
+report = "latexmk -pdf -r report/.latexmkrc -cd report/main.tex"
+report-clean = { script = "shutil:rmtree('report/build', ignore_errors=True)" }
+report-arxiv = "python scripts/report/make_arxiv.py"
+
 inspect-dataset = "python scripts/data/inspect_dataset.py"
 inspect-perturbation = "python scripts/data/inspect_perturbation.py"
 inspect-text = "python scripts/text/inspect_text_embeddings.py"
