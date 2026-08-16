@@ -120,11 +120,11 @@ We evaluate MorphoCLIP on three established tasks following the CPJUMP1 benchmar
 
 All development and training runs on a single **NVIDIA RTX 5080 (16 GB VRAM)** local workstation. This constraint shapes every design decision.
 
-**Key efficiency strategy:** The DINOv3 backbone is frozen, so features are pre-extracted once and cached to disk. Extraction takes ~7 minutes per plate (~6 hours for all 51 plates) and produces ~3 GB of .pt files per plate. All later training runs on the cached features, needs only ~2 GB VRAM and ~3-5 minutes per epoch, and allows 50+ ablation experiments in a single day.
+**Key efficiency strategy:** The DINOv3 backbone is frozen, so features are pre-extracted once and cached to disk. Extraction takes ~7 minutes per plate (~6 hours for all 51 plates) and produces ~75 MB of .pt files per plate. All later training runs on the cached features, needs only a few GB of VRAM and, with the cache preloaded into RAM, about 4 seconds per epoch, which allows dozens of ablation runs in a single day.
 
 | Configuration                                  | Trainable Params | Est. VRAM | Time/Epoch |
 | ---------------------------------------------- | ---------------- | --------- | ---------- |
-| Pre-extracted DINOv3-L + CrossChFormer + heads | ~8M              | ~2 GB     | ~3-5 min   |
+| Pre-extracted DINOv3-L + CrossChFormer + heads | ~14M             | ~2 GB     | ~4 s (cache in RAM) |
 | Frozen DINOv3-L + LoRA (r=8) + CrossChFormer   | ~20M             | ~14 GB    | ~45-90 min |
 
 **Building blocks.** MorphoCLIP will be implemented in PyTorch, building on the following existing resources:

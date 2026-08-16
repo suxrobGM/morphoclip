@@ -80,8 +80,9 @@ trains on compounds and genetic perturbations together.
 100 epochs, sized for one RTX 5080 (16 GB). The dataclass defaults are smaller
 and apply only when no config file is given.
 
-Both encoders read from the pre-computed caches above. That is why an epoch
-takes only 3 to 5 minutes.
+Both encoders read from the pre-computed caches above. With `preload: true`
+and the cache in RAM, an epoch at batch size 256 takes about 4 seconds on an
+RTX 5080. Loading the cache into memory takes longer than the training run.
 
 ## Things worth knowing before you change something
 

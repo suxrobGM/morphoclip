@@ -2,36 +2,36 @@
 
 \subsection{Morphological Profiling}
 
-Cell Painting~\cite{bray2016cellpainting} introduced the now-standard five-stain protocol for high-content morphological profiling and has become the dominant assay for high-throughput phenotypic screening~\cite{seal2024cellpainting}. The classical analysis tool, CellProfiler~\cite{carpenter2006cellprofiler}, extracts more than 1,000 handcrafted shape, texture, and intensity features per cell. On CPJUMP1~\cite{chandrasekaran2024jump}, this pipeline retrieves 5--25\% of expected sister perturbations within a modality and 7--17\% of CRISPR guide matches; cross-modal compound-to-gene matching is harder still.
+Cell Painting~\cite{bray2016cellpainting} fixed the five-stain protocol that most high-content morphological profiling now uses~\cite{seal2024cellpainting}. The classical analysis tool, CellProfiler~\cite{carpenter2006cellprofiler}, measures more than 1,000 handcrafted features per cell. On CPJUMP1~\cite{chandrasekaran2024jump} that pipeline retrieves 5 to 25\% of the expected sister perturbations within a modality and 7 to 17\% of CRISPR guide matches, and cross-modal compound-to-gene matching is harder still.
 
-Handcrafted features are bounded by the measurements their authors chose to compute and miss higher-order phenotypic patterns. Self-supervised vision transformers trained with DINO surpass CellProfiler on drug-target and gene-family classification with zero-shot transfer~\cite{moshkov2025ssl}, which motivates the use of frozen foundation-model features for Cell Painting.
+Handcrafted features can only measure what their authors thought to measure. Self-supervised vision transformers trained with DINO beat CellProfiler on drug-target and gene-family classification with zero-shot transfer~\cite{moshkov2025ssl}, which is the case for building on frozen foundation-model features.
 
 \subsection{Contrastive Learning for Cell Painting}
 
-CLOOME~\cite{sanchez2023cloome} was the first CLIP-style framework for Cell Painting. It jointly trains a ResNet image encoder and a Morgan-fingerprint MLP and reaches top-1 retrieval $>70\times$ random over $\sim$2,000 candidates. CLOOME handles only chemical perturbations and treats the five channels as RGB, discarding channel-specific signal.
+CLOOME~\cite{sanchez2023cloome} was the first CLIP-style model for Cell Painting. It trains a ResNet image encoder against a Morgan-fingerprint MLP and reaches top-1 retrieval more than $70\times$ random over about 2,000 candidates. It handles chemical perturbations only and treats the five channels as RGB.
 
-MolPhenix~\cite{fradkin2024molphenix} replaces the trained image branch with a frozen Phenom-1 encoder, averages replicate embeddings, and introduces a soft-to-label (S2L) loss, gaining $8.78\times$ over CLOOME. It also covers compounds only and depends on a proprietary backbone.
+MolPhenix~\cite{fradkin2024molphenix} swaps the trained image branch for a frozen Phenom-1 encoder, averages replicate embeddings, and adds a soft-to-label loss, gaining $8.78\times$ over CLOOME. It also covers compounds only and depends on a proprietary backbone.
 
-CellCLIP~\cite{lu2025cellclip} is the closest prior work. It contributes (i)~templated text prompts (``A Cell Painting image of [cell\_type] cells treated with [drug\_name], SMILES: [SMILES\_string]''), (ii)~a CrossChannelFormer that processes each channel separately before cross-attention, (iii)~attention-based MIL pooling across cells, and (iv)~the Continuously Weighted Contrastive Loss (CWCL) for soft positives. CellCLIP runs on a DINOv2-g backbone (1.1B parameters, 1.48B total) and is evaluated on the Bray dataset~\cite{ljosa2012annotated} and on RxRx3-core gene--gene benchmarks (CORUM recall 0.354). Although CellCLIP supports all perturbation types through text, its cross-class mAP falls below the CellProfiler baseline, suggesting that text supervision on its own does not solve the batch-effect problem.
+CellCLIP~\cite{lu2025cellclip} is the closest prior work. It uses templated prompts (``A Cell Painting image of [cell\_type] cells treated with [drug\_name], SMILES: [SMILES\_string]''), a CrossChannelFormer that encodes each channel separately before attending across channels, attention-based pooling across cells, and a Continuously Weighted Contrastive Loss (CWCL) for soft positives. It runs on DINOv2-g (1.1B parameters, 1.48B in total) and is evaluated on the Bray dataset~\cite{ljosa2012annotated} and on RxRx3-core gene--gene benchmarks (CORUM recall 0.354). Its text branch admits every perturbation type, but its cross-class mAP falls below the CellProfiler baseline, so text supervision alone does not solve the batch-effect problem.
 
 \subsection{Batch-Effect Correction}
 
-CWA-MSN~\cite{huang2025cwamsn} addresses batch effects directly with cross-well alignment inside a masked siamese network. By aligning embeddings of cells subjected to the same perturbation across different wells and plates, it absorbs technical variance without an explicit batch label. With 22M parameters and 0.2M training images, CWA-MSN improves on CellCLIP by 9\% and on OpenPhenom by 29\% on gene--gene retrieval (CORUM recall 0.386). It has no text branch.
+CWA-MSN~\cite{huang2025cwamsn} addresses batch effects inside a masked siamese network by aligning embeddings of cells that received the same perturbation across wells and plates. It absorbs technical variance without an explicit batch label. With 22M parameters and 0.2M training images it improves on CellCLIP by 9\% and on OpenPhenom by 29\% on gene--gene retrieval (CORUM recall 0.386). It has no text branch.
 
 \subsection{Foundation Models for Microscopy}
 
-DINOv2~\cite{oquab2024dinov2} and DINOv3~\cite{simeoni2025dinov3} provide self-supervised visual representations that transfer well to biological imaging despite being trained on natural images~\cite{moshkov2025ssl}. DINOv3 adds gram anchoring and an improved training recipe over DINOv2. Channel Vision Transformers~\cite{bao2024channelvit} show that per-channel processing followed by cross-channel attention is effective for multi-channel microscopy, which motivates our CrossChannelFormer aggregator.
+DINOv2~\cite{oquab2024dinov2} and DINOv3~\cite{simeoni2025dinov3} give self-supervised visual features that transfer to biological imaging despite natural-image pretraining~\cite{moshkov2025ssl}. DINOv3 adds gram anchoring and a revised training recipe. Channel Vision Transformers~\cite{bao2024channelvit} show that per-channel encoding followed by cross-channel attention works for multi-channel microscopy, which is the pattern our channel aggregator follows.
 
-On the text side, BioClinical ModernBERT~\cite{sounack2025bioclinical} (150M parameters) is pre-trained on 53.5B tokens of PubMed, PMC, and clinical text, roughly $17\times$ the biomedical corpus used by PubMedBERT (110M, 3.1B tokens) in CellCLIP. Built on ModernBERT with RoPE, Flash Attention, and GeGLU activations, it can encode both small-molecule and gene descriptions in a single model, unlike SMILES-specialized encoders such as ChemBERTa.
+On the text side, BioClinical ModernBERT~\cite{sounack2025bioclinical} (150M parameters) is pre-trained on 53.5B tokens of PubMed, PMC and clinical text, about $17\times$ the biomedical corpus behind the PubMedBERT (110M, 3.1B tokens) that CellCLIP uses. It is built on ModernBERT (rotary embeddings, Flash Attention, GeGLU) and can encode both small-molecule and gene descriptions with one model, unlike SMILES-specialized encoders such as ChemBERTa.
 
 \subsection{Positioning of MorphoCLIP}
 
-Table~\ref{tab:landscape} places MorphoCLIP relative to these methods. No prior method combines text supervision with both gene-inclusive training and batch-effect correction: CellCLIP has text but no gene-inclusive contrastive training and no batch correction; CWA-MSN has genes and batch correction but no text. MorphoCLIP is designed to fill that intersection with a parameter-efficient architecture ($\sim$14M trainable parameters against CellCLIP's 1.48B total). The batch-correction component is optional and is evaluated in the planned ablation rather than in the results reported here.
+Table~\ref{tab:methods} places MorphoCLIP among these methods. CellCLIP has text but no batch correction. CWA-MSN has batch correction but no text. MorphoCLIP has both, trains on all three perturbation types, and keeps the trained part small. Where a like-for-like number exists we compare on the same benchmark harness (Section~\ref{sec:results}); elsewhere we quote published figures and say what differs.
 
 \begin{table}[t]
 \centering
-\caption{Landscape of Cell Painting representation learning methods. MorphoCLIP is designed to combine text supervision, gene-inclusive training, and batch correction. The parameter count is trainable parameters for MorphoCLIP and total parameters for the other learned methods.}
-\label{tab:landscape}
+\caption{Cell Painting representation learning methods. The parameter count is trainable parameters for MorphoCLIP and total parameters for the other learned methods.}
+\label{tab:methods}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccccc@{}}
 \toprule
@@ -42,7 +42,7 @@ CLOOME~\cite{sanchez2023cloome} & ResNet & No & Compounds & No & ${\sim}$25M \\
 MolPhenix~\cite{fradkin2024molphenix} & Phenom-1 & No & Compounds & No & ${\sim}$36M \\
 CellCLIP~\cite{lu2025cellclip} & DINOv2-g & Yes & All & No & 1,477M \\
 CWA-MSN~\cite{huang2025cwamsn} & ViT-S/16 & No & Unimodal & CWA & 22M \\
-\textbf{MorphoCLIP} & DINOv3-L & Yes & All & CWA (opt.) & ${\sim}$14M \\
+\textbf{MorphoCLIP} & DINOv3-L & Yes & All & Plate offsets & ${\sim}$14M \\
 \bottomrule
 \end{tabular}%
 }

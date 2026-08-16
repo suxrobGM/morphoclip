@@ -2,59 +2,49 @@
 
 \subsection{Dataset}
 
-We evaluate on the CPJUMP1 pilot dataset~\cite{chandrasekaran2024jump}, a public benchmark from the JUMP Cell Painting Consortium hosted on the Cell Painting Gallery (AWS S3, prefix \texttt{cpg0000-jump-pilot}). CPJUMP1 contains 51 plates and 3.31\,TiB of raw 16-bit TIFF images. The collection covers three perturbation types (303 small-molecule compounds, 160 CRISPR gene knockouts, 176 ORF overexpressions), two cell lines (U2OS and A549), and several timepoints. Each gene target is linked to at least two compounds, which allows systematic evaluation of compound--gene matching. Each plate has 384 wells with 7--16 sites per well; each site produces five fluorescence channels at $1080 \times 1080$ pixels plus three brightfield channels that we do not use.
+We use the CPJUMP1 pilot~\cite{chandrasekaran2024jump}, a public dataset from the JUMP Cell Painting Consortium hosted on the Cell Painting Gallery (S3 prefix \texttt{cpg0000-jump-pilot}). It has 51 plates and 3.31\,TiB of raw 16-bit TIFF images. The perturbations are 303 small-molecule compounds, 160 CRISPR knockouts and 176 ORF overexpressions, in two cell lines (U2OS and A549), mostly at two timepoints per modality. Each gene target is linked to at least two compounds, which is what makes compound--gene matching testable. Each plate has 384 wells with 7 to 16 imaged sites per well, and each site has five fluorescence channels at $1080 \times 1080$ pixels plus three brightfield channels that we do not use.
 
 \subsection{Data Pipeline}
 
-We use a stream-extract-delete pipeline to keep disk usage bounded. Raw TIFFs ($\sim$58--118\,GiB per plate) are downloaded to scratch space, passed through the frozen DINOv3 backbone, and removed once the per-channel CLS features are written. This compresses 3.31\,TiB of raw data into roughly 153\,GB of cached features ($\sim$3\,GB per plate). Extraction takes about seven minutes per plate on an RTX 5080, or roughly six hours for all 51 plates. Text embeddings are pre-computed in the same way: each perturbation prompt is encoded by frozen BioClinical ModernBERT and the 768-d CLS tokens are cached to disk.
+The raw plates are 58 to 118\,GiB each, so we stream, encode and delete. Each plate is downloaded to scratch, passed once through the frozen DINOv3 backbone, and removed once the per-channel CLS tokens are on disk. The cache for all 51 plates is about 3.8\,GB, or 75\,MB per plate.\footnote{An earlier version of the extractor saved each site tensor as a slice of a larger buffer, and \texttt{torch.save} wrote the whole buffer each time. The cache was 44$\times$ larger than it needed to be. Numbers in earlier drafts of this work quoted that size.} Encoding takes about seven minutes per plate on an RTX 5080, about six hours in total. Text embeddings are cached the same way: each prompt is encoded once by the frozen ModernBERT and the 768-d CLS token stored.
 
-The unit of training is a well with all of its sites aggregated. The cached feature tensor for a well has shape $(S, 5, 1024)$, where $S$ is the number of sites. After the CrossChannelFormer produces one vector per site, the site vectors are mean-pooled into a single well representation.
+\subsection{Splits}
 
-\subsection{Train/Validation/Test Split}
+Wells are split by perturbation. Each \texttt{broad\_sample} is hashed with a fixed seed into train, validation or test at 80/10/10, so all replicate wells of a perturbation land in one split and every split contains all three modalities. Control wells are excluded from training and evaluation. The validation split has 2,220 wells from 98 perturbations (42 compound, 34 CRISPR, 22 ORF), about 24 replicate wells each. The test split has 1,860 wells from 86 perturbations. The hash is deliberately stable: changing it would move every well to a different split and invalidate every split saved on disk.
 
-The runs reported here use a perturbation-stratified split. Each perturbation (\texttt{broad\_sample}) is hashed deterministically into train, validation, or test at an 80/10/10 ratio, with all three modalities present in every split and all wells of a perturbation kept together, so no perturbation is split across partitions. We also implement two alternative splits for later use: a gene-level holdout, in which no target gene appears in both train and test, and a CellCLIP-style within-slice split that matches CellCLIP's evaluation protocol.
+\subsection{Retrieval Protocol}
+\label{sec:protocol}
 
-\subsection{Evaluation Protocol}
+Replicate wells share one text vector, so the text side of a split has $P$ distinct vectors (98 on validation) and the image side has $N$ wells (2,220). We report four directions, each with an analytic random baseline computed from the same $P$ and $N$.
 
-We report numbers on the held-out validation split, which contains 2{,}220 wells drawn from 98 perturbations (42 compound, 34 CRISPR, 22 ORF), so each perturbation is represented by about 24 replicate wells. Retrieval ranks each query against all 2{,}220 wells, and a query is counted correct when any well sharing its perturbation appears in the top~$k$. Because replicate wells share an identical text embedding, both retrieval directions face the same positive structure. Both directions are reported:
 \begin{itemize}
-    \item \textbf{Recall@$k$} for $k \in \{1, 5, 10\}$: the fraction of queries whose first correct match appears in the top-$k$ retrieved candidates.
-    \item \textbf{Median rank}: the median position of the first correct match in the full ranked list (lower is better).
+    \item \textbf{Well-level image-to-text.} Each of the $N$ wells ranks the $P$ unique texts. One candidate is correct. Random Recall@$k$ is $k/P$.
+    \item \textbf{Well-level text-to-image.} Each of the $P$ texts ranks all $N$ wells and is scored on the rank of its first correct replicate. With $m$ replicate wells among $N$ candidates, random Recall@$k$ is $1 - \binom{N-m}{k} / \binom{N}{k}$.
+    \item \textbf{Perturbation-level, both directions.} The well embeddings of each perturbation are averaged and re-normalized into one profile, and the $P$ profiles are ranked against the $P$ texts. This is the unit of the standard CPJUMP1 protocol. Random Recall@$k$ is $k/P$.
 \end{itemize}
-A like-for-like random baseline, computed by ranking the 2{,}220 wells uniformly at random against the same positive structure, gives Recall@1/5/10 of approximately 1.1\%/5.3\%/10.4\% and a median rank near 64. Because each perturbation has many replicate positives, this baseline is much higher than the na\"ive single-positive value; we use it as the reference throughout. This well-level protocol differs from the standard CPJUMP1 setup, which aggregates replicates into one profile per perturbation and ranks over the perturbation set; moving to that protocol is the first item of future work (Section~\ref{sec:conclusion}).
+We report Recall@\{1, 5, 10\} and the median rank of the first correct match. Model selection uses the validation text loss, and we report both the validation and the test split.
+
+An earlier version of this evaluation ranked each well against all $N$ well-texts instead of the $P$ unique texts. Because the pool then held about 24 exact copies of every text vector, a model that scores identical vectors identically placed all copies at consecutive ranks, which capped Recall@5 and Recall@10 near Recall@1 and made image-to-text retrieval look worse than a shuffled baseline that interleaved the copies. Section~\ref{sec:pitfall} gives the arithmetic. Every number in this paper uses the unique-text pool.
+
+\subsection{Standard CPJUMP1 Benchmark}
+
+We also run the benchmark of Chandrasekaran et al.~\cite{chandrasekaran2024jump} on exported well embeddings, with the pinned copairs implementation the reference code uses. Trained checkpoints encode every well of a plate (controls included) in fp32, subtract the plate's negative-control mean, and write one profile CSV per plate in the layout the benchmark reads. The benchmark covers the 40 plates at standard seeding density without antibiotics, at two timepoints per modality (short: compound 24\,h, ORF 48\,h, CRISPR 96\,h; long: 48\,h, 96\,h, 144\,h). It measures three things with mean average precision (mAP) against a permutation null: \emph{replicability}, whether replicate wells of one perturbation retrieve each other; \emph{target matching}, whether perturbations of one modality that share a target retrieve each other; and \emph{gene--compound matching}, whether compounds retrieve the CRISPR or ORF perturbations of their target. Each track reports mean mAP and the fraction of perturbations whose mAP passes $q < 0.05$ (fraction retrieved).
+
+One caveat applies to every fraction-retrieved value in this paper and in the reference results: the permutation null is random, so the set of perturbations that pass the threshold changes from run to run of identical code. Only replicability mAP is deterministic. Small differences in fraction retrieved should not be read as effects.
 
 \subsection{Baselines}
 
-We compare against three baselines. Each was reported on a different dataset or task formulation, so the comparisons are indicative rather than strictly controlled, and we flag the relevant differences in the results section.
 \begin{itemize}
-    \item \textbf{CellProfiler}~\cite{carpenter2006cellprofiler}. Handcrafted features on CPJUMP1 sister-perturbation matching, fraction retrieved 4.3--25.1\% (mean $\sim$13\%)~\cite{chandrasekaran2024jump}.
-    \item \textbf{CellCLIP}~\cite{lu2025cellclip}. Contrastive model on the Bray dataset~\cite{ljosa2012annotated} with text-to-profile retrieval. Best Recall@10 7.4\%; CORUM gene--gene recall 0.354.
-    \item \textbf{CWA-MSN}~\cite{huang2025cwamsn}. Self-supervised siamese network with cross-well alignment. CORUM gene--gene recall 0.386 with 22M parameters.
+    \item \textbf{CellProfiler}~\cite{carpenter2006cellprofiler}. Handcrafted features. On CPJUMP1 sister-perturbation matching the published fraction retrieved is 4.3 to 25.1\% (mean about 13\%)~\cite{chandrasekaran2024jump}. We did not rerun the CellProfiler pipeline.
+    \item \textbf{CellCLIP}~\cite{lu2025cellclip}. We quote the published Bray-dataset retrieval (best Recall@10 7.4\%) and CORUM recall (0.354). We also ran the released CellCLIP checkpoint through our benchmark harness on the short timeline, exporting profiles with CellCLIP's own encoder path. Those numbers are the closest like-for-like comparison we have, with two caveats noted where they appear: CellCLIP's evaluation recipe includes a control-fitted KernelPCA batch correction that our export does not apply, and the two are separate runs of a non-deterministic harness.
+    \item \textbf{CWA-MSN}~\cite{huang2025cwamsn}. CORUM gene--gene recall 0.386 with 22M parameters. Its benchmarks (CORUM, HuMAP, Reactome) are not among ours, so no comparable number exists.
 \end{itemize}
 
-\subsection{Implementation Details}
-
-Batch size 256 wells. AdamW optimizer with $\text{lr} = 10^{-4}$, weight decay 0.2, $(\beta_1, \beta_2) = (0.9, 0.999)$, $\varepsilon = 10^{-8}$. Schedule: 100-step linear warmup followed by cosine decay over 100 epochs, with the reported checkpoint selected by validation loss. FP16 mixed precision; gradient clipping at norm 1.0. CrossChannelFormer: 1 transformer layer, 4 attention heads. Projection heads: hidden width 512, dropout 0.3. Temperature initialized to $\ln(1/0.07)$ and clamped at $\ln(100)$. The headline number uses seed 42; the planned ablation runs use three seeds (42, 1337, 2024) for variance estimates.
-
-\subsection{Planned Ablations}
+\subsection{Ablation Design}
 \label{sec:ablation_design}
 
-We design a $2^3$ factorial ablation over three binary factors (text supervision, CWA batch correction, and gene-inclusive training) to attribute performance to each component:
+The base model was trained with binary CWCL labels, uniform random batches, no replicate term and no plate offsets, on the 100-epoch schedule. The ablations share one config that differs from the base in three ways: perturbation-aware batches, a 30-epoch schedule and early stopping (patience 8). From that shared control we change one thing at a time: gene-aware soft labels ($\alpha = 0.6$), the replicate alignment loss ($\lambda_{\text{rep}} = 0.3$), and plate offsets. The plate-offset variant was run three times: once with the earlier in-batch mean subtraction, once with condition-relative offsets for the 40 plates the reference metadata covers and a zero offset for the other 11, and once with offsets for all 51 plates. A final run turns all three additions on together. Every run uses seed 42, batch size 256 and the same split. All retrieval numbers below therefore come from one seed. Where two runs differ by a few points at 98 or 86 candidates, one perturbation is worth about one point, and we do not read such differences as effects.
 
-\begin{table}[t]
-\centering
-\caption{Factorial ablation design.}
-\label{tab:ablation_design}
-\begin{tabular}{@{}lcccl@{}}
-\toprule
-Variant & CWA & Genes & Text & Tests \\
-\midrule
-Full MorphoCLIP & \checkmark & \checkmark & \checkmark & Complete method \\
-No text & \checkmark & \checkmark & & CWA-MSN--like \\
-No genes & \checkmark & & \checkmark & CellCLIP + CWA \\
-No CWA & & \checkmark & \checkmark & Batch corr.\ effect \\
-\bottomrule
-\end{tabular}
-\end{table}
+\subsection{Implementation}
 
-A second planned ablation varies prompt richness across four levels: (1)~perturbation name only, (2)~name plus target and function, (3)~name plus target plus SMILES or gene description, and (4)~full description with pathway annotations. The goal is to measure how much of the gain comes from injecting structured domain knowledge into the prompt, and in particular whether SMILES strings carry useful signal through BioClinical ModernBERT, which was not pre-trained on chemical notation.
+Everything runs on one RTX 5080 (16\,GB). AdamW, learning rate $10^{-4}$, weight decay 0.2, 100 warm-up steps then cosine decay, FP16, gradient clipping at 1.0. CCF: one layer, four heads. Projection heads: hidden width 512, dropout 0.3. The code, configs and split manifests are released with the paper.

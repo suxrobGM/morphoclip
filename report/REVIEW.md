@@ -118,17 +118,17 @@ cautious ("we present / we evaluate / preliminary results suggest").
 ## Pre-journal checklist
 
 - [x] **Re-evaluate at the perturbation level**: done; see the addendum below.
-- [ ] Run the **2³ factorial ablation** (text × CWA × genes) plus the mean-pool and
-      prompt-richness variants on one locked split. *(Staged 4-run campaign in progress.)*
-- [ ] **≥3 seeds** (42, 1337, 2024); report mean ± sd for R@1/5/10 and median rank.
-- [ ] Report the headline on the **held-out test split** after validation-based model selection.
-- [ ] Same-data **head-to-head vs CWA-MSN** (CORUM / HuMAP / Reactome) and CellCLIP.
+- [~] Run the **2³ factorial ablation** (text × CWA × genes) plus the mean-pool and
+      prompt-richness variants on one locked split. *(Replaced by a one-factor-at-a-time campaign plus one combined run; the paper now describes what was run. Mean-pool and prompt-richness variants remain unrun.)*
+- [ ] **≥3 seeds** (42, 1337, 2024); report mean ± sd for R@1/5/10 and median rank. *(Still open. The 2026-08-15 test-split evals show a single checkpoint moving by 5 to 12 points between splits, so this is now the top item.)*
+- [x] Report the headline on the **held-out test split** after validation-based model selection. *(Done 2026-08-15; see addendum.)*
+- [~] Same-data **head-to-head vs CWA-MSN** (CORUM / HuMAP / Reactome) and CellCLIP. *(CellCLIP: the reference-checkpoint short-timeline benchmark from `docs/_internal/cellclip_replicate_changelog.md` is now in the paper as a same-harness table, with its KernelPCA caveat. CWA-MSN: still no comparable number.)*
 - [x] **Enable CWA and measure it**, or drop it from the contribution list. *(Measured,
       found catastrophic, rebuilt as condition-relative plate offsets, re-measured at
-      control level; see the 2026-08-12 addendum. Benchmark replicability still pending.)*
+      control level; see the 2026-08-12 addendum. Benchmarked 2026-08-15: replicability at control level.)*
 - [x] ~~Investigate why **image→text is below chance**~~: it never was; see the addendum.
 - [ ] Add qualitative **nearest-neighbor examples** with biological interpretation.
-- [ ] Regenerate the **architecture figure** if it shows channel mean-pooling.
+- [x] Regenerate the **architecture figure** if it shows channel mean-pooling. *(It did not, but its arrows rendered as boxes and it omitted site pooling and the added loss terms. Regenerated 2026-08-15 from `report/figures/make_architecture.py`.)*
 
 ---
 
@@ -332,3 +332,88 @@ control with full plate coverage), benchmark effect pending". CWA still cannot b
 as a delivered win until the replicability numbers and at least a second seed exist: the
 single-seed gain is four perturbations, comparable to the run-to-run spread seen across
 the other campaign variants.
+
+---
+
+## Addendum: rewrite for arXiv (2026-08-15)
+
+The manuscript was rewritten end to end against the numbers on disk. Every
+retrieval figure now comes from an `eval_{val,test}.json` under
+`output/morphoclip_runs/`, and every benchmark figure from an
+`output/benchmark_<run>/` directory. Three cheap experiments were run first so
+that the rewrite did not have to describe gaps it could close.
+
+### New measurements
+
+Test-split evaluations of the ablation checkpoints (perturbation-level R@10,
+i2t / t2i, 86 perturbations, random 0.116):
+
+| Run | val i2t / t2i | test i2t / t2i |
+|---|---|---|
+| `ccf_preload` (base) | 0.388 / 0.398 | 0.372 / 0.442 |
+| `abl_repro` (control) | 0.378 / 0.378 | **0.500** / 0.419 |
+| `abl_soft` | 0.378 / 0.429 | 0.442 / 0.477 |
+| `abl_imgimg` | **0.449** / 0.418 | 0.477 / 0.465 |
+| `abl_cwa_offsets_full` | 0.418 / 0.388 | 0.419 / 0.430 |
+| `abl_combined` (soft + replicate + offsets, new) | 0.429 / 0.439 | 0.465 / 0.453 |
+
+The test split reorders the runs: the control is best on test i2t, the
+replicate loss is best on val i2t. A single checkpoint moves by 5 to 12 points
+between splits. The paper therefore does not claim a retrieval gain for any
+single addition. The combined run has the lowest validation text loss (5.396)
+and is among the best on both splits without being additive.
+
+Standard benchmark, new columns (fraction retrieved / mean mAP, replicability
+mean of 12 tracks):
+
+| Run | replicability | matching (n profiles) | gene-compound |
+|---|---|---|---|
+| base | 0.178 / 0.298 | 0.339 / 0.197 (536) | 0.005 / 0.123 |
+| replicate loss | 0.248 / 0.343 | 0.262 / 0.160 (748) | 0.000 / 0.082 |
+| plate offsets (all 51) | 0.172 / 0.292 | 0.420 / 0.194 (540) | 0.010 / 0.140 |
+| all three | **0.277 / 0.369** | 0.172 / 0.148 (856) | 0.029 / 0.082 |
+
+Plate offsets alone leave replicability at control level, so the "decisive
+measurement" flagged on 2026-08-12 is negative: the rebuilt CWA is harmless but
+not useful on this benchmark. The combined run has the highest replicability
+mAP on 10 of 12 tracks. The matching population is gated on replicability, so
+its mean falls as more profiles are admitted; the CRISPR matching tracks have 2
+to 30 targets and are not readable. Gene-compound stays at or near zero: 2, 0,
+3 and 3 pairs pass the q<0.05 gate for base, replicate loss, plate offsets and
+combined (of 219, 385, 179 and 480). The plate-offset run's three are all
+compound-CRISPR and its gene-compound mAP (0.140) is the highest of the four,
+which is the direction a cross-plate correction should push, at one seed.
+
+### Two stale facts corrected in the paper and docs
+
+- An epoch takes about 4 seconds, not 3 to 5 minutes, once the cache is in
+  RAM (`epoch_seconds` in every `metrics.csv`). The 80-minute wall clock of the
+  combined run was the preload on a memory-pressured machine.
+- The CellProfiler 4.3 to 25.1 % figure is a sister-perturbation (target
+  matching) number. Earlier drafts compared replicability against it. The paper
+  now compares target matching to it and replicability to CellCLIP on the same
+  harness.
+
+### Checkpoint housekeeping
+
+The `abl_repro`, `abl_soft`, `abl_imgimg` and `abl_cwa` checkpoints carried the
+pre-rename config keys `lambda_img` and `img_img_temperature`, which the strict
+schema rejects. Their embedded configs were rewritten in place to
+`replicate_weight` / `replicate_temperature`; no shim was added to the code.
+
+### What the paper now says, in one line each
+
+- Retrieval: about four times chance in both directions on both splits.
+- Ablations: within single-seed noise at retrieval; replicate loss moves
+  benchmark replicability on every track, partly by definition.
+- Baselines: level with or above CellCLIP on compound replicability at 1/100
+  the size; target matching inside the CellProfiler range; no CWA-MSN number.
+- Cross-modality: at or near zero for every variant (at most 3 passing pairs of 179 to 480; the plate-offset run has the highest gene-compound mAP, 0.140), stated as an open failure.
+- Evaluation pitfall: documented with the arithmetic (median 289 = 12 x 24 + 1).
+
+### Still open
+
+- Seeds 1337 and 2024 for control, replicate loss and combined.
+- A task the replicate loss does not optimize that shows a gain.
+- Cross-modality: `target` vs `target_list` soft labels, prompt ablation.
+- Nearest-neighbor examples.

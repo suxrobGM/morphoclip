@@ -403,7 +403,7 @@ scripts/
 
 ## Key Design Decisions
 
-1. **Pre-computed features, not end-to-end.** DINOv3 is frozen, so CLS tokens are extracted and cached once (~3 GB/plate). Training iterates over `.pt` files, not raw images. That is what makes a ~3-5 min epoch possible on a single GPU.
+1. **Pre-computed features, not end-to-end.** DINOv3 is frozen, so CLS tokens are extracted and cached once (~75 MB/plate). Training iterates over `.pt` files, not raw images, and with the cache preloaded an epoch takes seconds on a single GPU.
 
 2. **Both text and image projection heads are trainable.** CellCLIP trains only the text side; MorphoCLIP trains both projection heads, and the CrossChannelFormer.
 
