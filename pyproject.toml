@@ -137,6 +137,9 @@ target-version = "py314"
 line-length = 100
 src = ["src", "scripts"]
 
+[tool.ruff.format]
+line-ending = "lf"
+
 [tool.ruff.lint]
 select = [
   "E",    # pycodestyle
