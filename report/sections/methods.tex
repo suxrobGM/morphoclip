@@ -88,7 +88,7 @@ Wells with no in-batch replicate are dropped from the mean, and the term shares 
 \begin{equation}
     \tilde{\mathbf{f}}_w = \frac{\mathbf{f}_w - \boldsymbol{\delta}_{p(w)}}{\|\mathbf{f}_w - \boldsymbol{\delta}_{p(w)}\|_2}, \quad \boldsymbol{\delta}_p = \bar{\mathbf{f}}_p - \frac{1}{|C(p)|} \sum_{q \in C(p)} \bar{\mathbf{f}}_q ,
 \end{equation}
-where $p(w)$ is the plate containing well $w$ and $C(p)$ is the set of plates with the same experimental condition. Offsets within a condition sum to zero, preserving the condition mean while removing plate-to-plate drift. They are treated as constants, applied only to image embeddings and stored in the checkpoint for consistent evaluation.
+where $p(w)$ is the plate containing well $w$ and $C(p)$ is the set of plates with the same experimental condition. Offsets within a condition sum to zero, so the correction removes plate-to-plate drift without shifting the condition mean. They are treated as constants, applied only to image embeddings and stored in the checkpoint for consistent evaluation.
 
 \subsection{Optimization}
 

@@ -8,7 +8,7 @@ Handcrafted pipelines are limited to a predefined set of measurements. Self-supe
 
 \subsection{Contrastive Learning for Cell Painting}
 
-CLOOME~\cite{sanchez2023cloome} introduced CLIP-style training for Cell Painting by pairing a ResNet image encoder with molecular fingerprints. Its strong compound retrieval results established the value of contrastive supervision, but the method does not cover genetic perturbations and treats the five fluorescence channels as RGB.
+CLOOME~\cite{sanchez2023cloome} introduced CLIP-style training for Cell Painting by pairing a ResNet image encoder with molecular fingerprints. Its compound retrieval results showed that contrastive supervision works for Cell Painting, but the method does not cover genetic perturbations and treats the five fluorescence channels as RGB.
 
 MolPhenix~\cite{fradkin2024molphenix} uses a frozen Phenom-1 image encoder, averages replicate embeddings and introduces softer labels. It improves compound retrieval but depends on a proprietary backbone and likewise does not represent genetic perturbations.
 

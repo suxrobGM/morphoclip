@@ -10,7 +10,7 @@ Because the raw images occupy several terabytes, we process one plate at a time.
 
 \subsection{Splits}
 
-We split the data by perturbation rather than by well. A fixed hash assigns each perturbation to the training, validation or test set in an 80/10/10 ratio, ensuring that replicate wells never appear across splits. All three perturbation types are represented in each split, and control wells are excluded from training and retrieval evaluation. The validation set contains 2,220 wells from 98 perturbations, and the test set contains 1,860 wells from 86 perturbations.
+We split the data by perturbation rather than by well. A fixed hash assigns each perturbation to the training, validation or test set in an 80/10/10 ratio, so replicate wells of one perturbation never appear in different splits. All three perturbation types are represented in each split, and control wells are excluded from training and retrieval evaluation. The validation set contains 2,220 wells from 98 perturbations, and the test set contains 1,860 wells from 86 perturbations.
 
 \subsection{Retrieval Protocol}
 \label{sec:protocol}
