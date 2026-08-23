@@ -28,9 +28,7 @@ dependencies = [
   "setuptools==81.0.0",
 ]
 
-# PyTorch is installed via a selectable, mutually-exclusive extra that picks the
-# right wheel index for your hardware. macOS ignores these indexes (via the
-# sys_platform marker) and pulls the MPS-enabled wheel from the default PyPI.
+# PyTorch is installed via a selectable, mutually-exclusive extra that picks the right wheel index for your hardware.
 #
 #   uv sync --extra cpu        # CPU-only (Linux/Windows), or macOS (MPS)
 #   uv sync --extra cu128      # CUDA 12.8 (RTX 50-series / Blackwell)
@@ -40,8 +38,7 @@ cpu = ["torch>=2.10.0", "torchvision>=0.25.0"]
 cu128 = ["torch>=2.10.0", "torchvision>=0.25.0"]
 cu130 = ["torch>=2.10.0", "torchvision>=0.25.0"]
 
-# Benchmark harness (mAP via copairs). Pinned to the "old API" commit the stable
-# benchmark path depends on. Install with: uv sync --extra benchmark
+# Benchmark harness (mAP via copairs). Install with: uv sync --extra benchmark
 benchmark = [
   "copairs @ git+https://github.com/cytomining/copairs@880f22a551bd897896d148a0b07baa99d981c6a9",
   "scikit-learn>=1.5.0",
@@ -102,12 +99,6 @@ torchvision = [
   { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform != 'darwin'" },
 ]
 
-# Task runner (poethepoet). Run with: uv run poe <task>
-#
-# Pipeline commands are NOT aliased here. They live in the `morphoclip` CLI
-# (`uv run morphoclip --help`); a second name for each one only gave the docs
-# something extra to fall out of sync with. What is left is the dev loop, the
-# two commands that supply a default config, and the script runners.
 [tool.poe.tasks]
 test = "pytest"
 test-cov = "pytest --cov --cov-report=term-missing --cov-report=xml"

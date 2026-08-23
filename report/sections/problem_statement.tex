@@ -1,10 +1,10 @@
 \section{Problem Statement}
 
-Given a Cell Painting image $\mathbf{x} \in \mathbb{R}^{5 \times H \times W}$ (five fluorescence channels, acquired at $1080 \times 1080$ pixels and resized to the backbone processor's native $224 \times 224$ input) and a text description $t$ of the perturbation applied to the imaged cells, we learn encoders $f_{\text{img}}$ and $f_{\text{txt}}$ that map both into a shared unit sphere:
+Given a five-channel Cell Painting image $\mathbf{x} \in \mathbb{R}^{5 \times H \times W}$ and a text description $t$ of the applied perturbation, we learn image and text encoders that map both inputs to the same normalized embedding space:
 \begin{equation}
     f_{\text{img}}(\mathbf{x}), \; f_{\text{txt}}(t) \in \mathbb{R}^d, \quad \|f_{\text{img}}(\mathbf{x})\|_2 = \|f_{\text{txt}}(t)\|_2 = 1.
 \end{equation}
-Matching image--text pairs should have high cosine similarity and non-matching pairs low similarity. We use $d = 512$. In practice the image unit is a well: all sites of one well are encoded together and produce one vector.
+Matching image--text pairs should have high cosine similarity, while unrelated pairs should be farther apart. We set $d=512$. Although the equation is written for one image, the model operates at the well level by combining all imaged sites from a well into one vector.
 
 The trained encoders support three retrieval tasks:
 \begin{itemize}
@@ -13,10 +13,10 @@ The trained encoders support three retrieval tasks:
     \item \textbf{Image-to-image retrieval.} Compare well embeddings by cosine similarity, without text at inference time. This is the setting of the standard CPJUMP1 benchmark: do replicate wells of one perturbation match, and do perturbations that share a target match across modalities?
 \end{itemize}
 
-Three properties of the data make this harder than natural image--caption alignment.
+This task is harder than ordinary image--caption alignment for three reasons.
 
-\paragraph{Batch effects.} The same perturbation looks different across plates and imaging days. Illumination, staining and focus drift add technical variance that is often larger than the biological signal. In CPJUMP1, replicability depends on modality (compounds replicate more cleanly than CRISPR) and on cell line (U2OS against A549)~\cite{chandrasekaran2024jump}, and the distribution of per-perturbation average precision is heavily right-skewed: most perturbations score close to zero.
+\paragraph{Batch effects.} The same perturbation can look different across plates and imaging days. Changes in illumination, staining or focus may be stronger than the biological effect of interest. In CPJUMP1, reproducibility also varies by perturbation type and cell line~\cite{chandrasekaran2024jump}.
 
-\paragraph{Fuzzy ground truth.} Perturbations do not come with clean positive and negative labels. Two compounds may share a primary target and diverge on secondary effects. A CRISPR knockout and a small molecule can converge on one pathway through different mechanisms. Similarity is a continuum, which argues for soft-positive losses over hard-negative InfoNCE.
+\paragraph{Imperfect labels.} Biological similarity is not simply positive or negative. Two compounds may share a primary target but differ in their secondary effects, while a gene knockout and a compound may influence the same pathway through different mechanisms. This motivates softer supervision than a standard loss in which every non-matching pair is treated as equally negative.
 
-\paragraph{Scale and compute.} CPJUMP1 has 51 plates and 3.31\,TiB of raw 16-bit TIFF images, about 3 million fields of view and 75 million cells. Training full vision and language encoders end to end at this scale is out of reach on one consumer GPU. We instead run the frozen backbones once, cache their outputs, and train only the small components that sit on top.
+\paragraph{Scale and compute.} CPJUMP1 contains several terabytes of microscopy data. Training both foundation models end to end is impractical on a single consumer GPU, so we run the frozen backbones once, cache their outputs and train only the smaller modules on top.
