@@ -1,7 +1,7 @@
 \section{Results and Discussion}
 \label{sec:results}
 
-Unless otherwise noted, results come from a single training seed. Retrieval is measured on the held-out splits described in Section~\ref{sec:protocol}, while the standard benchmark uses its eligible CPJUMP1 plates. Chance performance is shown alongside each retrieval result.
+Retrieval is measured on the held-out splits described in Section~\ref{sec:protocol}, with chance performance shown alongside the model results. The standard benchmark uses its eligible CPJUMP1 plates.
 
 \subsection{Cross-Modal Retrieval}
 
@@ -64,7 +64,7 @@ All three & soft $+$ replicate $+$ offsets & 42.9 & 43.9 & 13 & 46.5 & 45.3 & 11
 }
 \end{table*}
 
-No single addition improves retrieval consistently across validation and test data. The ranking of the variants changes between splits, and a difference of several percentage points represents only a few perturbations. The combined model is competitive in both directions but is not uniformly best. These results show that the three components can be trained together, but repeated seeds are needed to determine whether any of them provides a reliable retrieval gain.
+No single addition improves retrieval consistently across validation and test data. The ranking of the variants changes between splits, and a difference of several percentage points represents only a few perturbations. The combined model is competitive in both directions but is not uniformly best. The observed differences are therefore too small to establish a reliable retrieval gain.
 
 \subsection{Standard CPJUMP1 Benchmark}
 
@@ -106,28 +106,46 @@ Gene--compound summary & & 0.005 (0.123) & 0.000 (0.082) & 0.010 (0.140) & 0.029
 
 \subsection{Comparison with Baselines}
 
-\paragraph{CellProfiler.} The base model's mean result across the four compound target-matching tracks falls within the published CellProfiler range~\cite{chandrasekaran2024jump}. Because we did not rerun CellProfiler under the same pipeline, this comparison provides context but does not establish an advantage.
+\paragraph{Same-harness comparison.} Table~\ref{tab:same_harness} compares the released CellCLIP checkpoint with MorphoCLIP on the five short-timeline CPJUMP1 tracks available for both models. The shared-track mean gives a clearer summary than any single cell line or perturbation type. MorphoCLIP's base model and CellCLIP are close on average, while the replicate-loss and combined variants are higher on most tracks. The comparison remains approximate because CellCLIP uses its own encoder path and a control-fitted KernelPCA correction, whereas MorphoCLIP does not.
 
-\paragraph{CellCLIP.} Table~\ref{tab:cellclip} places the released CellCLIP checkpoint in the same benchmark harness. The comparison is not fully controlled: CellCLIP uses an additional KernelPCA correction, and fraction retrieved varies with the benchmark's permutation test. The table should therefore be read as a reference rather than a ranking.
+\begin{table*}[t]
+\centering
+\caption{Short-timeline CPJUMP1 replicability on tracks shared by CellCLIP and MorphoCLIP. Values are fraction retrieved; the final column is the unweighted mean of the five tracks. CellCLIP uses the released checkpoint and its own preprocessing path.}
+\label{tab:same_harness}
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Model & Compound A549 & Compound U2OS & CRISPR A549 & CRISPR U2OS & ORF U2OS & Mean \\
+\midrule
+CellCLIP~\cite{lu2025cellclip} & 0.366 & 0.353 & 0.020 & 0.118 & 0.119 & 0.195 \\
+MorphoCLIP base & 0.353 & 0.297 & 0.173 & 0.026 & 0.043 & 0.178 \\
+$+$ replicate loss & 0.435 & 0.379 & 0.271 & 0.049 & 0.099 & 0.247 \\
+MorphoCLIP, all three & 0.497 & 0.422 & 0.340 & 0.078 & 0.099 & 0.287 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Because fraction retrieved depends on a stochastic significance test, the differences in Table~\ref{tab:same_harness} should not be read as a definitive ranking. The changes from the MorphoCLIP base to its own variants are more informative than the unpaired comparison with CellCLIP.
+
+\paragraph{Published benchmark context.} Table~\ref{tab:published_context} groups published results only where the dataset, task and metric match. On CPJUMP1 compound target matching, the MorphoCLIP base spans a similar range to CellProfiler and has a four-track mean of 16.3\%. On the separate RxRx3-core CORUM benchmark, CWA-MSN improves over CellCLIP, but MorphoCLIP has not been evaluated there.
 
 \begin{table}[t]
 \centering
-\caption{Short-timeline replicability, fraction retrieved, same benchmark harness. CellCLIP row uses the released checkpoint and its own export path. Separate runs of a non-deterministic harness.}
-\label{tab:cellclip}
-\begin{tabular}{@{}lrrrr@{}}
+\caption{Published benchmark context. Results are comparable within each dataset--task group, not across groups. FR denotes fraction retrieved.}
+\label{tab:published_context}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}llllr@{}}
 \toprule
-Track & CellCLIP & Base & $+$ replicate loss & All three \\
+Method & Dataset & Task & Metric & Result \\
 \midrule
-Compound A549 & 0.366 & 0.353 & 0.435 & 0.497 \\
-Compound U2OS & 0.353 & 0.297 & 0.379 & 0.422 \\
-CRISPR A549 & 0.020 & 0.173 & 0.271 & 0.340 \\
-CRISPR U2OS & 0.118 & 0.026 & 0.049 & 0.078 \\
-ORF U2OS & 0.119 & 0.043 & 0.099 & 0.099 \\
+CellProfiler~\cite{chandrasekaran2024jump} & CPJUMP1 & Compound target matching & FR range & 4.3--25.1\% \\
+MorphoCLIP base & CPJUMP1 & Compound target matching & FR range & 7.5--31.5\% \\
+\midrule
+CellCLIP~\cite{lu2025cellclip} & RxRx3-core & CORUM gene--gene & Recall & 0.354 \\
+CWA-MSN~\cite{huang2025cwamsn} & RxRx3-core & CORUM gene--gene & Recall & 0.386 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
-
-\paragraph{CWA-MSN.} CWA-MSN is evaluated on different gene--gene benchmarks, so a direct numerical comparison is not possible. Conceptually, its alignment of repeated perturbations is closer to our replicate loss than to plate correction, which is consistent with the component that improved replicability here.
 
 \subsection{Cached Feature Analysis}
 

@@ -23,27 +23,3 @@ CWA-MSN~\cite{huang2025cwamsn} addresses batch effects within a masked Siamese n
 DINOv2~\cite{oquab2024dinov2} and DINOv3~\cite{simeoni2025dinov3} give self-supervised visual features that transfer to biological imaging despite natural-image pretraining~\cite{moshkov2025ssl}. DINOv3 adds gram anchoring and a revised training recipe. Channel Vision Transformers~\cite{bao2024channelvit} show that per-channel encoding followed by cross-channel attention works for multi-channel microscopy, which is the pattern our channel aggregator follows.
 
 On the text side, BioClinical ModernBERT~\cite{sounack2025bioclinical} is pretrained on biomedical and clinical literature. A single model can encode both small-molecule and gene descriptions, unlike encoders designed only for chemical strings. This makes it a natural fit for a dataset that mixes compounds with genetic perturbations.
-
-\subsection{Positioning of MorphoCLIP}
-
-Table~\ref{tab:methods} places MorphoCLIP among these methods. CellCLIP has text but no batch correction. CWA-MSN has batch correction but no text. MorphoCLIP has both, trains on all three perturbation types, and keeps the trained part small. Where a like-for-like number exists we compare on the same benchmark harness (Section~\ref{sec:results}); elsewhere we quote published figures and say what differs.
-
-\begin{table}[t]
-\centering
-\caption{Cell Painting representation learning methods. The parameter count is trainable parameters for MorphoCLIP and total parameters for the other learned methods.}
-\label{tab:methods}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-Method & Image Encoder & Text & Pert.\ Types & Batch Corr.\ & Params \\
-\midrule
-CellProfiler~\cite{carpenter2006cellprofiler} & Handcrafted & No & All & Sphering & N/A \\
-CLOOME~\cite{sanchez2023cloome} & ResNet & No & Compounds & No & ${\sim}$25M \\
-MolPhenix~\cite{fradkin2024molphenix} & Phenom-1 & No & Compounds & No & ${\sim}$36M \\
-CellCLIP~\cite{lu2025cellclip} & DINOv2-g & Yes & All & No & 1,477M \\
-CWA-MSN~\cite{huang2025cwamsn} & ViT-S/16 & No & Unimodal & CWA & 22M \\
-\textbf{MorphoCLIP} & DINOv3-L & Yes & All & Plate offsets & ${\sim}$14M \\
-\bottomrule
-\end{tabular}%
-}
-\end{table}

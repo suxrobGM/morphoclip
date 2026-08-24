@@ -9,8 +9,9 @@ The main unresolved problem is gene--compound matching. None of the tested varia
 
 \subsection{Limitations and Future Work}
 
-The retrieval experiments use one random seed, so repeated runs are needed before small differences between variants can be treated as reliable. The benchmark's permutation test also introduces variation in fraction retrieved. Comparisons with CellProfiler and CellCLIP should be read as context rather than a strict ranking because their preprocessing and evaluation procedures are not identical. More importantly, a stronger case for biological usefulness will require improvement on tasks that are not directly optimized by the replicate loss.
+Small differences between variants remain uncertain, and the benchmark's permutation test introduces additional variation in fraction retrieved. Comparisons with CellProfiler and CellCLIP should be read as context rather than a strict ranking because their preprocessing and evaluation procedures are not identical. More importantly, a stronger case for biological usefulness will require improvement on tasks that are not directly optimized by the replicate loss.
 
 One likely source of the weak cross-modality result is the mismatch between the primary-target annotations used during training and the broader target lists used by the benchmark. Future work should align these definitions and test whether richer target supervision improves gene--compound retrieval. Prompt ablations are also needed to determine whether chemical structures and gene-function descriptions contribute useful information. Finally, evaluation on the larger and more diverse JUMP corpus is needed to test whether the learned representation transfers across sites, cell lines and experimental conditions.
 
-We release the code, configs, split manifests and the evaluation harness with the paper.
+Code, configurations, split manifests and the evaluation harness are available at
+\url{https://github.com/suxrobGM/morphoclip}.
