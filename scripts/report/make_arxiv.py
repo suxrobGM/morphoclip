@@ -44,8 +44,8 @@ def main() -> None:
     latexmk = ["latexmk", "-pdf", "-r", str(REPORT / ".latexmkrc"), "-cd"]
     subprocess.run([*latexmk, str(REPORT / "main.tex")], check=True)
 
-    # arXiv never runs bibtex, so the submission carries the compiled bibliography
-    # instead of references.bib.
+    # Keep the compiled bibliography for stable output and the database for build
+    # systems that choose to rerun BibTeX.
     bbl = BUILD / "main.bbl"
     if not bbl.exists():
         raise RuntimeError(f"{bbl} is missing, so latexmk did not run bibtex")
@@ -53,7 +53,7 @@ def main() -> None:
     if STAGE.exists():
         shutil.rmtree(STAGE)
     sources = _sources()
-    for path in [*sources, *_figures(sources)]:
+    for path in [*sources, REPORT / "references.bib", *_figures(sources)]:
         _stage(path, path.relative_to(REPORT).as_posix())
     _stage(bbl, "main.bbl")
 

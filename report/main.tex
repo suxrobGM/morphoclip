@@ -46,13 +46,14 @@
   descriptions of compounds, CRISPR knockouts and ORF overexpressions. The model keeps its vision
   and language backbones frozen and trains only a compact cross-channel module and projection
   layers, so it can be trained on a single consumer GPU.
-  On held-out CPJUMP1 data, MorphoCLIP retrieves the correct perturbation within its top ten results
-  more than three times as often as chance in both image-to-text and text-to-image searches. Adding
-  a replicate-alignment loss makes profiles from repeated experiments more consistent, although
-  this improvement does not yet translate into reliable gene--compound matching. Gene-aware labels
-  and plate correction also show no consistent retrieval benefit.
-  These findings suggest that text supervision is a useful way to organize mixed chemical and
-  genetic Cell Painting data. Cross-modality matching, however, is still an open problem.
+  On held-out CPJUMP1 data, MorphoCLIP searches in both directions: from a cell image to its
+  perturbation description and from a description to matching cell images. In both cases, a correct
+  match appears among the top ten results much more often than expected by chance. Adding a
+  replicate-alignment loss makes profiles from repeated experiments more consistent, although this
+  improvement does not yet translate into reliable gene--compound matching. Gene-aware labels and
+  plate correction also show no consistent retrieval benefit.
+  These findings suggest that text supervision can help organize chemical and genetic Cell Painting
+  data. Matching compounds with genetic perturbations, however, remains an open problem.
 \end{abstract}
 
 \begin{IEEEkeywords}

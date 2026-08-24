@@ -16,8 +16,8 @@ it with `-r` because latexmk reads the file from the working directory, which it
 changes only afterwards.
 
 `report-arxiv` stages `main.tex`, `sections/`, the figures that `\includegraphics`
-actually names, and the compiled `main.bbl`. arXiv never runs bibtex, which is
-why the tarball carries `main.bbl` instead of `references.bib`.
+actually names, `references.bib` and the compiled `main.bbl`. Keeping both bibliography
+files makes the source portable while preserving the bibliography used in the reviewed PDF.
 
 Retrieval numbers trace to `output/morphoclip_runs/<run>/eval_{val,test}.json`;
 standard benchmark numbers trace to `output/benchmark_<run>/`. The cached-feature
