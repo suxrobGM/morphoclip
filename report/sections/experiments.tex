@@ -2,47 +2,95 @@
 
 \subsection{Dataset}
 
-We use the CPJUMP1 pilot~\cite{chandrasekaran2024jump}, a public dataset from the JUMP Cell Painting Consortium. It contains 303 small-molecule compounds, 160 CRISPR knockouts and 176 ORF overexpressions measured in U2OS and A549 cells. Most perturbation types were collected at two timepoints. Each well contains several imaged sites with five fluorescence channels; the three available brightfield channels are not used in this study.
+We use the CPJUMP1 pilot~\cite{chandrasekaran2024jump}, a public dataset from the JUMP Cell
+Painting Consortium. It contains 303 small-molecule compounds, 160 CRISPR knockouts and 176 ORF
+overexpressions measured in U2OS and A549 cells. Most perturbation types were collected at two
+timepoints. Each well contains several imaged sites with five fluorescence channels; the three
+available brightfield channels are not used in this study.
 
 \subsection{Data Pipeline}
 
-Because the raw images occupy several terabytes, we process one plate at a time. After DINOv3 produces the per-channel features, the raw local copy is removed and the cached features are reused in every training run. Text prompts are handled similarly: ModernBERT encodes each prompt once, and the resulting feature is stored for later training.
+Because the raw images occupy several terabytes, we process one plate at a time. After DINOv3
+produces the per-channel features, the raw local copy is removed and the cached features are reused
+in every training run. Text prompts are handled similarly: ModernBERT encodes each prompt once, and
+the resulting feature is stored for later training.
 
 \subsection{Splits}
 
-We split the data by perturbation rather than by well. A fixed hash assigns each perturbation to the training, validation or test set in an 80/10/10 ratio, so replicate wells of one perturbation never appear in different splits. All three perturbation types are represented in each split, and control wells are excluded from training and retrieval evaluation. The validation set contains 2,220 wells from 98 perturbations, and the test set contains 1,860 wells from 86 perturbations.
+We split the data by perturbation rather than by well. A fixed hash assigns each perturbation to
+the training, validation or test set in an 80/10/10 ratio, so replicate wells of one perturbation
+never appear in different splits. All three perturbation types are represented in each split, and
+control wells are excluded from training and retrieval evaluation. The validation set contains
+2,220 wells from 98 perturbations, and the test set contains 1,860 wells from 86 perturbations.
 
 \subsection{Retrieval Protocol}
 \label{sec:protocol}
 
-Replicate wells share a text description. A split therefore contains $P$ distinct text vectors and $N$ well vectors. We evaluate four retrieval settings and compute an analytic chance baseline for each one.
+Replicate wells share a text description. A split therefore contains $P$ distinct text vectors and
+$N$ well vectors. We evaluate four retrieval settings and compute an analytic chance baseline for
+each one.
 
 \begin{itemize}
-    \item \textbf{Well-level image-to-text.} Each of the $N$ wells ranks the $P$ unique texts. One candidate is correct. Random Recall@$k$ is $k/P$.
-    \item \textbf{Well-level text-to-image.} Each of the $P$ texts ranks all $N$ wells and is scored on the rank of its first correct replicate. With $m$ replicate wells among $N$ candidates, random Recall@$k$ is $1 - \binom{N-m}{k} / \binom{N}{k}$.
-    \item \textbf{Perturbation-level, both directions.} The well embeddings of each perturbation are averaged and re-normalized into one profile, and the $P$ profiles are ranked against the $P$ texts. This is the unit of the standard CPJUMP1 protocol. Random Recall@$k$ is $k/P$.
+  \item \textbf{Well-level image-to-text.}
+        Each of the $N$ wells ranks the $P$ unique texts. One candidate is correct. Random
+        Recall@$k$
+        is $k/P$.
+  \item \textbf{Well-level text-to-image.}
+        Each of the $P$ texts ranks all $N$ wells and is scored on the rank of its first correct
+        replicate. With $m$ replicate wells among $N$ candidates, random Recall@$k$ is
+        $1 - \binom{N-m}{k} / \binom{N}{k}$.
+  \item \textbf{Perturbation-level, both directions.}
+        The well embeddings of each perturbation are averaged and re-normalized into one profile,
+        and the $P$ profiles are ranked against the $P$ texts. This is the unit of the standard
+        CPJUMP1 protocol. Random Recall@$k$ is $k/P$.
 \end{itemize}
-We report Recall@\{1, 5, 10\} and the median rank of the first correct match. Checkpoints are selected using validation text loss and then evaluated on both validation and test data.
+We report Recall@\{1, 5, 10\} and the median rank of the first correct match. Checkpoints are
+selected using validation text loss and then evaluated on both validation and test data.
 
 \subsection{Standard CPJUMP1 Benchmark}
 
-We also evaluate exported well embeddings with the standard CPJUMP1 benchmark of Chandrasekaran et al.~\cite{chandrasekaran2024jump}. We follow the reference pipeline: every well is encoded in fp32, including controls, and the negative-control mean is removed before scoring. The benchmark uses the 40 plates that meet its standard experimental criteria and covers a short and long timepoint for each perturbation type. It measures \emph{replicability} between repeated wells, \emph{target matching} between perturbations of the same type and \emph{gene--compound matching} across perturbation types. Results are reported as mean average precision (mAP) and as the fraction of perturbations that pass the benchmark's significance threshold.
+We also evaluate exported well embeddings with the standard CPJUMP1 benchmark of Chandrasekaran et
+al.~\cite{chandrasekaran2024jump}. We follow the reference pipeline: every well is encoded in fp32,
+including controls, and the negative-control mean is removed before scoring. The benchmark uses the
+40 plates that meet its standard experimental criteria and covers a short and long timepoint for
+each perturbation type. It measures \emph{replicability} between repeated wells, \emph{target
+  matching} between perturbations of the same type and \emph{gene--compound matching} across
+perturbation types. Results are reported as mean average precision (mAP) and as the fraction of
+perturbations that pass the benchmark's significance threshold.
 
-The benchmark's significance test uses random permutations, so fraction retrieved varies slightly between otherwise identical runs. Replicability mAP is deterministic. We therefore treat small differences in fraction retrieved as descriptive rather than conclusive.
+The benchmark's significance test uses random permutations, so fraction retrieved varies slightly
+between otherwise identical runs. Replicability mAP is deterministic. We therefore treat small
+differences in fraction retrieved as descriptive rather than conclusive.
 
 \subsection{Baselines}
 
 \begin{itemize}
-    \item \textbf{CellProfiler}~\cite{carpenter2006cellprofiler} provides the established handcrafted-feature baseline. We use its published CPJUMP1 target-matching range because we did not rerun the full pipeline.
-    \item \textbf{CellCLIP}~\cite{lu2025cellclip} is the closest text-supervised baseline. We report its published results and also run the released checkpoint through our short-timepoint benchmark pipeline. This comparison is approximate because CellCLIP applies an additional KernelPCA correction and the benchmark significance test is stochastic.
-    \item \textbf{CWA-MSN}~\cite{huang2025cwamsn} is included as a related batch-aware method. Its published benchmarks differ from ours, so a direct numerical comparison is not possible.
+  \item \textbf{CellProfiler}~\cite{carpenter2006cellprofiler} provides the established
+        handcrafted-feature baseline. We use its published CPJUMP1 target-matching range because we
+        did not rerun the full pipeline.
+  \item \textbf{CellCLIP}~\cite{lu2025cellclip} is the closest text-supervised baseline. We report
+        its published results and also run the released checkpoint through our short-timepoint
+        benchmark pipeline. This comparison is approximate because CellCLIP applies an additional
+        KernelPCA correction and the benchmark significance test is stochastic.
+  \item \textbf{CWA-MSN}~\cite{huang2025cwamsn} is included as a related batch-aware method. Its
+        published benchmarks differ from ours, so a direct numerical comparison is not possible.
 \end{itemize}
 
 \subsection{Ablation Design}
 \label{sec:ablation_design}
 
-The base model uses binary CWCL labels, random batches, no replicate loss and no plate correction. The ablations use perturbation-aware batches, a shorter schedule and early stopping. Starting from this shared control, we add gene-aware soft labels ($\alpha=0.6$), replicate alignment ($\lambda_{\text{rep}}=0.3$) and condition-relative plate offsets one at a time, followed by a run that combines all three. All runs use seed 42, batch size 256 and the same data split. Since a single retrieved perturbation changes recall by about one percentage point, small differences should not be interpreted as reliable effects.
+The base model uses binary CWCL labels, random batches, no replicate loss and no plate correction.
+The ablations use perturbation-aware batches, a shorter schedule and early stopping. Starting from
+this shared control, we add gene-aware soft labels ($\alpha=0.6$), replicate alignment
+($\lambda_{\text{rep}}=0.3$) and condition-relative plate offsets one at a time, followed by a run
+that combines all three. All runs use seed 42, batch size 256 and the same data split. Since a
+single retrieved perturbation changes recall by about one percentage point, small differences
+should not be interpreted as reliable effects.
 
 \subsection{Implementation}
 
-All experiments run on one RTX 5080 with 16\,GB of memory. We use AdamW with a learning rate of $10^{-4}$, weight decay of 0.2, 100 warm-up steps followed by cosine decay, FP16 training and gradient clipping at 1.0. The CrossChannelFormer has one layer and four attention heads; both projection heads use a hidden width of 512 and dropout of 0.3. Code, configurations and split manifests are released with the paper.
+All experiments run on one RTX 5080 with 16\,GB of memory. We use AdamW with a learning rate of
+$10^{-4}$, weight decay of 0.2, 100 warm-up steps followed by cosine decay, FP16 training and
+gradient clipping at 1.0. The CrossChannelFormer has one layer and four attention heads; both
+projection heads use a hidden width of 512 and dropout of 0.3. Code, configurations and split
+manifests are released with the paper.

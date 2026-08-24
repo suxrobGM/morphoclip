@@ -1,95 +1,216 @@
 \section{Method}
 
-MorphoCLIP learns a common representation for microscopy images and perturbation descriptions. The image branch summarizes the five-channel images from a well, while the text branch encodes a prompt describing the treatment. Both produce normalized 512-dimensional vectors. Training brings matching vectors together and can optionally encourage agreement across replicate wells or correct for plate-specific drift. Figure~\ref{fig:architecture} summarizes the model.
+MorphoCLIP learns a common representation for microscopy images and perturbation descriptions. The
+image branch summarizes the five-channel images from a well, while the text branch encodes a prompt
+describing the treatment. Both produce normalized 512-dimensional vectors. Training brings matching
+vectors together and can optionally encourage agreement across replicate wells or correct for
+plate-specific drift. Figure~\ref{fig:architecture} summarizes the model.
 
 \begin{figure*}[t]
-    \centering
-    \includegraphics[width=\textwidth]{figures/architecture.pdf}
-    \caption{Overview of MorphoCLIP. A frozen DINOv3 encoder processes each fluorescence channel separately, and the CrossChannelFormer combines the resulting tokens. Site representations are averaged into a well representation and projected into the shared embedding space. A frozen BioClinical ModernBERT encodes the perturbation prompt, followed by a trainable text projection. Optional plate correction is applied to the image embedding before the training losses.}
-    \label{fig:architecture}
+  \centering
+  \includegraphics[width=\textwidth]{figures/architecture.pdf}
+  \caption{Overview of MorphoCLIP. A frozen DINOv3 encoder processes each fluorescence channel
+    separately, and the CrossChannelFormer combines the resulting tokens. Site representations are
+    averaged into a well representation and projected into the shared embedding space. A frozen
+    BioClinical ModernBERT encodes the perturbation prompt, followed by a trainable text projection.
+    Optional plate correction is applied to the image embedding before the training losses.}
+  \label{fig:architecture}
 \end{figure*}
 
 \subsection{Image Encoder}
 
-A Cell Painting site has five fluorescence channels (Table~\ref{tab:channels}). Each channel is resized to $224 \times 224$, copied into three channels to match the backbone input and normalized with the backbone's preprocessing statistics. A frozen DINOv3 ViT-L/16~\cite{simeoni2025dinov3} then produces one 1024-dimensional CLS token per channel,
+A Cell Painting site has five fluorescence channels (Table~\ref{tab:channels}). Each channel is
+resized to $224 \times 224$, copied into three channels to match the backbone input and normalized
+with the backbone's preprocessing statistics. A frozen DINOv3 ViT-L/16~\cite{simeoni2025dinov3}
+then produces one 1024-dimensional CLS token per channel,
 \begin{equation}
-    \{\mathbf{z}_c\}_{c=1}^{5}, \quad \mathbf{z}_c \in \mathbb{R}^{1024}.
+  \{\mathbf{z}_c\}_{c=1}^{5}, \quad \mathbf{z}_c \in \mathbb{R}^{1024}.
 \end{equation}
 
 \begin{table}[t]
-\centering
-\caption{Cell Painting fluorescence channels used in MorphoCLIP.}
-\label{tab:channels}
-\begin{tabular}{@{}cll@{}}
-\toprule
-Ch & Stain & Target \\
-\midrule
-1 & MitoTracker / Alexa 647 & Mitochondria \\
-2 & Phalloidin / Alexa 568 & Actin \\
-3 & WGA / Alexa 488 & Golgi / plasma membrane \\
-4 & Concanavalin A / Alexa 488 & Endoplasmic reticulum \\
-5 & Hoechst 33342 & DNA / nucleus \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Cell Painting fluorescence channels used in MorphoCLIP.}
+  \label{tab:channels}
+  \begin{tabular}{@{}cll@{}}
+    \toprule
+    Ch & Stain                      & Target                  \\
+    \midrule
+    1  & MitoTracker / Alexa 647    & Mitochondria            \\
+    2  & Phalloidin / Alexa 568     & Actin                   \\
+    3  & WGA / Alexa 488            & Golgi / plasma membrane \\
+    4  & Concanavalin A / Alexa 488 & Endoplasmic reticulum   \\
+    5  & Hoechst 33342              & DNA / nucleus           \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
-The resulting channel tokens are cached to disk and reused across experiments, so the vision backbone does not run during model training.
+The resulting channel tokens are cached to disk and reused across experiments, so the vision
+backbone does not run during model training.
 
-\paragraph{CrossChannelFormer (CCF).} A one-layer, four-head transformer~\cite{vaswani2017attention} combines the five channel tokens into one site representation, following the channel-aware designs of CellCLIP~\cite{lu2025cellclip} and Channel ViT~\cite{bao2024channelvit}. We first normalize each token and add a learned channel embedding $\mathbf{e}_c$ so the transformer can distinguish the stains. A learned aggregation token $\mathbf{q}$ collects information across channels, and its output becomes the site vector:
+\paragraph{CrossChannelFormer (CCF).}
+A one-layer, four-head transformer~\cite{vaswani2017attention} combines the five channel tokens
+into one site representation, following the channel-aware designs of CellCLIP~\cite{lu2025cellclip}
+and Channel ViT~\cite{bao2024channelvit}. We first normalize each token and add a learned channel
+embedding $\mathbf{e}_c$ so the transformer can distinguish the stains. A learned aggregation token
+$\mathbf{q}$ collects information across channels, and its output becomes the site vector:
 \begin{equation}
-    \mathbf{h}_{\text{site}} = \bigl[\,\text{CCF}\bigl(\mathbf{q},\, \hat{\mathbf{z}}_1 + \mathbf{e}_1,\, \dots,\, \hat{\mathbf{z}}_5 + \mathbf{e}_5\bigr)\,\bigr]_{0}, \quad \hat{\mathbf{z}}_c = \mathbf{z}_c / \|\mathbf{z}_c\|_2 .
+  \mathbf{h}_{\text{site}}
+  = \bigl[\,\text{CCF}\bigl(
+    \mathbf{q},\,
+    \hat{\mathbf{z}}_1 + \mathbf{e}_1,\,
+    \dots,\,
+    \hat{\mathbf{z}}_5 + \mathbf{e}_5
+    \bigr)\,\bigr]_{0},
+  \quad
+  \hat{\mathbf{z}}_c = \mathbf{z}_c / \|\mathbf{z}_c\|_2 .
 \end{equation}
-The layer uses pre-normalization, a feed-forward width of 4096 and GELU activations. This allows the model to represent changes that appear across more than one stain. The CCF contains most of MorphoCLIP's roughly 14 million trainable parameters.
+The layer uses pre-normalization, a feed-forward width of 4096 and GELU activations. This allows
+the model to represent changes that appear across more than one stain. The CCF contains most of
+MorphoCLIP's roughly 14 million trainable parameters.
 
-\paragraph{Site-to-well pooling.} The training unit is a well. We average its valid site vectors under a mask, producing a fixed-size representation regardless of the number or order of imaged sites.
+\paragraph{Site-to-well pooling.}
+The training unit is a well. We average its valid site vectors under a mask, producing a fixed-size
+representation regardless of the number or order of imaged sites.
 
-\paragraph{Image projection head.} A two-layer MLP with LayerNorm, GELU and dropout ($p = 0.3$) maps the well vector $\mathbf{h}_{\text{img}}$ to the shared space:
+\paragraph{Image projection head.}
+A two-layer MLP with LayerNorm, GELU and dropout ($p = 0.3$) maps the well vector
+$\mathbf{h}_{\text{img}}$ to the shared space:
 \begin{equation}
-    f_{\text{img}}(\mathbf{x}) = \text{L2Norm}\bigl(\mathbf{W}_2\, \text{Drop}(\text{GELU}(\text{LN}(\mathbf{W}_1 \mathbf{h}_{\text{img}})))\bigr),
+  f_{\text{img}}(\mathbf{x})
+  = \text{L2Norm}\bigl(
+  \mathbf{W}_2\,
+  \text{Drop}(\text{GELU}(\text{LN}(\mathbf{W}_1 \mathbf{h}_{\text{img}})))
+  \bigr),
 \end{equation}
-with $\mathbf{W}_1 \in \mathbb{R}^{512 \times 1024}$ and $\mathbf{W}_2 \in \mathbb{R}^{512 \times 512}$.
+with $\mathbf{W}_1 \in \mathbb{R}^{512 \times 1024}$ and
+$\mathbf{W}_2 \in \mathbb{R}^{512 \times 512}$.
 
 \subsection{Text Encoder}
 
-Each perturbation is described with a template built from CPJUMP1 metadata and external annotations:
+Each perturbation is described with a template built from CPJUMP1 metadata and external
+annotations:
 
 \begin{itemize}
-    \item \textbf{Compound:} \textit{``Cell Painting morphological profile of \{cell\_line\} cells treated with the compound \{compound\_name\}. Chemical structure (SMILES): \{smiles\}. Known target gene: \{target\_gene\}. Target protein function: \{gene\_function\}. Perturbation modality: chemical compound.''}
-    \item \textbf{CRISPR:} \textit{``\dots\ with CRISPR-Cas9 knockout of gene \{gene\_symbol\}. Gene description: \{gene\_description\}. Gene function: \{gene\_function\}. Perturbation modality: CRISPR knockout.''}
-    \item \textbf{ORF:} \textit{``\dots\ overexpressing gene \{gene\_symbol\} via open reading frame construct. Gene description: \{gene\_description\}. Gene function: \{gene\_function\}. Perturbation modality: ORF overexpression.''}
-    \item \textbf{Negative control:} \textit{``\dots\ treated with DMSO vehicle control. No active perturbation applied.''}
+  \item \textbf{Compound:}
+        \textit{``Cell Painting morphological profile of \{cell\_line\} cells treated with the
+          compound \{compound\_name\}. Chemical structure (SMILES): \{smiles\}. Known target gene:
+          \{target\_gene\}. Target protein function: \{gene\_function\}. Perturbation modality:
+          chemical compound.''}
+  \item \textbf{CRISPR:}
+        \textit{``\dots\ with CRISPR-Cas9 knockout of gene \{gene\_symbol\}. Gene description:
+          \{gene\_description\}. Gene function: \{gene\_function\}. Perturbation modality: CRISPR
+          knockout.''}
+  \item \textbf{ORF:}
+        \textit{``\dots\ overexpressing gene \{gene\_symbol\} via open reading frame construct.
+          Gene description: \{gene\_description\}. Gene function: \{gene\_function\}. Perturbation
+          modality: ORF overexpression.''}
+  \item \textbf{Negative control:}
+        \textit{``\dots\ treated with DMSO vehicle control. No active perturbation applied.''}
 \end{itemize}
 
-Missing fields become ``unknown''. Compound annotations come from ChEMBL and the CPJUMP1 metadata. Gene descriptions and functions come from UniProt. Prompts are keyed by the perturbation identifier (\texttt{broad\_sample}), so replicate wells of one perturbation share one text vector.
+Missing fields become ``unknown''. Compound annotations come from ChEMBL and the CPJUMP1 metadata.
+Gene descriptions and functions come from UniProt. Prompts are keyed by the perturbation identifier
+(\texttt{broad\_sample}), so replicate wells of one perturbation share one text vector.
 
-We encode each prompt with a frozen BioClinical ModernBERT~\cite{sounack2025bioclinical} (150M parameters, 768-d CLS token). A trainable projection head with the same shape as the image head maps the CLS token to the shared space:
+We encode each prompt with a frozen BioClinical ModernBERT~\cite{sounack2025bioclinical} (150M
+parameters, 768-d CLS token). A trainable projection head with the same shape as the image head
+maps the CLS token to the shared space:
 \begin{equation}
-    f_{\text{txt}}(t) = \text{L2Norm}\bigl(\mathbf{W}_4\, \text{Drop}(\text{GELU}(\text{LN}(\mathbf{W}_3 \mathbf{h}_{\text{txt}})))\bigr),
+  f_{\text{txt}}(t)
+  = \text{L2Norm}\bigl(
+  \mathbf{W}_4\,
+  \text{Drop}(\text{GELU}(\text{LN}(\mathbf{W}_3 \mathbf{h}_{\text{txt}})))
+  \bigr),
 \end{equation}
-with $\mathbf{W}_3 \in \mathbb{R}^{512 \times 768}$ and $\mathbf{W}_4 \in \mathbb{R}^{512 \times 512}$. The 768-d BERT outputs are cached separately from the projected 512-d vectors, so a change to the projection head never re-runs BERT.
+with $\mathbf{W}_3 \in \mathbb{R}^{512 \times 768}$ and
+$\mathbf{W}_4 \in \mathbb{R}^{512 \times 512}$. The 768-d BERT outputs are cached separately from
+the projected 512-d vectors, so a change to the projection head never re-runs BERT.
 
 \subsection{Training Objective}
 
-\paragraph{Continuously weighted contrastive loss (CWCL).} Standard InfoNCE~\cite{oord2018infonce} treats every off-diagonal pair in a batch as a negative. This is inappropriate when two wells share a perturbation and may also be too strict when different perturbations share a target. Following CellCLIP~\cite{lu2025cellclip}, we use a soft-label contrastive loss. For a batch of $N$ wells with logits $\mathbf{S} = \tau\, \mathbf{F}_{\text{img}} \mathbf{F}_{\text{txt}}^{\top}$, the affinity matrix $\mathbf{W}$ assigns a weight of 1 to the same perturbation, $\alpha$ to different perturbations with overlapping target genes and 0 otherwise. The loss is
+\paragraph{Continuously weighted contrastive loss (CWCL).}
+Standard InfoNCE~\cite{oord2018infonce} treats every off-diagonal pair in a batch as a negative.
+This is inappropriate when two wells share a perturbation and may also be too strict when different
+perturbations share a target. Following CellCLIP~\cite{lu2025cellclip}, we use a soft-label
+contrastive loss. For a batch of $N$ wells with logits
+$\mathbf{S} = \tau\, \mathbf{F}_{\text{img}} \mathbf{F}_{\text{txt}}^{\top}$, the affinity matrix
+$\mathbf{W}$ assigns a weight of 1 to the same perturbation, $\alpha$ to different perturbations
+with overlapping target genes and 0 otherwise.
+The loss is
 \begin{equation}
-    \mathcal{L}_{\text{CWCL}} = -\frac{1}{2N} \sum_{i=1}^{N} \sum_{j=1}^{N} \Bigl( \tilde{w}_{ij} \log p_{ij} + \tilde{w}^{\top}_{ij} \log p^{\top}_{ij} \Bigr),
+  \mathcal{L}_{\text{CWCL}}
+  = -\frac{1}{2N}
+  \sum_{i=1}^{N}
+  \sum_{j=1}^{N}
+  \Bigl(
+  \tilde{w}_{ij} \log p_{ij}
+  + \tilde{w}^{\top}_{ij} \log p^{\top}_{ij}
+  \Bigr),
 \end{equation}
-where $p_{ij}$ is the softmax of row $i$ of $\mathbf{S}$, $\tilde{w}_{ij} = w_{ij} / \sum_k w_{ik}$, and the transposed terms use $\mathbf{S}^{\top}$ and $\mathbf{W}^{\top}$ normalized over their own rows. The gene weight $\alpha$ is a hyperparameter; the base model uses $\alpha = 0$ (binary labels) and the soft-label ablation uses $\alpha = 0.6$. The scale $\tau$ is learned through its logarithm, which starts at $\ln(1/0.07)$ and is clamped to $[0, \ln 100]$ after every step.
+where $p_{ij}$ is the softmax of row $i$ of $\mathbf{S}$,
+$\tilde{w}_{ij} = w_{ij} / \sum_k w_{ik}$, and the transposed terms use $\mathbf{S}^{\top}$ and
+$\mathbf{W}^{\top}$ normalized over their own rows. The gene weight $\alpha$ is a hyperparameter;
+the base model uses $\alpha = 0$ (binary labels) and the soft-label ablation uses $\alpha = 0.6$.
+The scale $\tau$ is learned through its logarithm, which starts at $\ln(1/0.07)$ and is clamped to
+$[0, \ln 100]$ after every step.
 
-\paragraph{Replicate alignment loss.} The text objective brings each well close to its shared description but does not directly bring replicate wells close to one another. We therefore add an image--image contrastive term. Let $P_i$ denote the other wells in the batch with the same perturbation as well $i$, and let $\mathbf{G} = \tau\, \mathbf{F}_{\text{img}} \mathbf{F}_{\text{img}}^{\top}$ with its diagonal masked. Then
+\paragraph{Replicate alignment loss.}
+The text objective brings each well close to its shared description but does not directly bring
+replicate wells close to one another. We therefore add an image--image contrastive term. Let $P_i$
+denote the other wells in the batch with the same perturbation as well $i$, and let $\mathbf{G} =
+  \tau\, \mathbf{F}_{\text{img}} \mathbf{F}_{\text{img}}^{\top}$ with its diagonal masked. Then
 \begin{equation}
-    \mathcal{L}_{\text{rep}} = -\frac{1}{|\{i : P_i \neq \emptyset\}|} \sum_{i:\, P_i \neq \emptyset} \frac{1}{|P_i|} \sum_{j \in P_i} \log \frac{\exp G_{ij}}{\sum_{k \neq i} \exp G_{ik}} .
+  \mathcal{L}_{\text{rep}}
+  = -\frac{1}{|\{i : P_i \neq \emptyset\}|}
+  \sum_{i:\, P_i \neq \emptyset}
+  \frac{1}{|P_i|}
+  \sum_{j \in P_i}
+  \log \frac{\exp G_{ij}}{\sum_{k \neq i} \exp G_{ik}} .
 \end{equation}
-Wells with no in-batch replicate are dropped from the mean, and the term shares the learned temperature with the text loss. The training loss is $\mathcal{L} = \mathcal{L}_{\text{CWCL}} + \lambda_{\text{rep}} \mathcal{L}_{\text{rep}}$; the base model uses $\lambda_{\text{rep}} = 0$ and the ablation uses $0.3$. Validation loss is the text term alone, so model selection is not influenced by the added term.
+Wells with no in-batch replicate are dropped from the mean, and the term shares the learned
+temperature with the text loss. The training loss is
+$\mathcal{L} = \mathcal{L}_{\text{CWCL}} + \lambda_{\text{rep}} \mathcal{L}_{\text{rep}}$; the base
+model uses $\lambda_{\text{rep}} = 0$ and the ablation uses $0.3$. Validation loss is the text term
+alone, so model selection is not influenced by the added term.
 
-\paragraph{Perturbation-aware batches.} The replicate loss requires repeated wells to appear in the same batch. Our sampler therefore groups wells by perturbation, forms pairs, shuffles those pairs and packs them into batches. Where possible, each batch spans more than one plate. This changes batch composition but does not remove plate confounding from individual negative pairs.
+\paragraph{Perturbation-aware batches.}
+The replicate loss requires repeated wells to appear in the same batch. Our sampler therefore
+groups wells by perturbation, forms pairs, shuffles those pairs and packs them into batches. Where
+possible, each batch spans more than one plate. This changes batch composition but does not remove
+plate confounding from individual negative pairs.
 
-\paragraph{Condition-relative plate offsets.} Plate effects are a major source of technical variation, but in CPJUMP1 each plate is also tied closely to an experimental condition. Simply subtracting the plate mean would remove useful information about cell line, perturbation type and timepoint. Instead, we measure each plate relative to other plates from the same condition. At the start of each epoch, a gradient-free pass computes the plate means $\bar{\mathbf{f}}_p$, and each well is shifted by its plate's offset from the corresponding condition mean:
+\paragraph{Condition-relative plate offsets.}
+Plate effects are a major source of technical variation, but in CPJUMP1 each plate is also tied
+closely to an experimental condition. Simply subtracting the plate mean would remove useful
+information about cell line, perturbation type and timepoint. Instead, we measure each plate
+relative to other plates from the same condition. At the start of each epoch, a gradient-free pass
+computes the plate means $\bar{\mathbf{f}}_p$, and each well is shifted by its plate's offset from
+the corresponding condition mean:
 \begin{equation}
-    \tilde{\mathbf{f}}_w = \frac{\mathbf{f}_w - \boldsymbol{\delta}_{p(w)}}{\|\mathbf{f}_w - \boldsymbol{\delta}_{p(w)}\|_2}, \quad \boldsymbol{\delta}_p = \bar{\mathbf{f}}_p - \frac{1}{|C(p)|} \sum_{q \in C(p)} \bar{\mathbf{f}}_q ,
+  \tilde{\mathbf{f}}_w
+  = \frac{
+    \mathbf{f}_w - \boldsymbol{\delta}_{p(w)}
+  }{
+    \|\mathbf{f}_w - \boldsymbol{\delta}_{p(w)}\|_2
+  },
+  \quad
+  \boldsymbol{\delta}_p
+  = \bar{\mathbf{f}}_p
+  - \frac{1}{|C(p)|}
+  \sum_{q \in C(p)} \bar{\mathbf{f}}_q ,
 \end{equation}
-where $p(w)$ is the plate containing well $w$ and $C(p)$ is the set of plates with the same experimental condition. Offsets within a condition sum to zero, so the correction removes plate-to-plate drift without shifting the condition mean. They are treated as constants, applied only to image embeddings and stored in the checkpoint for consistent evaluation.
+where $p(w)$ is the plate containing well $w$ and $C(p)$ is the set of plates with the same
+experimental condition. Offsets within a condition sum to zero, so the correction removes
+plate-to-plate drift without shifting the condition mean. They are treated as constants, applied
+only to image embeddings and stored in the checkpoint for consistent evaluation.
 
 \subsection{Optimization}
 
-We train with AdamW~\cite{loshchilov2019adamw} at learning rate $10^{-4}$, $(\beta_1, \beta_2) = (0.9, 0.999)$ and $\varepsilon = 10^{-8}$. Weight decay 0.2 is applied to multi-dimensional weights but not to biases, normalization parameters or the learned temperature. The learning rate warms up linearly for 100 steps and then follows a cosine schedule to zero. We use FP16 mixed precision, gradient clipping at norm $1.0$ and a batch of 256 wells. The base model uses a 100-epoch schedule; ablation runs use a 30-epoch schedule with early stopping after eight epochs without improvement. All backbones remain frozen during optimization.
+We train with AdamW~\cite{loshchilov2019adamw} at learning rate $10^{-4}$,
+$(\beta_1, \beta_2) = (0.9, 0.999)$ and $\varepsilon = 10^{-8}$. Weight decay 0.2 is applied to
+multi-dimensional weights but not to biases, normalization parameters or the learned temperature.
+The learning rate warms up
+linearly for 100 steps and then follows a cosine schedule to zero. We use FP16 mixed precision,
+gradient clipping at norm $1.0$ and a batch of 256 wells. The base model uses a 100-epoch schedule;
+ablation runs use a 30-epoch schedule with early stopping after eight epochs without improvement.
+All backbones remain frozen during optimization.

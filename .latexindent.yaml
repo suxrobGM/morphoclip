@@ -1,0 +1,13 @@
+defaultIndent: "  "
+
+lookForAlignDelims:
+  tabular: 0
+
+modifyLineBreaks:
+  preserveBlankLines: 1
+  condenseMultipleBlankLinesInto: 1
+  textWrapOptions:
+    columns: 100
+    multipleSpacesToSingle: 1
+    removeBlockLineBreaks: 0
+    when: before

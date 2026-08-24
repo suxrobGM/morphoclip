@@ -1,22 +1,46 @@
 \section{Problem Statement}
 
-Given a five-channel Cell Painting image $\mathbf{x} \in \mathbb{R}^{5 \times H \times W}$ and a text description $t$ of the applied perturbation, we learn image and text encoders that map both inputs to the same normalized embedding space:
+Given a five-channel Cell Painting image $\mathbf{x} \in \mathbb{R}^{5 \times H \times W}$ and a
+text description $t$ of the applied perturbation, we learn image and text encoders that map both
+inputs to the same normalized embedding space:
 \begin{equation}
-    f_{\text{img}}(\mathbf{x}), \; f_{\text{txt}}(t) \in \mathbb{R}^d, \quad \|f_{\text{img}}(\mathbf{x})\|_2 = \|f_{\text{txt}}(t)\|_2 = 1.
+  f_{\text{img}}(\mathbf{x}),\;
+  f_{\text{txt}}(t) \in \mathbb{R}^d,
+  \quad
+  \|f_{\text{img}}(\mathbf{x})\|_2
+  = \|f_{\text{txt}}(t)\|_2
+  = 1.
 \end{equation}
-Matching image--text pairs should have high cosine similarity, while unrelated pairs should be farther apart. We set $d=512$. Although the equation is written for one image, the model operates at the well level by combining all imaged sites from a well into one vector.
+Matching image--text pairs should have high cosine similarity, while unrelated pairs should be
+farther apart. We set $d=512$. Although the equation is written for one image, the model operates
+at the well level by combining all imaged sites from a well into one vector.
 
 The trained encoders support three retrieval tasks:
 \begin{itemize}
-    \item \textbf{Text-to-image retrieval.} Given a perturbation description, retrieve the wells that show the corresponding phenotype.
-    \item \textbf{Image-to-text retrieval.} Given a well, return the perturbation description that best matches its morphology.
-    \item \textbf{Image-to-image retrieval.} Compare well embeddings by cosine similarity, without text at inference time. This is the setting of the standard CPJUMP1 benchmark: do replicate wells of one perturbation match, and do perturbations that share a target match across modalities?
+  \item \textbf{Text-to-image retrieval.}
+        Given a perturbation description, retrieve the wells that show the corresponding phenotype.
+  \item \textbf{Image-to-text retrieval.}
+        Given a well, return the perturbation description that best matches its morphology.
+  \item \textbf{Image-to-image retrieval.}
+        Compare well embeddings by cosine similarity, without text at inference time. This is the
+        setting of the standard CPJUMP1 benchmark: do replicate wells of one perturbation match, and
+        do perturbations that share a target match across modalities?
 \end{itemize}
 
 This task is harder than ordinary image--caption alignment for three reasons.
 
-\paragraph{Batch effects.} The same perturbation can look different across plates and imaging days. Changes in illumination, staining or focus may be stronger than the biological effect of interest. In CPJUMP1, reproducibility also varies by perturbation type and cell line~\cite{chandrasekaran2024jump}.
+\paragraph{Batch effects.}
+The same perturbation can look different across plates and imaging days. Changes in illumination,
+staining or focus may be stronger than the biological effect of interest. In CPJUMP1,
+reproducibility also varies by perturbation type and cell line~\cite{chandrasekaran2024jump}.
 
-\paragraph{Imperfect labels.} Biological similarity is not simply positive or negative. Two compounds may share a primary target but differ in their secondary effects, while a gene knockout and a compound may influence the same pathway through different mechanisms. This motivates softer supervision than a standard loss in which every non-matching pair is treated as equally negative.
+\paragraph{Imperfect labels.}
+Biological similarity is not simply positive or negative. Two compounds may share a primary target
+but differ in their secondary effects, while a gene knockout and a compound may influence the same
+pathway through different mechanisms. This motivates softer supervision than a standard loss in
+which every non-matching pair is treated as equally negative.
 
-\paragraph{Scale and compute.} CPJUMP1 contains several terabytes of microscopy data. Training both foundation models end to end is impractical on a single consumer GPU, so we run the frozen backbones once, cache their outputs and train only the smaller modules on top.
+\paragraph{Scale and compute.}
+CPJUMP1 contains several terabytes of microscopy data. Training both foundation models end to end
+is impractical on a single consumer GPU, so we run the frozen backbones once, cache their outputs
+and train only the smaller modules on top.

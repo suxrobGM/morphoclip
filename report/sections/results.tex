@@ -1,173 +1,268 @@
 \section{Results and Discussion}
 \label{sec:results}
 
-Retrieval is measured on the held-out splits described in Section~\ref{sec:protocol}, with chance performance shown alongside the model results. The standard benchmark uses its eligible CPJUMP1 plates.
+Retrieval is measured on the held-out splits described in Section~\ref{sec:protocol}, with chance
+performance shown alongside the model results. The standard benchmark uses its eligible CPJUMP1
+plates.
 
 \subsection{Cross-Modal Retrieval}
 
-Table~\ref{tab:retrieval} reports the base model on validation and test data. At the perturbation level, the correct match appears in the top ten for roughly two out of five queries in either direction. This is more than three times the expected chance rate. Similar performance on the unseen test perturbations suggests that the model is learning a relationship between morphology and perturbation text rather than memorizing the training set.
+Table~\ref{tab:retrieval} reports the base model on validation and test data. At the perturbation
+level, the correct match appears in the top ten for roughly two out of five queries in either
+direction. This is more than three times the expected chance rate. Similar performance on the
+unseen test perturbations suggests that the model is learning a relationship between morphology and
+perturbation text rather than memorizing the training set.
 
 \begin{table}[t]
-\centering
-\caption{Base-model retrieval on validation and test data. Image-to-text retrieval ranks one description per perturbation. Text-to-image retrieval ranks either individual wells or perturbation-level mean profiles. Random rows show analytic chance performance.}
-\label{tab:retrieval}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llrrrr@{}}
-\toprule
-Split & Direction & R@1 & R@5 & R@10 & Med.\ rank \\
-\midrule
-\multirow{6}{*}{Val}
- & well image $\to$ text & 5.9 & 23.3 & 39.4 & 14 \\
- & well text $\to$ image & 4.1 & 15.3 & 23.5 & 30 \\
- & pert.\ image $\to$ text & 4.1 & 20.4 & 38.8 & 13 \\
- & pert.\ text $\to$ image & 5.1 & 18.4 & 39.8 & 13 \\
- & random, single positive & 1.0 & 5.1 & 10.2 & 49.5 \\
- & random, well text $\to$ image & 1.0 & 5.0 & 9.7 & 99 \\
-\midrule
-\multirow{6}{*}{Test}
- & well image $\to$ text & 5.5 & 22.0 & 41.4 & 13 \\
- & well text $\to$ image & 4.7 & 18.6 & 26.7 & 25 \\
- & pert.\ image $\to$ text & 4.7 & 17.4 & 37.2 & 14 \\
- & pert.\ text $\to$ image & 8.1 & 23.3 & 44.2 & 13 \\
- & random, single positive & 1.2 & 5.8 & 11.6 & 43.5 \\
- & random, well text $\to$ image & 1.2 & 5.7 & 11.0 & 86 \\
-\bottomrule
-\end{tabular}%
-}
+  \centering
+  \caption{Base-model retrieval on validation and test data. Image-to-text retrieval ranks one
+    description per perturbation. Text-to-image retrieval ranks either individual wells or
+    perturbation-level mean profiles. Random rows show analytic chance performance.}
+  \label{tab:retrieval}
+  \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{@{}llrrrr@{}}
+      \toprule
+      Split & Direction                     & R@1 & R@5  & R@10 & Med.\ rank \\
+      \midrule
+      \multirow{6}{*}{Val}
+      & well image $\to$ text         & 5.9 & 23.3 & 39.4 & 14         \\
+      & well text $\to$ image         & 4.1 & 15.3 & 23.5 & 30         \\
+      & pert.\ image $\to$ text       & 4.1 & 20.4 & 38.8 & 13         \\
+      & pert.\ text $\to$ image       & 5.1 & 18.4 & 39.8 & 13         \\
+      & random, single positive       & 1.0 & 5.1  & 10.2 & 49.5       \\
+      & random, well text $\to$ image & 1.0 & 5.0  & 9.7  & 99         \\
+      \midrule
+      \multirow{6}{*}{Test}
+      & well image $\to$ text         & 5.5 & 22.0 & 41.4 & 13         \\
+      & well text $\to$ image         & 4.7 & 18.6 & 26.7 & 25         \\
+      & pert.\ image $\to$ text       & 4.7 & 17.4 & 37.2 & 14         \\
+      & pert.\ text $\to$ image       & 8.1 & 23.3 & 44.2 & 13         \\
+      & random, single positive       & 1.2 & 5.8  & 11.6 & 43.5       \\
+      & random, well text $\to$ image & 1.2 & 5.7  & 11.0 & 86         \\
+      \bottomrule
+    \end{tabular}%
+  }
 \end{table}
 
-Text-to-image retrieval is harder at the well level because each description must search a much larger pool of individual wells. Even so, the first matching replicate usually appears near the top of the ranking. Averaging replicate wells into perturbation profiles produces more balanced results in the two retrieval directions.
+Text-to-image retrieval is harder at the well level because each description must search a much
+larger pool of individual wells. Even so, the first matching replicate usually appears near the top
+of the ranking. Averaging replicate wells into perturbation profiles produces more balanced results
+in the two retrieval directions.
 
 \subsection{Ablations}
 
 Table~\ref{tab:ablation} lists the single-factor runs.
 
 \begin{table*}[t]
-\centering
-\caption{Single-factor ablations from a shared control. Values are perturbation-level Recall@10 in percent and median rank. Random Recall@10 is 10.2 on validation and 11.6 on test.}
-\label{tab:ablation}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}llrrrrrr@{}}
-\toprule
- & & \multicolumn{3}{c}{Validation} & \multicolumn{3}{c}{Test} \\
-\cmidrule(lr){3-5} \cmidrule(lr){6-8}
-Run & Change from control & i$\to$t & t$\to$i & Med. & i$\to$t & t$\to$i & Med. \\
-\midrule
-Base model & 100-epoch schedule, random batches & 38.8 & 39.8 & 13 & 37.2 & 44.2 & 14 \\
-Control & none & 37.8 & 37.8 & 13 & 50.0 & 41.9 & 10 \\
-Soft labels & $\alpha = 0.6$ & 37.8 & 42.9 & 14 & 44.2 & 47.7 & 12 \\
-Replicate loss & $\lambda_{\text{rep}} = 0.3$ & 44.9 & 41.8 & 13 & 47.7 & 46.5 & 12 \\
-Plate offsets & condition-relative correction & 41.8 & 38.8 & 13 & 41.9 & 43.0 & 12 \\
-All three & soft $+$ replicate $+$ offsets & 42.9 & 43.9 & 13 & 46.5 & 45.3 & 11 \\
-\bottomrule
-\end{tabular}%
-}
+  \centering
+  \caption{Single-factor ablations from a shared control. Values are perturbation-level Recall@10
+    in percent and median rank. Random Recall@10 is 10.2 on validation and 11.6 on test.}
+  \label{tab:ablation}
+  \resizebox{\textwidth}{!}{%
+    \begin{tabular}{@{}llrrrrrr@{}}
+      \toprule
+      &
+      & \multicolumn{3}{c}{Validation}
+      & \multicolumn{3}{c}{Test} \\
+      \cmidrule(lr){3-5} \cmidrule(lr){6-8}
+      Run & Change from control
+      & i$\to$t & t$\to$i & Med.
+      & i$\to$t & t$\to$i & Med. \\
+      \midrule
+      Base model & 100-epoch schedule, random batches
+      & 38.8 & 39.8 & 13
+      & 37.2 & 44.2 & 14 \\
+      Control & none
+      & 37.8 & 37.8 & 13
+      & 50.0 & 41.9 & 10 \\
+      Soft labels & $\alpha = 0.6$
+      & 37.8 & 42.9 & 14
+      & 44.2 & 47.7 & 12 \\
+      Replicate loss & $\lambda_{\text{rep}} = 0.3$
+      & 44.9 & 41.8 & 13
+      & 47.7 & 46.5 & 12 \\
+      Plate offsets & condition-relative correction
+      & 41.8 & 38.8 & 13
+      & 41.9 & 43.0 & 12 \\
+      All three & soft $+$ replicate $+$ offsets
+      & 42.9 & 43.9 & 13
+      & 46.5 & 45.3 & 11 \\
+      \bottomrule
+    \end{tabular}%
+  }
 \end{table*}
 
-No single addition improves retrieval consistently across validation and test data. The ranking of the variants changes between splits, and a difference of several percentage points represents only a few perturbations. The combined model is competitive in both directions but is not uniformly best. The observed differences are therefore too small to establish a reliable retrieval gain.
+No single addition improves retrieval consistently across validation and test data. The ranking of
+the variants changes between splits, and a difference of several percentage points represents only
+a few perturbations. The combined model is competitive in both directions but is not uniformly
+best. The observed differences are therefore too small to establish a reliable retrieval gain.
 
 \subsection{Standard CPJUMP1 Benchmark}
 
-Table~\ref{tab:benchmark} reports fraction retrieved and mAP on the standard benchmark for the base model, the replicate-loss run, the plate-offset run and the combined run.
+Table~\ref{tab:benchmark} reports fraction retrieved and mAP on the standard benchmark for the base
+model, the replicate-loss run, the plate-offset run and the combined run.
 
 \begin{table*}[t]
-\centering
-\caption{Standard CPJUMP1 benchmark. Each entry gives fraction retrieved, with mAP in parentheses. Summary fractions are unweighted across tracks; summary mAP is pooled across scored profiles.}
-\label{tab:benchmark}
-\begin{tabular}{@{}llrrrr@{}}
-\toprule
-Track & & Base & Replicate loss & Plate offsets & All three \\
-\midrule
-\multirow{2}{*}{Compound A549} & short & 0.353 (0.392) & 0.435 (0.458) & 0.327 (0.384) & 0.497 (0.493) \\
- & long & 0.513 (0.526) & 0.650 (0.583) & 0.503 (0.513) & 0.703 (0.626) \\
-\multirow{2}{*}{Compound U2OS} & short & 0.297 (0.344) & 0.379 (0.404) & 0.310 (0.351) & 0.422 (0.439) \\
- & long & 0.369 (0.413) & 0.471 (0.474) & 0.395 (0.421) & 0.503 (0.496) \\
-\multirow{2}{*}{CRISPR A549} & short & 0.173 (0.286) & 0.271 (0.343) & 0.092 (0.239) & 0.340 (0.375) \\
- & long & 0.183 (0.296) & 0.376 (0.356) & 0.134 (0.282) & 0.366 (0.385) \\
-\multirow{2}{*}{CRISPR U2OS} & short & 0.026 (0.175) & 0.049 (0.207) & 0.052 (0.182) & 0.078 (0.232) \\
- & long & 0.170 (0.277) & 0.219 (0.290) & 0.160 (0.259) & 0.258 (0.318) \\
-\multirow{2}{*}{ORF A549} & short & 0.006 (0.136) & 0.012 (0.158) & 0.012 (0.138) & 0.019 (0.174) \\
- & long & 0.000 (0.128) & 0.006 (0.142) & 0.000 (0.126) & 0.006 (0.141) \\
-\multirow{2}{*}{ORF U2OS} & short & 0.043 (0.171) & 0.099 (0.223) & 0.062 (0.209) & 0.099 (0.221) \\
- & long & 0.006 (0.133) & 0.012 (0.146) & 0.012 (0.140) & 0.031 (0.160) \\
-\midrule
-Replicability summary (12 tracks) & & 0.178 (0.298) & 0.248 (0.343) & 0.172 (0.292) & 0.277 (0.369) \\
-Target-matching summary (8 tracks) & & 0.339 (0.197) & 0.262 (0.160) & 0.420 (0.194) & 0.172 (0.148) \\
-Gene--compound summary & & 0.005 (0.123) & 0.000 (0.082) & 0.010 (0.140) & 0.029 (0.082) \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Standard CPJUMP1 benchmark. Each entry gives fraction retrieved, with mAP in
+    parentheses. Summary fractions are unweighted across tracks; summary mAP is pooled across
+    scored profiles.}
+  \label{tab:benchmark}
+  \begin{tabular}{@{}llrrrr@{}}
+    \toprule
+    Track & & Base & Replicate loss & Plate offsets & All three \\
+    \midrule
+    \multirow{2}{*}{Compound A549} & short
+    & 0.353 (0.392) & 0.435 (0.458) & 0.327 (0.384) & 0.497 (0.493) \\
+    & long
+    & 0.513 (0.526) & 0.650 (0.583) & 0.503 (0.513) & 0.703 (0.626) \\
+    \multirow{2}{*}{Compound U2OS} & short
+    & 0.297 (0.344) & 0.379 (0.404) & 0.310 (0.351) & 0.422 (0.439) \\
+    & long
+    & 0.369 (0.413) & 0.471 (0.474) & 0.395 (0.421) & 0.503 (0.496) \\
+    \multirow{2}{*}{CRISPR A549} & short
+    & 0.173 (0.286) & 0.271 (0.343) & 0.092 (0.239) & 0.340 (0.375) \\
+    & long
+    & 0.183 (0.296) & 0.376 (0.356) & 0.134 (0.282) & 0.366 (0.385) \\
+    \multirow{2}{*}{CRISPR U2OS} & short
+    & 0.026 (0.175) & 0.049 (0.207) & 0.052 (0.182) & 0.078 (0.232) \\
+    & long
+    & 0.170 (0.277) & 0.219 (0.290) & 0.160 (0.259) & 0.258 (0.318) \\
+    \multirow{2}{*}{ORF A549} & short
+    & 0.006 (0.136) & 0.012 (0.158) & 0.012 (0.138) & 0.019 (0.174) \\
+    & long
+    & 0.000 (0.128) & 0.006 (0.142) & 0.000 (0.126) & 0.006 (0.141) \\
+    \multirow{2}{*}{ORF U2OS} & short
+    & 0.043 (0.171) & 0.099 (0.223) & 0.062 (0.209) & 0.099 (0.221) \\
+    & long
+    & 0.006 (0.133) & 0.012 (0.146) & 0.012 (0.140) & 0.031 (0.160) \\
+    \midrule
+    Replicability summary (12 tracks) &
+    & 0.178 (0.298) & 0.248 (0.343) & 0.172 (0.292) & 0.277 (0.369) \\
+    Target-matching summary (8 tracks) &
+    & 0.339 (0.197) & 0.262 (0.160) & 0.420 (0.194) & 0.172 (0.148) \\
+    Gene--compound summary &
+    & 0.005 (0.123) & 0.000 (0.082) & 0.010 (0.140) & 0.029 (0.082) \\
+    \bottomrule
+  \end{tabular}
 \end{table*}
 
-\paragraph{Replicability.} The replicate loss improves mAP on all twelve tracks, increasing pooled mAP from 0.298 to 0.343. The combined model reaches 0.369, while plate offsets alone do not improve the pooled result. This is the clearest change in the study, but it is also closely tied to the training objective: the loss explicitly pulls replicate wells together, and the benchmark measures how well those wells retrieve one another.
+\paragraph{Replicability.}
+The replicate loss improves mAP on all twelve tracks, increasing pooled mAP from 0.298 to 0.343.
+The combined model reaches 0.369, while plate offsets alone do not improve the pooled result. This
+is the clearest change in the study, but it is also closely tied to the training objective: the
+loss explicitly pulls replicate wells together, and the benchmark measures how well those wells
+retrieve one another.
 
-\paragraph{Target matching.} No variant is consistently better on the larger compound tracks. The smaller CRISPR tracks are especially sensitive to the benchmark's significance test. Overall, the target-matching results do not show that replicate alignment or plate correction improves relationships beyond perturbation identity.
+\paragraph{Target matching.}
+No variant is consistently better on the larger compound tracks. The smaller CRISPR tracks are
+especially sensitive to the benchmark's significance test. Overall, the target-matching results do
+not show that replicate alignment or plate correction improves relationships beyond perturbation
+identity.
 
-\paragraph{Gene--compound matching.} Cross-modality retrieval is weak for every variant. Almost no gene--compound relationships pass the significance threshold, and pooled mAP shows no consistent ordering. The tested training changes therefore do not solve the central problem of matching compounds to genetic perturbations with the same target.
+\paragraph{Gene--compound matching.}
+Cross-modality retrieval is weak for every variant. Almost no gene--compound relationships pass the
+significance threshold, and pooled mAP shows no consistent ordering. The tested training changes
+therefore do not solve the central problem of matching compounds to genetic perturbations with the
+same target.
 
 \subsection{Comparison with Baselines}
 
-\paragraph{Same-harness comparison.} Table~\ref{tab:same_harness} compares the released CellCLIP checkpoint with MorphoCLIP on the five short-timeline CPJUMP1 tracks available for both models. The shared-track mean gives a clearer summary than any single cell line or perturbation type. MorphoCLIP's base model and CellCLIP are close on average, while the replicate-loss and combined variants are higher on most tracks. The comparison remains approximate because CellCLIP uses its own encoder path and a control-fitted KernelPCA correction, whereas MorphoCLIP does not.
+\paragraph{Same-harness comparison.}
+Table~\ref{tab:same_harness} compares the released CellCLIP checkpoint with MorphoCLIP on the five
+short-timeline CPJUMP1 tracks available for both models. The shared-track mean gives a clearer
+summary than any single cell line or perturbation type. MorphoCLIP's base model and CellCLIP are
+close on average, while the replicate-loss and combined variants are higher on most tracks. The
+comparison remains approximate because CellCLIP uses its own encoder path and a control-fitted
+KernelPCA correction, whereas MorphoCLIP does not.
 
 \begin{table*}[t]
-\centering
-\caption{Short-timeline CPJUMP1 replicability on tracks shared by CellCLIP and MorphoCLIP. Values are fraction retrieved; the final column is the unweighted mean of the five tracks. CellCLIP uses the released checkpoint and its own preprocessing path.}
-\label{tab:same_harness}
-\begin{tabular}{@{}lrrrrrr@{}}
-\toprule
-Model & Compound A549 & Compound U2OS & CRISPR A549 & CRISPR U2OS & ORF U2OS & Mean \\
-\midrule
-CellCLIP~\cite{lu2025cellclip} & 0.366 & 0.353 & 0.020 & 0.118 & 0.119 & 0.195 \\
-MorphoCLIP base & 0.353 & 0.297 & 0.173 & 0.026 & 0.043 & 0.178 \\
-$+$ replicate loss & 0.435 & 0.379 & 0.271 & 0.049 & 0.099 & 0.247 \\
-MorphoCLIP, all three & 0.497 & 0.422 & 0.340 & 0.078 & 0.099 & 0.287 \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Short-timeline CPJUMP1 replicability on tracks shared by CellCLIP and MorphoCLIP.
+    Values are fraction retrieved; the final column is the unweighted mean of the five tracks.
+    CellCLIP uses the released checkpoint and its own preprocessing path.}
+  \label{tab:same_harness}
+  \begin{tabular}{@{}lrrrrrr@{}}
+    \toprule
+    Model & Compound A549 & Compound U2OS & CRISPR A549 & CRISPR U2OS & ORF U2OS & Mean \\
+    \midrule
+    CellCLIP~\cite{lu2025cellclip}
+    & 0.366 & 0.353 & 0.020 & 0.118 & 0.119 & 0.195 \\
+    MorphoCLIP base
+    & 0.353 & 0.297 & 0.173 & 0.026 & 0.043 & 0.178 \\
+    $+$ replicate loss
+    & 0.435 & 0.379 & 0.271 & 0.049 & 0.099 & 0.247 \\
+    MorphoCLIP, all three
+    & 0.497 & 0.422 & 0.340 & 0.078 & 0.099 & 0.287 \\
+    \bottomrule
+  \end{tabular}
 \end{table*}
 
-Because fraction retrieved depends on a stochastic significance test, the differences in Table~\ref{tab:same_harness} should not be read as a definitive ranking. The changes from the MorphoCLIP base to its own variants are more informative than the unpaired comparison with CellCLIP.
+Because fraction retrieved depends on a stochastic significance test, the differences in
+Table~\ref{tab:same_harness} should not be read as a definitive ranking. The changes from the
+MorphoCLIP base to its own variants are more informative than the unpaired comparison with
+CellCLIP.
 
-\paragraph{Published benchmark context.} Table~\ref{tab:published_context} groups published results only where the dataset, task and metric match. On CPJUMP1 compound target matching, the MorphoCLIP base spans a similar range to CellProfiler and has a four-track mean of 16.3\%. On the separate RxRx3-core CORUM benchmark, CWA-MSN improves over CellCLIP, but MorphoCLIP has not been evaluated there.
+\paragraph{Published benchmark context.}
+Table~\ref{tab:published_context} groups published results only where the dataset, task and metric
+match. On CPJUMP1 compound target matching, the MorphoCLIP base spans a similar range to
+CellProfiler and has a four-track mean of 16.3\%. On the separate RxRx3-core CORUM benchmark,
+CWA-MSN improves over CellCLIP, but MorphoCLIP has not been evaluated there.
 
 \begin{table}[t]
-\centering
-\caption{Published benchmark context. Results are comparable within each dataset--task group, not across groups. FR denotes fraction retrieved.}
-\label{tab:published_context}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llllr@{}}
-\toprule
-Method & Dataset & Task & Metric & Result \\
-\midrule
-CellProfiler~\cite{chandrasekaran2024jump} & CPJUMP1 & Compound target matching & FR range & 4.3--25.1\% \\
-MorphoCLIP base & CPJUMP1 & Compound target matching & FR range & 7.5--31.5\% \\
-\midrule
-CellCLIP~\cite{lu2025cellclip} & RxRx3-core & CORUM gene--gene & Recall & 0.354 \\
-CWA-MSN~\cite{huang2025cwamsn} & RxRx3-core & CORUM gene--gene & Recall & 0.386 \\
-\bottomrule
-\end{tabular}%
-}
+  \centering
+  \caption{Published benchmark context. Results are comparable within each dataset--task group,
+    not across groups. FR denotes fraction retrieved.}
+  \label{tab:published_context}
+  \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{@{}llllr@{}}
+      \toprule
+      Method & Dataset & Task & Metric & Result \\
+      \midrule
+      CellProfiler~\cite{chandrasekaran2024jump}
+      & CPJUMP1 & Compound target matching & FR range & 4.3--25.1\% \\
+      MorphoCLIP base
+      & CPJUMP1 & Compound target matching & FR range & 7.5--31.5\% \\
+      \midrule
+      CellCLIP~\cite{lu2025cellclip}
+      & RxRx3-core & CORUM gene--gene & Recall & 0.354 \\
+      CWA-MSN~\cite{huang2025cwamsn}
+      & RxRx3-core & CORUM gene--gene & Recall & 0.386 \\
+      \bottomrule
+    \end{tabular}%
+  }
 \end{table}
 
 \subsection{Cached Feature Analysis}
 
-We checked whether channel identity survives the frozen backbone using 500 sites sampled with seed 42 from plate BR00116991. The reproducible diagnostic output is stored with the figure sources. A variance decomposition attributes 31.1\% of variance to between-channel differences, 37.1\% to between-site differences and 31.8\% to the residual (Figure~\ref{fig:variance}). Same-channel tokens from different sites have mean cosine similarity 0.84, while cross-channel tokens from different sites average 0.75 (Figure~\ref{fig:channelsim}). The two-dimensional PCA projection in Figure~\ref{fig:pca} provides a qualitative view of this channel structure.
+We checked whether channel identity survives the frozen backbone using 500 sites sampled with seed
+42 from plate BR00116991. The reproducible diagnostic output is stored with the figure sources. A
+variance decomposition attributes 31.1\% of variance to between-channel differences, 37.1\% to
+between-site differences and 31.8\% to the residual (Figure~\ref{fig:variance}). Same-channel
+tokens from different sites have mean cosine similarity 0.84, while cross-channel tokens from
+different sites average 0.75 (Figure~\ref{fig:channelsim}). The two-dimensional PCA projection in
+Figure~\ref{fig:pca} provides a qualitative view of this channel structure.
 
 \begin{figure}[t]
-    \centering
-    \includegraphics[width=\columnwidth]{figures/variance_decomp.png}
-    \caption{Variance decomposition of the cached DINOv3 tokens on plate BR00116991: between-channel, between-site and residual components.}
-    \label{fig:variance}
+  \centering
+  \includegraphics[width=\columnwidth]{figures/variance_decomp.png}
+  \caption{Variance decomposition of the cached DINOv3 tokens on plate BR00116991:
+    between-channel, between-site and residual components.}
+  \label{fig:variance}
 \end{figure}
 
 \begin{figure}[t]
-    \centering
-    \includegraphics[width=\columnwidth]{figures/channel_similarity.png}
-    \caption{Mean cosine similarity between fluorescence channels in the cached token space. The DNA channel is the most distinct.}
-    \label{fig:channelsim}
+  \centering
+  \includegraphics[width=\columnwidth]{figures/channel_similarity.png}
+  \caption{Mean cosine similarity between fluorescence channels in the cached token space. The DNA
+    channel is the most distinct.}
+  \label{fig:channelsim}
 \end{figure}
 
 \begin{figure}[t]
-    \centering
-    \includegraphics[width=\columnwidth]{figures/pca_channels.png}
-    \caption{First two principal components of the cached 1024-d channel tokens, colored by fluorescence channel.}
-    \label{fig:pca}
+  \centering
+  \includegraphics[width=\columnwidth]{figures/pca_channels.png}
+  \caption{First two principal components of the cached 1024-d channel tokens, colored by
+    fluorescence channel.}
+  \label{fig:pca}
 \end{figure}

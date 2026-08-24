@@ -1,16 +1,39 @@
 \section{Introduction}
 
-Phenotypic drug discovery studies how cells respond to chemical and genetic perturbations. Unlike target-specific assays, it can reveal broad changes in cell state without assuming in advance which biological pathway matters. This matters in a drug-development process that remains slow, expensive and prone to failure~\cite{wouters2020rdcost,sun2022clinicaltrials}.
+Phenotypic drug discovery studies how cells respond to chemical and genetic perturbations. Unlike
+target-specific assays, it can reveal broad changes in cell state without assuming in advance which
+biological pathway matters. This matters in a drug-development process that remains slow, expensive
+and prone to failure~\cite{wouters2020rdcost,sun2022clinicaltrials}.
 
-High-content microscopy provides this broader view at scale. The Cell Painting assay~\cite{bray2016cellpainting, seal2024cellpainting} uses fluorescent stains to label major cellular structures, producing a five-channel image of each field of view. Changes in cell shape, organelles and spatial organization can reveal how a perturbation acts. The CPJUMP1 benchmark~\cite{chandrasekaran2024jump} asks whether a model can recover these relationships across a large collection of compound treatments, gene knockouts and gene overexpression experiments.
+High-content microscopy provides this broader view at scale. The Cell Painting
+assay~\cite{bray2016cellpainting, seal2024cellpainting} uses fluorescent stains to label major
+cellular structures, producing a five-channel image of each field of view. Changes in cell shape,
+organelles and spatial organization can reveal how a perturbation acts. The CPJUMP1
+benchmark~\cite{chandrasekaran2024jump} asks whether a model can recover these relationships across
+a large collection of compound treatments, gene knockouts and gene overexpression experiments.
 
-Existing approaches address different parts of this problem. CellProfiler~\cite{carpenter2006cellprofiler} uses handcrafted measurements, while CLOOME~\cite{sanchez2023cloome} and MolPhenix~\cite{fradkin2024molphenix} learn image representations from molecular fingerprints and are therefore limited to compounds. CellCLIP~\cite{lu2025cellclip} uses text prompts, allowing it to represent both chemical and genetic perturbations, but relies on a large vision backbone and still struggles with cross-class retrieval. CWA-MSN~\cite{huang2025cwamsn} focuses on batch effects and improves gene--gene retrieval, but it has no text branch and cannot be searched with natural-language descriptions.
+Existing approaches address different parts of this problem.
+CellProfiler~\cite{carpenter2006cellprofiler} uses handcrafted measurements, while
+CLOOME~\cite{sanchez2023cloome} and MolPhenix~\cite{fradkin2024molphenix} learn image
+representations from molecular fingerprints and are therefore limited to compounds.
+CellCLIP~\cite{lu2025cellclip} uses text prompts, allowing it to represent both chemical and
+genetic perturbations, but relies on a large vision backbone and still struggles with cross-class
+retrieval. CWA-MSN~\cite{huang2025cwamsn} focuses on batch effects and improves gene--gene
+retrieval, but it has no text branch and cannot be searched with natural-language descriptions.
 
-MorphoCLIP brings text supervision, chemical and genetic perturbations, and optional plate correction into one model. Following CLIP~\cite{radford2021clip}, it learns to place a Cell Painting well near the text describing its perturbation. The vision and language backbones remain frozen, and their outputs are cached before training. Only the cross-channel transformer and projection layers are optimized, which keeps the trainable part of the model relatively small.
+MorphoCLIP brings text supervision, chemical and genetic perturbations, and optional plate
+correction into one model. Following CLIP~\cite{radford2021clip}, it learns to place a Cell
+Painting well near the text describing its perturbation. The vision and language backbones remain
+frozen, and their outputs are cached before training. Only the cross-channel transformer and
+projection layers are optimized, which keeps the trainable part of the model relatively small.
 
 Our main contributions are:
 \begin{enumerate}
-    \item A text-supervised model built on cached DINOv3 features~\cite{simeoni2025dinov3} that learns jointly from compounds, CRISPR knockouts and ORF overexpressions.
-    \item An evaluation of replicate alignment, gene-aware soft labels and condition-relative plate correction. Replicate alignment improves agreement between repeated experiments, while the other changes do not show a consistent benefit.
-    \item A retrieval protocol with analytic chance baselines, together with evaluation on the standard CPJUMP1 benchmark.
+  \item A text-supervised model built on cached DINOv3 features~\cite{simeoni2025dinov3} that
+        learns jointly from compounds, CRISPR knockouts and ORF overexpressions.
+  \item An evaluation of replicate alignment, gene-aware soft labels and condition-relative plate
+        correction. Replicate alignment improves agreement between repeated experiments, while
+        the other changes do not show a consistent benefit.
+  \item A retrieval protocol with analytic chance baselines, together with evaluation on the
+        standard CPJUMP1 benchmark.
 \end{enumerate}

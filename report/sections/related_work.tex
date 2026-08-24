@@ -2,24 +2,51 @@
 
 \subsection{Morphological Profiling}
 
-Cell Painting~\cite{bray2016cellpainting} established the five-stain assay now widely used for high-content morphological profiling~\cite{seal2024cellpainting}. The standard analysis pipeline, CellProfiler~\cite{carpenter2006cellprofiler}, measures more than a thousand handcrafted properties of each cell. These features remain a strong baseline on CPJUMP1~\cite{chandrasekaran2024jump}, although matching compounds to genetic perturbations is still difficult.
+Cell Painting~\cite{bray2016cellpainting} established the five-stain assay now widely used for
+high-content morphological profiling~\cite{seal2024cellpainting}. The standard analysis pipeline,
+CellProfiler~\cite{carpenter2006cellprofiler}, measures more than a thousand handcrafted properties
+of each cell. These features remain a strong baseline on CPJUMP1~\cite{chandrasekaran2024jump},
+although matching compounds to genetic perturbations is still difficult.
 
-Handcrafted pipelines are limited to a predefined set of measurements. Self-supervised vision transformers have shown stronger transfer on drug-target and gene-family classification~\cite{moshkov2025ssl}, which motivates our use of frozen foundation-model features.
+Handcrafted pipelines are limited to a predefined set of measurements. Self-supervised vision
+transformers have shown stronger transfer on drug-target and gene-family
+classification~\cite{moshkov2025ssl}, which motivates our use of frozen foundation-model features.
 
 \subsection{Contrastive Learning for Cell Painting}
 
-CLOOME~\cite{sanchez2023cloome} introduced CLIP-style training for Cell Painting by pairing a ResNet image encoder with molecular fingerprints. Its compound retrieval results showed that contrastive supervision works for Cell Painting, but the method does not cover genetic perturbations and treats the five fluorescence channels as RGB.
+CLOOME~\cite{sanchez2023cloome} introduced CLIP-style training for Cell Painting by pairing a
+ResNet image encoder with molecular fingerprints. Its compound retrieval results showed that
+contrastive supervision works for Cell Painting, but the method does not cover genetic
+perturbations and treats the five fluorescence channels as RGB.
 
-MolPhenix~\cite{fradkin2024molphenix} uses a frozen Phenom-1 image encoder, averages replicate embeddings and introduces softer labels. It improves compound retrieval but depends on a proprietary backbone and likewise does not represent genetic perturbations.
+MolPhenix~\cite{fradkin2024molphenix} uses a frozen Phenom-1 image encoder, averages replicate
+embeddings and introduces softer labels. It improves compound retrieval but depends on a
+proprietary backbone and likewise does not represent genetic perturbations.
 
-CellCLIP~\cite{lu2025cellclip} is the closest prior work. It combines templated text prompts with per-channel image encoding, cross-channel attention, attention-based cell pooling and a continuously weighted contrastive loss. Its text branch can describe chemical and genetic perturbations in a common form. However, it relies on a much larger DINOv2-g backbone, and its cross-class results show that text supervision alone does not solve technical variation between experiments.
+CellCLIP~\cite{lu2025cellclip} is the closest prior work. It combines templated text prompts with
+per-channel image encoding, cross-channel attention, attention-based cell pooling and a
+continuously weighted contrastive loss. Its text branch can describe chemical and genetic
+perturbations in a common form. However, it relies on a much larger DINOv2-g backbone, and its
+cross-class results show that text supervision alone does not solve technical variation between
+experiments.
 
 \subsection{Batch-Effect Correction}
 
-CWA-MSN~\cite{huang2025cwamsn} addresses batch effects within a masked Siamese network by aligning cells that received the same perturbation across wells and plates. This improves gene--gene retrieval without relying on explicit batch labels. The model has no text branch, but its alignment strategy is closely related to the replicate loss studied here.
+CWA-MSN~\cite{huang2025cwamsn} addresses batch effects within a masked Siamese network by aligning
+cells that received the same perturbation across wells and plates. This improves gene--gene
+retrieval without relying on explicit batch labels. The model has no text branch, but its alignment
+strategy is closely related to the replicate loss studied here.
 
 \subsection{Foundation Models for Microscopy}
 
-DINOv2~\cite{oquab2024dinov2} and DINOv3~\cite{simeoni2025dinov3} give self-supervised visual features that transfer to biological imaging despite natural-image pretraining~\cite{moshkov2025ssl}. DINOv3 adds gram anchoring and a revised training recipe. Channel Vision Transformers~\cite{bao2024channelvit} show that per-channel encoding followed by cross-channel attention works for multi-channel microscopy, which is the pattern our channel aggregator follows.
+DINOv2~\cite{oquab2024dinov2} and DINOv3~\cite{simeoni2025dinov3} give self-supervised visual
+features that transfer to biological imaging despite natural-image
+pretraining~\cite{moshkov2025ssl}. DINOv3 adds gram anchoring and a revised training recipe.
+Channel Vision Transformers~\cite{bao2024channelvit} show that per-channel encoding followed by
+cross-channel attention works for multi-channel microscopy, which is the pattern our channel
+aggregator follows.
 
-On the text side, BioClinical ModernBERT~\cite{sounack2025bioclinical} is pretrained on biomedical and clinical literature. A single model can encode both small-molecule and gene descriptions, unlike encoders designed only for chemical strings. This makes it a natural fit for a dataset that mixes compounds with genetic perturbations.
+On the text side, BioClinical ModernBERT~\cite{sounack2025bioclinical} is pretrained on biomedical
+and clinical literature. A single model can encode both small-molecule and gene descriptions,
+unlike encoders designed only for chemical strings. This makes it a natural fit for a dataset that
+mixes compounds with genetic perturbations.
