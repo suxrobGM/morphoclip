@@ -1,0 +1,74 @@
+\documentclass{melba}
+% Submission: no option (line numbers on). arXiv during review: [arxiv]. Camera-ready: [accepted].
+
+\usepackage{amsmath}
+
+% The shared sections cite parenthetically as `Name~\cite{key}`; natbib's \cite is textual.
+\let\cite\citep
+
+\newcommand{\narrowfloatwidth}{\columnwidth}
+\newcommand{\codeavailability}{Code, configurations, split manifests and the evaluation harness are
+  available at \url{https://github.com/suxrobGM/morphoclip}.}
+
+% Filled in by the publishing editor at camera-ready; not printed during review.
+\melbaid{YYYY:NNN}
+\doi{10.59275/j.melba.YYYY-AAAA}
+\melbaauthors{Sukhrobbek Ilyosbekov, Shubham Gajjar and Rongfei Jin}
+\email{ilyosbekov.s@northeastern.edu}
+\volume{3}
+\firstpageno{1}
+\melbayear{2026}
+\datesubmitted{yyyy-mm-dd}
+\datepublished{yyyy-mm-dd}
+
+\ShortHeadings{MorphoCLIP: Text-Supervised Perturbation Matching}{Ilyosbekov, Gajjar and Jin}
+
+\title{MorphoCLIP: Text-Supervised Contrastive Learning for Perturbation Matching in Cell Painting
+  Images}
+
+\author{
+  \name Sukhrobbek Ilyosbekov\aff{1},
+  \name Shubham Gajjar\aff{1},
+  \name Rongfei Jin\aff{1}
+}
+\affiliations{%
+  \num 1 \addr Northeastern University, Portland, ME, USA
+}
+
+\abstract{%
+  \input{sections/abstract}}
+
+\keywords{Contrastive learning, Cell Painting, Morphological profiling, CLIP, Perturbation matching}
+
+\begin{document}
+
+\twocolumn[\maketitle]
+
+\input{sections/introduction}
+\input{sections/problem_statement}
+\input{sections/related_work}
+\input{sections/methods}
+\input{sections/experiments}
+\input{sections/results}
+\input{sections/conclusion}
+
+\acks{We thank the JUMP Cell Painting Consortium for making the CPJUMP1 data publicly available.
+  AI writing assistants were used to edit the manuscript for language and clarity. All content,
+  analyses and conclusions are the authors' own, and the authors take full responsibility for
+  them.}
+
+\ethics{The work follows appropriate ethical standards in conducting research and writing the
+  manuscript. It uses only publicly available images of cultured human cell lines (U2OS and A549)
+  from the CPJUMP1 dataset. No human subjects or animals were involved, so no institutional review
+  board approval was required.}
+
+\coi{We declare we don't have conflicts of interest.}
+
+\data{CPJUMP1 is publicly available from the Cell Painting Gallery (\texttt{cpg0000-jump-pilot})
+  on the Registry of Open Data on AWS. The reference metadata used by the benchmark, together with
+  the code, configurations and split manifests, is available at
+  \url{https://github.com/suxrobGM/morphoclip}.}
+
+\bibliography{references}
+
+\end{document}

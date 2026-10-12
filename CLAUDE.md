@@ -20,6 +20,7 @@ uv run morphoclip benchmark --config configs/benchmark.yml
 uv run torchrun --nproc_per_node=4 -m morphoclip.cli train --config configs/train/ddp.yaml --distributed
 
 uv run poe report                         # paper: report/build/main.pdf
+uv run poe report-tmlr                    # TMLR PDF + anonymized code zip (report/README.md)
 cd docs && bun run build                  # docs site
 ```
 

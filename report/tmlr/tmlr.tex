@@ -1,0 +1,55 @@
+\documentclass[10pt]{article}
+% Submission: no option, which anonymizes the author block. Camera-ready: [accepted].
+\usepackage{tmlr}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+% The shared sections cite parenthetically as `Name~\cite{key}`; natbib's \cite is textual.
+\let\cite\citep
+
+% Single-column page: full text width would blow up the small tables and figures.
+\newcommand{\narrowfloatwidth}{0.6\textwidth}
+\newcommand{\codeavailability}{Code, configurations, split manifests and the evaluation harness are
+  provided as anonymized supplementary material.}
+
+\def\month{MM}
+\def\year{YYYY}
+\def\openreview{\url{https://openreview.net/forum?id=XXXX}}
+
+\title{MorphoCLIP: Text-Supervised Contrastive Learning for Perturbation Matching in Cell Painting
+  Images}
+
+\author{\name Sukhrobbek Ilyosbekov \email ilyosbekov.s@northeastern.edu \\
+  \addr Northeastern University, Portland, ME, USA
+  \AND
+  \name Shubham Gajjar \email gajjar.shu@northeastern.edu \\
+  \addr Northeastern University, Portland, ME, USA
+  \AND
+  \name Rongfei Jin \email jin.ron@northeastern.edu \\
+  \addr Northeastern University, Portland, ME, USA}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  \input{sections/abstract}
+\end{abstract}
+
+\input{sections/introduction}
+\input{sections/problem_statement}
+\input{sections/related_work}
+\input{sections/methods}
+\input{sections/experiments}
+\input{sections/results}
+\input{sections/conclusion}
+
+\bibliographystyle{tmlr}
+\bibliography{references}
+
+\end{document}
