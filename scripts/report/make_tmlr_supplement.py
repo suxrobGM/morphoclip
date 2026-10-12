@@ -40,7 +40,8 @@ README_AUTHORS = re.compile(r"^## Authors\n.*?(?=^---$|\Z)", re.MULTILINE | re.D
 
 def _tracked_files() -> list[str]:
     result = subprocess.run(
-        ["git", "ls-files", "-z", "--", *INCLUDE],
+        # scripts/report/ builds the paper and lists the author identifiers it scrubs.
+        ["git", "ls-files", "-z", "--", *INCLUDE, ":!scripts/report"],
         cwd=ROOT,
         check=True,
         capture_output=True,
