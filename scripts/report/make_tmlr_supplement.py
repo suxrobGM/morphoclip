@@ -37,6 +37,18 @@ IDENTIFIERS = re.compile(
 README_DROP = re.compile(r"suxrobgm\.net")
 README_AUTHORS = re.compile(r"^## Authors\n.*?(?=^---$|\Z)", re.MULTILINE | re.DOTALL)
 
+README_REVIEW_NOTE = """\
+## Note for Reviewers
+
+The pre-extracted DINOv3 features are hosted under an account that would identify the authors,
+so `morphoclip features download` will not work during review. The archive will be made public
+on acceptance. Until then, the features can be rebuilt from the public CPJUMP1 images with
+`morphoclip data fetch` followed by `morphoclip features extract` (about 3 GB per plate across
+51 plates; DINOv3 weights require accepting Meta's license on Hugging Face). The test suite
+does not need the features: `uv run poe test`.
+
+"""
+
 
 def _tracked_files() -> list[str]:
     result = subprocess.run(
@@ -55,6 +67,7 @@ def _anonymize(name: str, text: str) -> str:
         text = "".join(
             line for line in text.splitlines(keepends=True) if not README_DROP.search(line)
         )
+        text = text.replace("## Quick Start\n", README_REVIEW_NOTE + "## Quick Start\n", 1)
     for pattern, replacement in REPLACEMENTS:
         text = pattern.sub(replacement, text)
     return text
