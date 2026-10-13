@@ -101,7 +101,6 @@ def load_progress(path: Path, config_hash: str) -> PipelineProgress:
             )
         progress.config_hash = config_hash
 
-        # Reset in-progress plates from a previous crash
         for plate_name, record in progress.plates.items():
             if record["status"] in {PlateStatus.FETCHING, PlateStatus.EXTRACTING}:
                 logger.info("Resetting crashed plate %s to pending", plate_name)

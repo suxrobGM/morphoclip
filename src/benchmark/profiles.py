@@ -1,8 +1,7 @@
 """The on-disk profile contract: where a plate's CSV lives and which columns are features.
 
 Exporters and the benchmark harness share this layout, so it is defined once here.
-Four separate predicates used to decide the metadata/feature split, and they disagreed.
-Now :func:`metadata_columns` and :func:`feature_columns` are exact complements, so
+:func:`metadata_columns` and :func:`feature_columns` are exact complements, so
 every column lands in exactly one set.
 """
 

@@ -1,9 +1,8 @@
 """Budget the import graph so a stray top-level import cannot creep back.
 
-Emptying the package __init__ files took `import morphoclip.training.config`
-from 3,918 modules to about 200. That is easy to undo by accident: one
-convenience re-export in an __init__, or one torch import moved to module scope,
-puts it back. Each check runs in a subprocess so sys.modules starts clean.
+One convenience re-export in an __init__, or one torch import moved to module
+scope, inflates the module count by thousands. Each check runs in a subprocess
+so sys.modules starts clean.
 """
 
 import subprocess
@@ -26,7 +25,7 @@ def _probe(code: str) -> str:
 @pytest.mark.parametrize(
     ("module", "budget", "forbidden"),
     [
-        # Pure dataclasses and YAML. Used to pull TensorBoard, transformers and pandas.
+        # Pure dataclasses and YAML; no TensorBoard, transformers or pandas.
         ("morphoclip.training.config", 400, "torch"),
         # Pandas only. profile_ops exists so result accumulation is importable
         # without copairs, which benchmark.metrics needs.
@@ -46,7 +45,7 @@ def test_module_import_stays_lean(module: str, budget: int, forbidden: str) -> N
 
 @pytest.mark.parametrize("forbidden", ["torch", "morphoclip"])
 def test_the_whole_benchmark_package_stays_free_of(forbidden: str) -> None:
-    """`benchmark` is standalone. It used to import a torch Dataset through splits."""
+    """`benchmark` is standalone, so no module in it may reach torch or morphoclip."""
     loaded = _probe(
         "import importlib, pkgutil, sys, benchmark\n"
         "for m in [x.name for x in pkgutil.iter_modules(benchmark.__path__)]:\n"

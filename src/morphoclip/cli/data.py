@@ -175,7 +175,6 @@ S3_BASE = "s3://cellpainting-gallery/cpg0000-jump-pilot/source_4/images/2020_11_
 """Base S3 URI for the CPJUMP1 images. Plates are subdirectories under this path."""
 
 MAX_WORKERS = 10
-"""Maximum number of parallel workers for scanning plates."""
 
 
 def _run_aws(args: list[str]) -> str:

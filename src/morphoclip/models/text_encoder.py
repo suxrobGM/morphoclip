@@ -22,7 +22,7 @@ from morphoclip.models.prompts import TEMPLATES, build_prompts
 
 
 class MorphoCLIPTextEncoder(nn.Module):
-    """Complete text encoder for MorphoCLIP.
+    """Encode perturbation metadata into the shared embedding space.
 
     Takes perturbation metadata, constructs prompts, encodes with
     BioClinical ModernBERT, and projects to the shared embedding space.

@@ -1,10 +1,10 @@
 benchmark:
   profiles_dir: "data/profiles"           # Root containing benchmark profile CSVs
-  output_dir: "output/benchmark"          # Output directory for results and figures
-  batch: "2020_11_04_CPJUMP1"            # Experiment batch identifier
+  output_dir: "output/benchmark"          # Results and figures
+  batch: "2020_11_04_CPJUMP1"
   test_mode: false                        # Use less data for testing
   cell_filter: null                       # Filter to single cell type (null = all)
-  batch_correction: false                 # Apply batch correction to profiles
+  batch_correction: false
   pca_kernel: "linear"                    # PCA kernel for batch correction
   pca_n_components: 500                   # PCA components for batch correction
   # Timeline labels are modality-aware:
@@ -16,9 +16,9 @@ cellclip_export:
   source_profiles_root: "data/profiles"   # Source benchmark CSVs for metadata/template rows
   feature_root: "data/features_cellclip_base" # CellCLIP-compatible per-site input tensors
   output_profiles_root: "data/profiles_cellclip_hf" # Output CellCLIP profile CSVs
-  batch: "2020_11_04_CPJUMP1"            # Experiment batch identifier
+  batch: "2020_11_04_CPJUMP1"
   experiment_metadata_path: "output/benchmark/input/experiment-metadata.tsv"
-  checkpoint_repo_id: "suinleelab/CellCLIP" # HuggingFace checkpoint repo
+  checkpoint_repo_id: "suinleelab/CellCLIP" # Hugging Face repo id
   checkpoint_filename: "model.safetensors"
-  input_dim: 1536                         # CellCLIP input dimension
-  device: "auto"                          # Torch device
+  input_dim: 1536
+  device: "auto"

@@ -1,6 +1,6 @@
 # Mean pooling experiment: replaces CrossChannelFormer with simple channel averaging.
 # Drops trainable params from ~14M to ~1.3M (projection heads only).
-# Run with: uv run poe train --config configs/train/mean_pool.yaml
+# Run with: uv run morphoclip train --config configs/train/mean_pool.yaml
 
 extends: base.yaml
 

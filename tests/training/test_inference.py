@@ -1,10 +1,10 @@
 """Tests for `encode_wells`, the one well-encoding loop.
 
-`morphoclip eval`, `morphoclip infer` and profile export each had their own
-copy. They disagreed on two things that matter: whether uncached wells are
-dropped, and whether the forward pass runs under autocast. Export ran in fp32
-and writes its embeddings to disk, so a helpful `amp=True` default would have
-changed every benchmark number downstream without failing anything.
+`morphoclip eval`, `morphoclip infer` and profile export all go through it.
+These pin whether uncached wells are dropped and whether the forward pass runs
+under autocast. Export runs in fp32 and writes its embeddings to disk, so an
+`amp=True` default would change every benchmark number downstream without
+failing anything.
 """
 
 from contextlib import nullcontext

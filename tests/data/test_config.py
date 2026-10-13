@@ -1,8 +1,7 @@
 """Tests for the cpjump dataset config.
 
-Seven call sites used to read configs/dataset.yml with their own defaults, so
-`local.features` fell back to "data/features" in one place and raised a KeyError
-in another. These pin the one set of defaults and the S3 URI assembly.
+Pins the single set of defaults every caller of configs/dataset.yml shares, the
+rejection of malformed configs, and the S3 URI assembly.
 """
 
 from pathlib import Path

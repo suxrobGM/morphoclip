@@ -398,7 +398,7 @@ def main(
         Path, typer.Option(help="Directory for the saved heatmap panel.")
     ] = DEFAULT_OUTPUT_DIR,
 ) -> None:
-    """Load a CPJUMP microscopy image, run DINO attention rollout, and save a heatmap panel."""
+    """Load a CPJUMP microscopy image, turn DINO attentions into heatmaps, and save a panel."""
     with torch.no_grad():
         resolved_source, image_path = pick_image_path(
             image=image,

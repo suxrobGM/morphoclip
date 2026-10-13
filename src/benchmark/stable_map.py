@@ -1,7 +1,6 @@
 """Old-copairs ("stable") mAP pipeline for benchmark metrics.
 
-Reaches :func:`benchmark.copairs_backend._get_legacy_modules` through the module
-reference so tests can monkeypatch the backend loader.
+Loads copairs via :mod:`benchmark.copairs_backend` (see there for why).
 """
 
 import itertools

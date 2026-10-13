@@ -1,9 +1,8 @@
 """Result accumulation, saving, and reporting for the stable benchmark.
 
-Holds the six mAP/fraction-retrieved accumulator frames; :meth:`StableResults.append`
-replaces the repeated build-and-concat pattern. copairs and matplotlib are imported
-lazily inside the methods that need them, so importing this module does not require
-the ``benchmark`` extra.
+Holds the six mAP/fraction-retrieved accumulator frames. copairs and matplotlib
+are imported lazily inside the methods that need them, so importing this module
+does not require the ``benchmark`` extra.
 """
 
 from dataclasses import dataclass, field

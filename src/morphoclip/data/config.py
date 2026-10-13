@@ -1,8 +1,7 @@
 """Schema for the ``cpjump`` section of ``configs/dataset.yml``.
 
-Seven call sites used to read this file with a bare
-``yaml.safe_load(f)["cpjump"]`` and reach into nested dicts with their own
-defaults, so the same key had a different fallback depending on who asked.
+Parse the file only through this schema so every key has one default
+regardless of the caller.
 """
 
 from pathlib import Path

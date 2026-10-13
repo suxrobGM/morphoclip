@@ -1,15 +1,15 @@
 """Pin what every committed config resolves to.
 
-`extends` inheritance runs up to six levels deep, so "which value wins" is not
+`extends` chains run up to three files deep, so "which value wins" is not
 readable from any single file. These goldens record the answer for every config
-in the repo, which is what makes it safe to rewrite the loader underneath.
+in the repo, so a loader rewrite that changes resolution fails here.
 
 Regenerate deliberately, never as a reflex::
 
     MORPHOCLIP_REGEN_GOLDENS=1 uv run pytest tests/config/test_golden_resolution.py
 
-A diff here means resolution changed. That is either the point of your change or
-a bug, and only you know which.
+A diff here means resolution changed. Regenerate only when that change is
+intended; otherwise it is a bug.
 """
 
 import json

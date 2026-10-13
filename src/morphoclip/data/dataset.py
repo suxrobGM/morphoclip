@@ -65,6 +65,19 @@ class MorphoCLIPDataset(Dataset[MorphoCLIPSample]):
     Each sample is a well: DINOv3 features or image tensors for every site,
     plus a text description looked up in the metadata index.
 
+    Args:
+        feature_dir: Root directory containing per-plate subdirectories
+            with ``.pt`` files (``data/features/`` or ``data/tensors/``).
+        metadata: MetadataIndex for text description lookup.
+        plates: List of plate barcodes to include.
+        mode: ``"features"`` for pre-extracted CLS tokens,
+            ``"tensors"`` for resized image tensors.
+        text_level: Text granularity
+            (``"name_only"``, ``"name_target"``, ``"full"``).
+        exclude_controls: If ``True``, exclude negcon/poscon wells.
+        pert_types: If provided, include only these perturbation types.
+        max_sites_per_well: Cap sites per well (random subset).
+
     Usage::
 
         metadata = MetadataIndex.from_config(Path("configs/dataset.yml"))
@@ -87,21 +100,6 @@ class MorphoCLIPDataset(Dataset[MorphoCLIPSample]):
         pert_types: set[PerturbationType] | None = None,
         max_sites_per_well: int | None = None,
     ) -> None:
-        """Initialize the dataset.
-
-        Args:
-            feature_dir: Root directory containing per-plate subdirectories
-                with ``.pt`` files (``data/features/`` or ``data/tensors/``).
-            metadata: MetadataIndex for text description lookup.
-            plates: List of plate barcodes to include.
-            mode: ``"features"`` for pre-extracted CLS tokens,
-                ``"tensors"`` for resized image tensors.
-            text_level: Text granularity
-                (``"name_only"``, ``"name_target"``, ``"full"``).
-            exclude_controls: If ``True``, exclude negcon/poscon wells.
-            pert_types: If provided, include only these perturbation types.
-            max_sites_per_well: Cap sites per well (random subset).
-        """
         self._feature_dir = feature_dir
         self._metadata = metadata
         self._plates = plates
@@ -234,10 +232,10 @@ class MorphoCLIPDataset(Dataset[MorphoCLIPSample]):
 def collate_fn(
     batch: list[MorphoCLIPSample],
 ) -> dict[str, torch.Tensor | list[str] | list[PerturbationInfo]]:
-    """Custom collate function for variable site counts per well.
+    """Pad wells to the batch's max site count.
 
-    Pads to the maximum number of sites in the batch and provides
-    a boolean mask.
+    Args:
+        batch: Samples whose site counts may differ.
 
     Returns:
         Dict with keys:

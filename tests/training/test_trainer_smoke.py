@@ -1,13 +1,10 @@
 """End-to-end characterization of the training entry point.
 
-trainer.py, loop.py, engine.py, tb_logger.py and train_data.py are 1,229 lines
-with no test between them, and they are the code path the project exists for.
-This runs the real thing on CPU against fake features: no network, no GPU, a
-couple of seconds.
+Runs trainer.py, loop.py, engine.py, tb_logger.py and train_data.py together
+on CPU against fake features: no network, no GPU, a couple of seconds.
 
-It is deliberately shallow on numerics and strict on wiring. What it pins is
-that optimizer, scaler, scheduler, checkpointing, resume and the metrics file
-are still connected to each other after a refactor.
+Shallow on numerics and strict on wiring: it pins that optimizer, scaler,
+scheduler, checkpointing, resume and the metrics file stay connected.
 """
 
 import math

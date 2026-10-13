@@ -1,7 +1,7 @@
 cpjump:
   # S3 source
   endpoint: "s3://cellpainting-gallery/cpg0000-jump-pilot/source_4"
-  batch: "2020_11_04_CPJUMP1"                     # Experiment batch identifier
+  batch: "2020_11_04_CPJUMP1"
   images: "images/{batch}/images"                  # S3 path to plate image directories
   metadata: "workspace/metadata/platemaps/{batch}" # S3 path for platemap files
   external_metadata: "workspace/metadata/external_metadata" # S3 path for compound/gene annotations
@@ -67,13 +67,13 @@ cpjump:
     metadata: "data/metadata"        # Platemap CSVs and annotation TSVs
     features: "data/features"        # Extracted DINOv3 CLS tokens (.pt files)
 
-  # Feature extraction - DINOv3 model settings for CLS token extraction
+  # DINOv3 settings for CLS token extraction
   extraction:
     model: "facebook/dinov3-vitl16-pretrain-lvd1689m" # DINOv3 ViT-L/16 300M model
     device: "cuda"                   # Torch device ("cuda" or "cpu")
     batch_size: 48                   # Number of sites per forward pass
 
-  # Download settings for scripts/fetch_dataset.py
+  # Download settings for `morphoclip data fetch`
   fetch:
     backend: "auto"                  # auto | awscli | rclone
     on_existing_plate: "ask"         # ask | skip | redownload

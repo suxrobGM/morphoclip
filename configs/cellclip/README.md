@@ -19,9 +19,9 @@ Split strategies available: `cpjump1_official_representation`,
 
 ## Reproducing the historical runs
 
-Each command below reproduces a config that used to live in this directory. The
-overrides were computed from the resolved configs, not transcribed, so they are
-exact. `tests/config/goldens/` pins what the surviving five resolve to.
+Each command below reproduces a past run as `--set` overrides on a committed
+config. The overrides were computed from the resolved configs, so they are
+exact. `tests/config/goldens/` pins what the five committed configs resolve to.
 
 ChemBERTa FiLM, SMILES removed from prompts:
 

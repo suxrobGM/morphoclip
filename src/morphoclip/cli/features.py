@@ -1,7 +1,8 @@
 """`morphoclip features` command group: extract and the unattended pipeline.
 
-Upload, download and repack live in `transfer.py`, which registers itself on
-the same Typer app."""
+Upload, download and repack live in `transfer.py` and are registered on this
+app at the bottom of this module.
+"""
 
 from datetime import UTC, datetime
 from pathlib import Path
@@ -179,10 +180,9 @@ def pipeline(
     ] = None,
     dry_run: Annotated[bool, typer.Option(help="Log all steps without executing.")] = False,
 ) -> None:
-    """Autonomous feature extraction pipeline: fetch -> extract -> cleanup.
+    """Run the feature extraction pipeline: fetch, extract, clean up.
 
     Processes plates one at a time, tracking progress for crash-safe resume.
-    Designed for unattended overnight runs.
     """
     load_dotenv()
 

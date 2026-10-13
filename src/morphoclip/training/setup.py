@@ -119,8 +119,8 @@ def build_optimization(
 ) -> tuple[AdamW, LambdaLR, Any, int]:
     """Build optimizer, scheduler, grad scaler, and resolve total_steps.
 
-    logit_scale parameters get their own no-decay group after the split param
-    groups, matching the original ordering.
+    logit_scale parameters get their own no-decay group, appended last because
+    saved optimizer state is keyed by param group index.
     """
     opt_cfg = config.optimization
     accum_steps = config.distributed.gradient_accumulation_steps

@@ -1,9 +1,7 @@
 """Tests for the evaluation loop's CWA hook.
 
-`evaluate_epoch` used to take a ``use_cwa`` flag and rebuild the correction from
-whatever wells were in the batch. It now applies the checkpoint's offsets, and
-the one thing that must not rot is that they actually reach the embeddings the
-eval loss is computed from.
+`evaluate_epoch` applies the checkpoint's plate offsets. These pin that the
+offsets reach the embeddings the eval loss is computed from.
 """
 
 import torch

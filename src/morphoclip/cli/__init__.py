@@ -1,4 +1,4 @@
-"""MorphoCLIP unified command-line interface.
+"""MorphoCLIP command-line interface.
 
 Exposes a single ``morphoclip`` command (see ``[project.scripts]`` in
 pyproject.toml) with grouped subcommands. Also runnable as a module
@@ -24,7 +24,6 @@ app = typer.Typer(
     pretty_exceptions_show_locals=False,
 )
 
-# Top-level commands.
 app.command()(train)
 app.command("eval")(evaluate)
 app.command()(infer)
@@ -32,7 +31,6 @@ app.command()(split)
 app.command()(benchmark)
 app.command("export-profiles")(export_profiles)
 
-# Grouped subcommands.
 app.add_typer(data.app, name="data")
 app.add_typer(features.app, name="features")
 app.add_typer(text.app, name="text")

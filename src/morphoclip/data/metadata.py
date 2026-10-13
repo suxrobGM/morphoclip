@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 def _read_tsv(path: Path) -> list[dict[str, str]]:
-
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f, delimiter="\t"))
 
@@ -55,7 +54,7 @@ def _classify_pert_type(
 
 
 class MetadataIndex:
-    """Unified metadata index for CPJUMP1.
+    """Metadata index for CPJUMP1.
 
     Merges plate maps, barcode mappings, and external metadata into a
     single lookup: ``(plate_barcode, well) -> PerturbationInfo``.

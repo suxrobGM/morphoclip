@@ -2,7 +2,7 @@
 
 Pre-encodes all perturbation text once with the frozen BioClinical ModernBERT
 backbone, caches the result, and loads it at training time. The projection
-head is NOT part of the cache, so it can be retrained without re-encoding.
+head is not part of the cache, so it can be retrained without re-encoding.
 """
 
 from pathlib import Path

@@ -1,8 +1,8 @@
 """TensorBoard logging for MorphoCLIP training.
 
 Wraps ``SummaryWriter`` for training scalars, embedding diagnostics,
-weight histograms, and similarity heatmaps.  Silent no-op when
-``rank != 0`` or TensorBoard is disabled in config.
+weight histograms, and similarity heatmaps. Silent no-op when
+``rank != 0``.
 """
 
 import logging
@@ -60,7 +60,7 @@ _CUSTOM_SCALARS_LAYOUT = {
 
 
 class TrainingLogger:
-    """Unified training logger with TensorBoard backend.
+    """Training logger with a TensorBoard backend.
 
     Silent no-op when ``rank != 0``.
     """

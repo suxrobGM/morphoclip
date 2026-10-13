@@ -1,8 +1,4 @@
-"""The seven per-run figures the stable benchmark writes.
-
-Split out of stable_helpers.py, which mixed profile loading, batch correction
-and plotting in one module.
-"""
+"""The seven per-run figures the stable benchmark writes."""
 
 from pathlib import Path
 

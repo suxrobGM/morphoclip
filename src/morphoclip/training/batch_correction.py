@@ -7,9 +7,9 @@ condition. Offsets within a condition sum to zero, so the correction removes
 plate-to-plate drift and keeps the condition signal. Offsets are recomputed
 once per epoch and treated as constants, never as a gradient path.
 
-An earlier version subtracted the mean of whichever wells of a plate landed in
-the current batch. On CPJUMP1 a plate is nearly one condition, so that erased
-the biology the prompts describe, and the per-batch estimate was noisy.
+Offsets are condition-relative rather than per-batch plate means because a
+CPJUMP1 plate is nearly one condition, so subtracting its raw mean would erase
+the biology the prompts describe.
 """
 
 import logging

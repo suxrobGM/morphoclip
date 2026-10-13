@@ -1,8 +1,7 @@
 """Tests for the shared YAML loader in `morphoclip.config`.
 
-The `extends` chain, dotted overrides and strict-model rejection used to be
-written twice (once per training package). Testing the loader directly is what
-lets the two packages stop carrying their own copy.
+Pins the `extends` chain, dotted overrides and strict-model rejection that both
+training packages rely on.
 """
 
 from pathlib import Path

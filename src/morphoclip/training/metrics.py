@@ -100,7 +100,7 @@ def compute_param_norm(module: nn.Module) -> float:
     """Total L2 norm of all parameters in a module.
 
     Args:
-        module: Any ``nn.Module``.
+        module: Module whose parameters, trainable or frozen, are included.
 
     Returns:
         Scalar L2 norm.

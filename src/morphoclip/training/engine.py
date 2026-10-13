@@ -46,7 +46,7 @@ def save_checkpoint(
 
     ``plate_offsets`` is stored so eval, inference and profile export apply the
     same CWA correction the run was trained under. It is ``None`` when CWA is
-    off, and absent entirely from checkpoints written before offsets existed.
+    off.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -95,14 +95,12 @@ def load_checkpoint(
     """
     ckpt = torch.load(path, map_location=device, weights_only=False)
 
-    # Unwrap DDP if present on the target modules
     img_target = unwrap(image_encoder)
     txt_target = unwrap(text_projection)
 
     img_target.load_state_dict(ckpt["image_encoder"])
     txt_target.load_state_dict(ckpt["text_projection"])
 
-    # Handle LogitScaleModule or raw nn.Parameter
     scale_data = ckpt["logit_scale"]
     if isinstance(logit_scale, LogitScaleModule):
         logit_scale.scale.data.copy_(scale_data)

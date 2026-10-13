@@ -9,7 +9,7 @@ import pandas as pd
 
 
 def concat_profiles(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
-    """Concatenate profiles while preserving old empty-frame behavior."""
+    """Return a copy of *df2* if *df1* is empty, else inner-join concat both."""
     if df1.shape[0] == 0:
         return df2.copy()
     return pd.concat([df1, df2], ignore_index=True, join="inner")

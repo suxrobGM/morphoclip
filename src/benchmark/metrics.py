@@ -1,8 +1,8 @@
 """Metrics for evaluating perturbation retrieval performance.
 
 Backend loading lives in :mod:`benchmark.copairs_backend` and the old-copairs
-("stable") pipeline in :mod:`benchmark.stable_map`; this module keeps the public
-mAP API and dispatches between the stable and experimental backends.
+("stable") pipeline in :mod:`benchmark.stable_map`. This module holds the public
+mAP API, which always runs the stable pipeline.
 """
 
 import numpy as np
@@ -36,7 +36,7 @@ def run_map_pipeline(
     """Run the full mAP computation pipeline.
 
     Args:
-        meta: Metadata DataFrame (will be reset to ensure consistent indexing).
+        meta: Metadata DataFrame. Index is reset before matching.
         features: Feature matrix aligned with metadata rows.
         pos_sameby: Columns that must match for positive pairs.
         pos_diffby: Columns that must differ for positive pairs.

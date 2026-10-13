@@ -88,7 +88,6 @@ def build_train_data(
         SplitParams(val_fraction=ds_cfg.val_fraction, seed=config.runtime.seed),
     )
 
-    # Preload train+val features into RAM for fast training
     if ds_cfg.preload:
         used_indices = set(train_set.indices) | set(val_set.indices)
         dataset.preload(indices=used_indices)

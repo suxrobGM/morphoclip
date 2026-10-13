@@ -1,4 +1,4 @@
-"""Autonomous plate extraction pipeline with progress tracking and resume.
+"""Plate extraction pipeline with progress tracking and resume.
 
 Orchestrates the full fetch -> extract -> cleanup cycle for all plates.
 Designed for unattended overnight runs with automatic resume on interruption.
@@ -49,13 +49,13 @@ logger = logging.getLogger(__name__)
 
 
 class PlateExtractionPipeline:
-    """Autonomous fetch -> extract -> cleanup pipeline for all plates.
+    """Fetch -> extract -> cleanup pipeline for all plates.
 
     Processes plates one at a time to minimize disk usage. Tracks progress
     in a JSON file for crash-safe resume.
 
     Args:
-        config: The ``cpjump`` config dict from ``configs/dataset.yml``.
+        config: Parsed ``cpjump`` section of ``configs/dataset.yml``.
         progress_path: Path to the progress JSON file.
         backend: S3 transfer backend (``"awscli"`` or ``"rclone"``).
         save_tensors: Whether to save resized image tensors alongside features.
@@ -118,7 +118,7 @@ class PlateExtractionPipeline:
         batch_size = batch_size or self._batch_size
         plate_list = self._resolve_plates(plates)
 
-        console.rule("[bold blue]Autonomous Feature Extraction Pipeline")
+        console.rule("[bold blue]Feature Extraction Pipeline")
         console.print(f"  Plates:      {len(plate_list)}/{len(self._plates)}")
         console.print(f"  Backend:     {self._backend}")
         console.print(f"  Device:      {device}")

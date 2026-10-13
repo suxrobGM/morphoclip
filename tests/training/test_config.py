@@ -14,8 +14,8 @@ TRAIN_CONFIGS = Path(__file__).resolve().parents[2] / "configs" / "train"
 
 
 class TestShippedConfigs:
-    def test_base_yaml_still_loads_with_current_behavior(self) -> None:
-        """base.yaml must stay behavior-identical: every new knob stays off."""
+    def test_base_yaml_leaves_optional_objectives_and_early_stop_off(self) -> None:
+        """base.yaml is the reference run, so every optional term defaults off."""
         config = load_training_config(TRAIN_CONFIGS / "base.yaml")
         assert config.optimization.loss_type == "cwcl"
         assert config.model.aggregator == "ccf-mean"
@@ -26,7 +26,7 @@ class TestShippedConfigs:
         assert config.optimization.replicate_temperature is None
         assert config.runtime.early_stop_patience is None
 
-    def test_mean_pool_yaml_uses_new_aggregator_field(self) -> None:
+    def test_mean_pool_yaml_selects_the_meanpool_aggregator(self) -> None:
         config = load_training_config(TRAIN_CONFIGS / "mean_pool.yaml")
         assert config.model.aggregator == "meanpool-mean"
 

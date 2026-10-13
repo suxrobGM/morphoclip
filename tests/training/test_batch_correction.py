@@ -1,10 +1,10 @@
 """Tests for condition-relative CWA plate offsets.
 
-The old in-batch version subtracted the full plate mean, which on CPJUMP1 is
-very nearly the condition mean and so deleted the signal the prompts encode.
-What these pin is that the replacement subtracts only the part of a plate mean
-that its replicate plates disagree about, and that the barcode normalization
-between feature-directory names and the offset table stays wired.
+On CPJUMP1 the full plate mean is very nearly the condition mean, so
+subtracting it would delete the signal the prompts encode. These pin that only
+the part of a plate mean its replicate plates disagree about is subtracted, and
+that the barcode normalization between feature-directory names and the offset
+table stays wired.
 """
 
 import logging

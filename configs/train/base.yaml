@@ -11,8 +11,8 @@ dataset:
   split_strategy: "pert_type"                     # Hash each broad_sample into 80/10/10; all modalities in every split
   val_fraction: 0.1                               # 10% validation (also used for test split)
   batch_size: 256                                 # Training batch size (wells per batch)
-  eval_batch_size: 256                            # Evaluation batch size
-  preload: true                                   # Preload all features into RAM (faster but more memory)
+  eval_batch_size: 256
+  preload: true                                   # Hold all features in RAM (faster but more memory)
   # num_workers and pin_memory are derived automatically: 0 workers when
   # preload=true (data already in RAM) else 4, pin_memory on iff device is cuda.
 
@@ -21,26 +21,26 @@ model:
   aggregator: "ccf-mean"            # Well aggregation: "ccf-mean", "meanpool-mean", "ccf-attn", "wellformer"
   ccf_layers: 1                     # Transformer layers (CCF/WellFormer; ignored by meanpool-mean)
   ccf_heads: 4                      # Transformer attention heads (CCF/WellFormer)
-  proj_dropout: 0.3                 # ProjectionHead dropout rate (stronger regularization)
+  proj_dropout: 0.3                 # ProjectionHead dropout rate
   # embed_dim (1024), text_input_dim (768), input_channels (5), and
   # proj_hidden_dim (512) are fixed by the cached features. See the constants
   # in morphoclip.training.config.
 
 optimization:
   loss_type: "cwcl"                 # Loss function: "cwcl" (soft labels) or "infonce"
-  lr: 1.0e-4                        # AdamW learning rate
-  weight_decay: 0.2                 # AdamW weight decay
-  epochs: 100                       # Maximum training epochs
+  lr: 1.0e-4
+  weight_decay: 0.2
+  epochs: 100
   warmup_steps: 100                 # Linear LR warmup steps before cosine decay
   use_cwa: false                    # Enable Cross-Well Alignment batch correction
   # betas, eps, grad_clip_norm, and logit_scale_max are fixed constants in
   # morphoclip.training.config.
 
 runtime:
-  seed: 42                          # Random seed for reproducibility
-  device: "auto"                    # Device: "auto", "cuda", or "cpu"
-  amp: true                         # Enable automatic mixed precision (fp16)
-  output_root: "output/morphoclip_runs" # Root directory for training runs
+  seed: 42
+  device: "auto"                    # "auto", "cuda", or "cpu"
+  amp: true                         # Automatic mixed precision (fp16)
+  output_root: "output/morphoclip_runs"
   run_name: null                    # Run subdirectory name (null -> "default")
   log_every_steps: 10               # Print training loss every N steps
   # Validation and checkpoint saving both run every epoch (hardcoded).

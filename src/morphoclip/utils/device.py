@@ -1,8 +1,7 @@
-"""Centralized device selection and mixed-precision helpers.
+"""Device selection and mixed-precision helpers.
 
-Provides a single ``resolve_device`` function that every script and
-training loop should use so the priority order (CUDA > MPS > CPU) is
-consistent across the codebase.
+Resolve devices only through ``resolve_device`` so the priority order
+(CUDA > MPS > CPU) stays the same everywhere.
 """
 
 import os

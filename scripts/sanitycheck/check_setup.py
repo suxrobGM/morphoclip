@@ -67,7 +67,7 @@ def _check_imports() -> tuple[bool, list[str]]:
         try:
             importlib.import_module(module_name)
             messages.append(f"[OK] import {module_name}")
-        except Exception as exc:  # pragma: no cover - defensive path
+        except Exception as exc:
             all_ok = False
             messages.append(f"[FAIL] import {module_name}: {exc}")
     return all_ok, messages

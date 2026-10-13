@@ -1,9 +1,9 @@
 """Inspect the perturbation types and metadata model used by MorphoCLIP.
 
 Examples:
-    python scripts/inspect_perturbation.py
-    python scripts/inspect_perturbation.py --plate BR00116991 --well A01
-    python scripts/inspect_perturbation.py --example-type compound --json
+    uv run python scripts/data/inspect_perturbation.py
+    uv run python scripts/data/inspect_perturbation.py --plate BR00116991 --well A01
+    uv run python scripts/data/inspect_perturbation.py --example-type compound --json
 """
 
 import json

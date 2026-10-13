@@ -1,14 +1,9 @@
-"""Tests for the optimizer and schedule both trainers now share.
+"""Tests for the optimizer and schedule shared by MorphoCLIP and CellCLIP.
 
-MorphoCLIP and CellCLIP used to carry their own copy of the decay/no-decay split
-and the warmup-cosine schedule. They differed in one way that matters and one
-that did not:
-
-* group ordering, which fixes the param indices in an optimizer state_dict, so
-  a resumed run maps momentum onto the wrong tensors if it flips. That is why
-  `split_params` takes `decay_first`, and both orderings are asserted here.
-* an extra `logit_scale` clause in CellCLIP's predicate, which `ndim < 2`
-  already covered. The test below proves it, so its removal is not a guess.
+Group ordering fixes the param indices in an optimizer state_dict, so a resumed
+run maps momentum onto the wrong tensors if it flips. `split_params` takes
+`decay_first` for that reason, and both trainers' orderings are pinned here.
+The `ndim < 2` rule alone must keep CellCLIP's 0-d `logit_scale` out of decay.
 """
 
 import math
@@ -100,7 +95,7 @@ class TestSplitParams:
         assert [p.ndim for p in decay["params"]] == [2]
         assert [p.ndim for p in no_decay["params"]] == [0]
 
-    def test_the_cellclip_logit_scale_clause_was_redundant(
+    def test_cellclip_0d_logit_scale_lands_in_no_decay(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         model = _cellclip_model(monkeypatch)

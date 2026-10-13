@@ -1,4 +1,4 @@
-"""Helper utilities for the stable benchmark script."""
+"""Stable benchmark plate loading, batch correction and the copairs unpaired guard."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -159,7 +159,7 @@ def run_with_unpaired_guard[**P](
     broken call site into six all-zero result CSVs instead of a crash.
 
     ``P`` forwards *func*'s signature, so a stale keyword at a call site is a
-    type error. An untyped ``**kwargs: Any`` hid exactly that bug once.
+    type error.
     """
     try:
         return func(*args, **kwargs)
