@@ -9,12 +9,12 @@ import logging
 from torch.utils.data import Subset
 
 from morphoclip.data.dataset import MorphoCLIPDataset, MorphoCLIPSample
-from morphoclip.splits.strategies import STRATEGIES, SplitParams
+from morphoclip.splits.strategies import STRATEGIES, SplitParams, Strategy
 
 logger = logging.getLogger(__name__)
 
 
-def _strategy(name: str):
+def _strategy(name: str) -> Strategy:
     try:
         return STRATEGIES[name]
     except KeyError:

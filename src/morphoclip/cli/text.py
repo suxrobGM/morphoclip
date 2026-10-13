@@ -7,49 +7,13 @@ from typing import Annotated
 import typer
 
 from morphoclip.data.metadata import MetadataIndex
-from morphoclip.data.perturbation import PerturbationInfo, PerturbationType
-from morphoclip.models.prompts import build_prompt_from_info
+from morphoclip.models.prompts import build_prompt_from_info, prompt_metadata_from_info
 from morphoclip.models.text_encoder import MorphoCLIPTextEncoder
 from morphoclip.utils.caching import precompute_and_cache_text_embeddings
 from morphoclip.utils.console import console
 from morphoclip.utils.device import resolve_device
 
 app = typer.Typer(no_args_is_help=True, help="Text embedding pre-computation.")
-
-
-def _unique_perturbations(index: MetadataIndex) -> list[PerturbationInfo]:
-    """Extract unique perturbations from the metadata index."""
-    seen: set[str] = set()
-    result: list[PerturbationInfo] = []
-    for _key, info in index._cache.items():
-        key = info.broad_sample or f"{info.pert_type.value}:{info.pert_iname or info.gene}"
-        if key not in seen:
-            seen.add(key)
-            result.append(info)
-    return result
-
-
-def _info_to_metadata_dict(info: PerturbationInfo) -> dict:
-    """Convert PerturbationInfo to a metadata dict for caching utilities."""
-    modality_map = {
-        PerturbationType.COMPOUND: "compound",
-        PerturbationType.CRISPR: "crispr",
-        PerturbationType.ORF: "orf",
-        PerturbationType.NEGCON: "negcon",
-        PerturbationType.POSCON: "negcon",
-        PerturbationType.UNKNOWN: "compound",
-    }
-    return {
-        "modality": modality_map.get(info.pert_type, "compound"),
-        "broad_sample": info.broad_sample,
-        "compound_name": info.pert_iname,
-        "smiles": info.smiles,
-        "target_gene": info.target_list,
-        "gene_function": info.moa,
-        "gene_symbol": info.gene,
-        "gene_description": info.protein_name,
-        "cell_line": info.cell_line,
-    }
 
 
 @app.command()
@@ -79,12 +43,12 @@ def precompute(
     index = MetadataIndex.from_config(config)
     console.print(f"  {index}")
 
-    perturbations = _unique_perturbations(index)
+    perturbations = index.unique_perturbations()
     if limit:
         perturbations = perturbations[:limit]
     console.print(f"  Unique perturbations: {len(perturbations)}")
 
-    metadata_list = [_info_to_metadata_dict(info) for info in perturbations]
+    metadata_list = [prompt_metadata_from_info(info) for info in perturbations]
 
     console.print("\n[bold]Sample prompts:[/bold]")
     for info in perturbations[:5]:
@@ -98,7 +62,7 @@ def precompute(
     resolved_device = str(resolve_device(device or "auto"))
     console.print(f"\nDevice: {resolved_device}")
 
-    encoder = MorphoCLIPTextEncoder(freeze_bert=True, pooling="cls").to(resolved_device)
+    encoder = MorphoCLIPTextEncoder(pooling="cls").to(resolved_device)
 
     total = sum(p.numel() for p in encoder.parameters())
     trainable = sum(p.numel() for p in encoder.parameters() if p.requires_grad)

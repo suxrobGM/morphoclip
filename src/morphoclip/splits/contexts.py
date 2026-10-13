@@ -92,10 +92,10 @@ def load_plate_contexts() -> dict[str, BenchmarkPlateContext]:
 
         result: dict[str, BenchmarkPlateContext] = {}
         for row in reader:
-            barcode = row.get("Assay_Plate_Barcode", "")
-            cell_type = row.get("Cell_type", "")
-            perturbation = row.get("Perturbation", "")
-            time_str = row.get("Time", "")
+            barcode = row["Assay_Plate_Barcode"]
+            cell_type = row["Cell_type"]
+            perturbation = row["Perturbation"]
+            time_str = row["Time"]
             if not (barcode and cell_type and perturbation and time_str):
                 continue
             result[barcode] = BenchmarkPlateContext(

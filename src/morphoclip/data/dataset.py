@@ -160,12 +160,20 @@ class MorphoCLIPDataset(Dataset[MorphoCLIPSample]):
         Args:
             indices: Preload only these dataset indices (e.g. train+val).
                 Default: everything.
+
+        Raises:
+            IndexError: If any of *indices* is outside the dataset.
         """
         if self._cache:
             return
         entries = self._index
         if indices is not None:
-            entries = [self._index[i] for i in indices if i < len(self._index)]
+            out_of_range = sorted(i for i in indices if not 0 <= i < len(self._index))
+            if out_of_range:
+                raise IndexError(
+                    f"preload indices out of range for {len(self._index)} wells: {out_of_range[:5]}"
+                )
+            entries = [self._index[i] for i in indices]
         paths = sorted({p for _, _, site_paths in entries for p in site_paths})
 
         logger.info("Preloading %d feature files into memory...", len(paths))

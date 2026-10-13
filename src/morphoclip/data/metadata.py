@@ -6,6 +6,8 @@ then caches the full lookup for fast access during training.
 
 import csv
 import logging
+from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 from morphoclip.data.perturbation import PerturbationInfo, PerturbationType
@@ -34,9 +36,9 @@ def _classify_pert_type(
     pert_type_str = row.get("pert_type", "").lower()
     control_type = row.get("control_type", "").lower()
 
-    if control_type and "negcon" in control_type:
+    if "negcon" in control_type:
         return PerturbationType.NEGCON
-    if control_type and "poscon" in control_type:
+    if "poscon" in control_type:
         return PerturbationType.POSCON
     if pert_type_str == "control" or not broad_sample:
         return PerturbationType.NEGCON
@@ -95,38 +97,43 @@ class MetadataIndex:
     def _build_info(self, row: dict[str, str]) -> PerturbationInfo:
         broad_sample = row.get("broad_sample", "")
         pert_type = _classify_pert_type(row, self._compound_ids, self._crispr_ids, self._orf_ids)
-        control_type = row.get("control_type", "")
-
-        kwargs: dict[str, str | PerturbationType] = {
-            "pert_type": pert_type,
-            "broad_sample": broad_sample,
-            "control_type": control_type,
-        }
+        base = PerturbationInfo(
+            pert_type=pert_type,
+            broad_sample=broad_sample,
+            control_type=row.get("control_type", ""),
+        )
 
         if pert_type == PerturbationType.COMPOUND and broad_sample in self._compound_meta:
             meta = self._compound_meta[broad_sample]
-            kwargs["pert_iname"] = meta.get("pert_iname", "")
-            kwargs["target_list"] = meta.get(
-                "target", meta.get("target_list", meta.get("gene", ""))
+            return replace(
+                base,
+                pert_iname=meta.get("pert_iname", ""),
+                target_list=meta.get("target", meta.get("target_list", meta.get("gene", ""))),
+                smiles=meta.get("smiles", ""),
+                pubchem_cid=meta.get("pubchem_cid", ""),
+                moa=meta.get("moa", ""),
             )
-            kwargs["smiles"] = meta.get("smiles", "")
-            kwargs["pubchem_cid"] = meta.get("pubchem_cid", "")
-            kwargs["moa"] = meta.get("moa", "")
 
-        elif pert_type == PerturbationType.CRISPR and broad_sample in self._crispr_meta:
+        if pert_type == PerturbationType.CRISPR and broad_sample in self._crispr_meta:
             meta = self._crispr_meta[broad_sample]
-            kwargs["gene"] = meta.get("gene", "")
-            kwargs["pert_iname"] = meta.get("pert_iname", meta.get("gene", ""))
-            kwargs["target_sequence"] = meta.get("target_sequence", "")
-            kwargs["negcon_control_type"] = meta.get("negcon_control_type", "")
+            return replace(
+                base,
+                gene=meta.get("gene", ""),
+                pert_iname=meta.get("pert_iname", meta.get("gene", "")),
+                target_sequence=meta.get("target_sequence", ""),
+                negcon_control_type=meta.get("negcon_control_type", ""),
+            )
 
-        elif pert_type == PerturbationType.ORF and broad_sample in self._orf_meta:
+        if pert_type == PerturbationType.ORF and broad_sample in self._orf_meta:
             meta = self._orf_meta[broad_sample]
-            kwargs["gene"] = meta.get("gene", "")
-            kwargs["pert_iname"] = meta.get("pert_iname", meta.get("gene", ""))
-            kwargs["negcon_control_type"] = meta.get("negcon_control_type", "")
+            return replace(
+                base,
+                gene=meta.get("gene", ""),
+                pert_iname=meta.get("pert_iname", meta.get("gene", "")),
+                negcon_control_type=meta.get("negcon_control_type", ""),
+            )
 
-        return PerturbationInfo(**kwargs)  # type: ignore[arg-type]
+        return base
 
     @classmethod
     def from_config(cls, config_path: Path) -> MetadataIndex:
@@ -244,6 +251,25 @@ class MetadataIndex:
     def plates(self) -> list[str]:
         """List all plate barcodes in the index."""
         return sorted(self._barcode_to_platemap.keys())
+
+    def perturbation_infos(self) -> Iterator[PerturbationInfo]:
+        """Yield the ``PerturbationInfo`` of every indexed (plate, well), in index order."""
+        yield from self._cache.values()
+
+    def unique_perturbations(self) -> list[PerturbationInfo]:
+        """One ``PerturbationInfo`` per distinct perturbation, first occurrence wins.
+
+        Perturbations are keyed by ``broad_sample``, or by type and name when a
+        well has none (controls).
+        """
+        seen: set[str] = set()
+        result: list[PerturbationInfo] = []
+        for info in self.perturbation_infos():
+            key = info.broad_sample or f"{info.pert_type.value}:{info.pert_iname or info.gene}"
+            if key not in seen:
+                seen.add(key)
+                result.append(info)
+        return result
 
     def __len__(self) -> int:
         return len(self._cache)

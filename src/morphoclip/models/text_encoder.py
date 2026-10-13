@@ -32,7 +32,6 @@ class MorphoCLIPTextEncoder(nn.Module):
         output_dim: Shared embedding dimension (must match the image encoder).
         hidden_dim: Projection head hidden dimension.
         dropout: Projection head dropout rate.
-        freeze_bert: Freeze all BERT parameters (default: True).
         pooling: BERT output pooling, "cls" or "mean".
         max_length: Max token length for the tokenizer.
         templates: Custom templates dict, or None for the defaults.
@@ -55,7 +54,6 @@ class MorphoCLIPTextEncoder(nn.Module):
         output_dim: int = 512,
         hidden_dim: int = 512,
         dropout: float = 0.1,
-        freeze_bert: bool = True,
         pooling: str = "cls",
         max_length: int = 256,
         templates: dict[str, str] | None = None,
@@ -68,12 +66,10 @@ class MorphoCLIPTextEncoder(nn.Module):
         self.bert = AutoModel.from_pretrained(model_name)
         self.bert_hidden_dim = self.bert.config.hidden_size  # 768 for base
 
-        if freeze_bert:
-            for param in self.bert.parameters():
-                param.requires_grad = False
-            self.bert.eval()
+        for param in self.bert.parameters():
+            param.requires_grad = False
+        self.bert.eval()
 
-        self.freeze_bert = freeze_bert
         self.pooling = pooling
         self.max_length = max_length
 
@@ -129,10 +125,7 @@ class MorphoCLIPTextEncoder(nn.Module):
         # ModernBERT takes no token_type_ids.
         tokens.pop("token_type_ids", None)
 
-        if self.freeze_bert:
-            with torch.no_grad():
-                outputs = self.bert(**tokens)
-        else:
+        with torch.no_grad():
             outputs = self.bert(**tokens)
 
         pooled = self.pool(outputs.last_hidden_state, tokens["attention_mask"])

@@ -12,10 +12,17 @@ import pandas as pd
 from morphoclip.data.dataset import MorphoCLIPDataset
 from morphoclip.data.perturbation import extract_plate_barcode
 from morphoclip.splits.api import resolve_split_indices
-from morphoclip.splits.contexts import load_official_split_contexts
+from morphoclip.splits.contexts import OfficialSplitContext, load_official_split_contexts
 from morphoclip.splits.strategies import SplitParams
 
 logger = logging.getLogger(__name__)
+
+_CONTEXT_COLUMNS = (
+    "Metadata_cell_line",
+    "Metadata_experiment_type",
+    "Metadata_timepoint",
+    "Metadata_timepoint_code",
+)
 
 
 def build_split_manifest(
@@ -41,7 +48,7 @@ def build_split_manifest(
 
     # A missing or malformed file leaves the cell-line/timepoint columns empty,
     # which then silently drives the cellclip_cpjump_style split. Say so.
-    official_contexts: dict = {}
+    official_contexts: dict[tuple[str, str], OfficialSplitContext] = {}
     try:
         official_contexts = load_official_split_contexts()
     except (FileNotFoundError, ValueError) as exc:
@@ -58,6 +65,17 @@ def build_split_manifest(
         barcode = extract_plate_barcode(plate)
         info = dataset.metadata.lookup(barcode, well)
         context = official_contexts.get((barcode, well))
+        if context is None:
+            context_columns: dict[str, str | int] = dict.fromkeys(_CONTEXT_COLUMNS, "")
+            target = ""
+        else:
+            context_columns = {
+                "Metadata_cell_line": context.cell_line,
+                "Metadata_experiment_type": context.experiment_type,
+                "Metadata_timepoint": context.timepoint,
+                "Metadata_timepoint_code": context.timepoint_code,
+            }
+            target = context.target
         records.append(
             {
                 "split_strategy": strategy,
@@ -65,11 +83,8 @@ def build_split_manifest(
                 "Metadata_Plate": barcode,
                 "Metadata_Well": well,
                 "Metadata_broad_sample": info.broad_sample,
-                "Metadata_cell_line": getattr(context, "cell_line", ""),
-                "Metadata_experiment_type": getattr(context, "experiment_type", ""),
-                "Metadata_timepoint": getattr(context, "timepoint", ""),
-                "Metadata_timepoint_code": getattr(context, "timepoint_code", ""),
-                "Metadata_target": getattr(context, "target", "") or info.gene or info.target_list,
+                **context_columns,
+                "Metadata_target": target or info.gene or info.target_list,
             }
         )
 

@@ -39,7 +39,7 @@ TEMPLATES: dict[str, str] = {
     ),
 }
 
-_MODALITY_ALIASES: dict[str, str] = {
+MODALITY_ALIASES: dict[str, str] = {
     "compound": "compound",
     "crispr": "crispr",
     "orf": "orf",
@@ -69,11 +69,11 @@ def build_prompt(metadata: dict, templates: dict[str, str] | None = None) -> str
     """Build a single prompt from a metadata dict."""
     tpl = templates or TEMPLATES
     modality = metadata.get("modality", "compound").lower().strip()
-    template = tpl[_MODALITY_ALIASES.get(modality, "compound")]
+    template = tpl[MODALITY_ALIASES.get(modality, "compound")]
 
     prompt = template
     for key in _FIELD_PATTERN.findall(template):
-        value = metadata.get(key, "").strip() if metadata.get(key) else ""
+        value = (metadata.get(key) or "").strip()
         prompt = prompt.replace("{" + key + "}", value or "unknown")
 
     return " ".join(prompt.split())
@@ -84,10 +84,15 @@ def build_prompts(metadata_list: list[dict], templates: dict[str, str] | None = 
     return [build_prompt(m, templates) for m in metadata_list]
 
 
-def build_prompt_from_info(info: PerturbationInfo, templates: dict[str, str] | None = None) -> str:
-    """Build a prompt from a ``PerturbationInfo`` dataclass."""
-    metadata = {
-        "modality": _PERT_TYPE_TO_MODALITY.get(info.pert_type, "compound"),
+def prompt_metadata_from_info(info: PerturbationInfo) -> dict[str, str]:
+    """The metadata dict :func:`build_prompt` reads, filled from a ``PerturbationInfo``.
+
+    Also carries ``broad_sample`` so the text cache can key the entry by
+    perturbation id.
+    """
+    return {
+        "modality": _PERT_TYPE_TO_MODALITY[info.pert_type],
+        "broad_sample": info.broad_sample,
         "compound_name": info.pert_iname,
         "smiles": info.smiles,
         "target_gene": info.target_list,
@@ -96,11 +101,8 @@ def build_prompt_from_info(info: PerturbationInfo, templates: dict[str, str] | N
         "gene_description": info.protein_name,
         "cell_line": info.cell_line,
     }
-    return build_prompt(metadata, templates)
 
 
-def build_prompts_from_info(
-    infos: list[PerturbationInfo], templates: dict[str, str] | None = None
-) -> list[str]:
-    """Build prompts for a batch of ``PerturbationInfo`` objects."""
-    return [build_prompt_from_info(info, templates) for info in infos]
+def build_prompt_from_info(info: PerturbationInfo, templates: dict[str, str] | None = None) -> str:
+    """Build a prompt from a ``PerturbationInfo`` dataclass."""
+    return build_prompt(prompt_metadata_from_info(info), templates)

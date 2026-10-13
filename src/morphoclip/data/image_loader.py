@@ -24,6 +24,8 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
+from morphoclip.data.perturbation import well_from_row_col
+
 # Fluorescence channels used for Cell Painting (skip ch6-ch8 brightfield)
 FLUORESCENCE_CHANNELS: tuple[int, ...] = (1, 2, 3, 4, 5)
 
@@ -68,7 +70,7 @@ class ImageKey:
     @property
     def well(self) -> str:
         """Well position in letter-number format (e.g. ``"A01"``)."""
-        return f"{chr(64 + self.row)}{self.col:02d}"
+        return well_from_row_col(self.row, self.col)
 
     def __str__(self) -> str:
         return f"r{self.row:02d}c{self.col:02d}f{self.field:02d}"
@@ -144,14 +146,12 @@ def load_single_channel(path: Path, normalize: bool = True) -> np.ndarray:
     """
     img = Image.open(path)
     raw = np.array(img)
-    original_dtype = raw.dtype
-    arr = raw
-    if arr.ndim != 2:
-        raise ValueError(f"Expected a single-channel image at {path}, got shape {arr.shape}")
+    if raw.ndim != 2:
+        raise ValueError(f"Expected a single-channel image at {path}, got shape {raw.shape}")
 
-    arr = arr.astype(np.float32)
-    if normalize and np.issubdtype(original_dtype, np.integer):
-        arr /= float(np.iinfo(original_dtype).max)
+    arr = raw.astype(np.float32)
+    if normalize and np.issubdtype(raw.dtype, np.integer):
+        arr /= float(np.iinfo(raw.dtype).max)
     return arr
 
 

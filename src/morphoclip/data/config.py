@@ -9,9 +9,9 @@ from pathlib import Path
 from pydantic import Field
 
 from morphoclip.config import StrictModel, load_yaml_mapping
+from morphoclip.utils.s3 import DEFAULT_RCLONE_REMOTE
 
 DEFAULT_DINO_MODEL = "facebook/dinov3-vitl16-pretrain-lvd1689m"
-DEFAULT_RCLONE_REMOTE = ":s3,provider=AWS,region=us-east-1,no_check_bucket=true:"
 
 
 class LocalPaths(StrictModel):

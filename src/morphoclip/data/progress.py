@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
 
-_MAX_SITES_PER_PLATE = 3456
-_COMPLETENESS_THRESHOLD = 0.80
+MAX_SITES_PER_PLATE = 3456
+COMPLETENESS_THRESHOLD = 0.80
 
 
-def _utcnow() -> str:
+def utcnow() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
@@ -54,8 +54,8 @@ class PipelineProgress:
     """Full pipeline progress state, serialized to JSON."""
 
     schema_version: int = SCHEMA_VERSION
-    created_at: str = field(default_factory=_utcnow)
-    updated_at: str = field(default_factory=_utcnow)
+    created_at: str = field(default_factory=utcnow)
+    updated_at: str = field(default_factory=utcnow)
     config_hash: str = ""
     metadata_downloaded: bool = False
     plates: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -87,8 +87,8 @@ def load_progress(path: Path, config_hash: str) -> PipelineProgress:
         raw = json.loads(path.read_text(encoding="utf-8"))
         progress = PipelineProgress(
             schema_version=raw.get("schema_version", SCHEMA_VERSION),
-            created_at=raw.get("created_at", _utcnow()),
-            updated_at=raw.get("updated_at", _utcnow()),
+            created_at=raw.get("created_at", utcnow()),
+            updated_at=raw.get("updated_at", utcnow()),
             config_hash=raw.get("config_hash", ""),
             metadata_downloaded=raw.get("metadata_downloaded", False),
             plates=raw.get("plates", {}),
@@ -118,7 +118,7 @@ def load_progress(path: Path, config_hash: str) -> PipelineProgress:
 
 def save_progress(progress: PipelineProgress, path: Path) -> None:
     """Atomically write progress to disk via temp file + os.replace."""
-    progress.updated_at = _utcnow()
+    progress.updated_at = utcnow()
     data = asdict(progress)
 
     path.parent.mkdir(parents=True, exist_ok=True)

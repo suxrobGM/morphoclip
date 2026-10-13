@@ -10,21 +10,6 @@ from morphoclip.utils.console import console
 DEFAULT_RCLONE_REMOTE = ":s3,provider=AWS,region=us-east-1,no_check_bucket=true:"
 
 
-def build_s3_uri(endpoint: str, path_template: str, batch: str) -> str:
-    """Build a full S3 URI by joining an endpoint with a formatted path.
-
-    Args:
-        endpoint: Base S3 URI (e.g. ``s3://cellpainting-gallery/cpg0000``).
-        path_template: Path segment with an optional ``{batch}`` placeholder
-            (e.g. ``images/{batch}/images``).
-        batch: Value substituted into *path_template*.
-
-    Returns:
-        The assembled S3 URI.
-    """
-    return f"{endpoint.rstrip('/')}/{path_template.format(batch=batch)}"
-
-
 def parse_s3_uri(uri: str) -> tuple[str, str]:
     """Split an S3 URI into its bucket name and object prefix.
 

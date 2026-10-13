@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from morphoclip.data.perturbation import well_from_row_col
+
 
 def normalize_well(df: pd.DataFrame) -> pd.Series:
     """Derive a canonical ``Well`` series (e.g. ``A01``) from label columns."""
@@ -19,8 +21,8 @@ def normalize_well(df: pd.DataFrame) -> pd.Series:
     if "row" in df.columns and "col" in df.columns:
         row_num = df["row"].astype(str).str.extract(r"(\d+)$")[0].astype(int)
         col_num = df["col"].astype(str).str.extract(r"(\d+)$")[0].astype(int)
-        row_letter = row_num.apply(lambda x: chr(ord("A") + x - 1))
-        return row_letter + col_num.map(lambda x: f"{x:02d}")
+        wells = [well_from_row_col(row, col) for row, col in zip(row_num, col_num, strict=True)]
+        return pd.Series(wells, index=df.index)
     raise ValueError("Label file must contain `Well`, `Metadata_Well`, or (`row`,`col`).")
 
 

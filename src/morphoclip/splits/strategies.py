@@ -23,6 +23,7 @@ from morphoclip.data.perturbation import (
     is_control_or_empty,
 )
 from morphoclip.splits.contexts import (
+    BenchmarkPlateContext,
     OfficialSplitContext,
     load_official_split_contexts,
     load_plate_contexts,
@@ -132,7 +133,9 @@ def _annotated_official_wells(
     return wells
 
 
-def _annotated_plate_wells(dataset: MorphoCLIPDataset):
+def _annotated_plate_wells(
+    dataset: MorphoCLIPDataset,
+) -> list[tuple[int, BenchmarkPlateContext, PerturbationInfo]]:
     """Load plate contexts and annotate dataset wells (raises on missing)."""
     plate_contexts = load_plate_contexts()
     wells, missing = _iterate_wells(dataset, plate_contexts, key_fn=lambda barcode, _well: barcode)
@@ -206,33 +209,28 @@ def build_official_gene_compound_subsets(
         target_to_indices,
         key=lambda target: (
             target_to_radix[target] is None,
-            target_to_radix[target] if target_to_radix[target] is not None else 10**9,
+            target_to_radix[target] or 0,
             target,
         ),
     )
 
+    # floor(60%) train and ceil(20%) validate never exceed the total, so the
+    # test share is never negative.
     n_targets = len(ordered_targets)
     n_train = int(n_targets * 0.60)
-    n_validate = (n_targets * 20 + 99) // 100 if n_targets else 0
-    n_test = n_targets - n_train - n_validate
-    if n_test < 0:
-        n_test = 0
-        n_validate = n_targets - n_train
-
-    train_targets = set(ordered_targets[:n_train])
-    validate_targets = set(ordered_targets[n_train : n_train + n_validate])
-    test_targets = set(ordered_targets[n_train + n_validate :])
+    n_validate = (n_targets * 20 + 99) // 100
+    subset_of: dict[str, str] = {}
+    for position, target in enumerate(ordered_targets):
+        if position < n_train:
+            subset_of[target] = "train"
+        elif position < n_train + n_validate:
+            subset_of[target] = "validate"
+        else:
+            subset_of[target] = "test"
 
     subsets: dict[str, list[int]] = {"train": [], "validate": [], "test": []}
     for target, indices in target_to_indices.items():
-        if target in train_targets:
-            subsets["train"].extend(indices)
-        elif target in validate_targets:
-            subsets["validate"].extend(indices)
-        elif target in test_targets:
-            subsets["test"].extend(indices)
-        else:  # pragma: no cover - defensive
-            raise AssertionError(f"Target {target!r} was not assigned to a subset")
+        subsets[subset_of[target]].extend(indices)
 
     return subsets
 

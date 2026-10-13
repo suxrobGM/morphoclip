@@ -7,14 +7,10 @@ import numpy as np
 from PIL import Image
 
 from morphoclip.data.image_loader import FLUORESCENCE_CHANNELS
+from morphoclip.data.perturbation import row_col_from_well
 
 DEFAULT_WELLS: tuple[str, ...] = ("A01", "A03")
 DEFAULT_SIZE = 32
-
-
-def well_to_row_col(well: str) -> tuple[int, int]:
-    """Turn ``"A01"`` into ``(1, 1)``."""
-    return ord(well[0].upper()) - 64, int(well[1:])
 
 
 def site_filename(row: int, col: int, field: int, channel: int) -> str:
@@ -63,7 +59,7 @@ def make_plate_images(
         targets.append(incomplete_well)
 
     for well in targets:
-        row, col = well_to_row_col(well)
+        row, col = row_col_from_well(well)
         for field in range(1, sites + 1):
             written = list(channels)
             if incomplete_well is not None and well == incomplete_well and field == 1:

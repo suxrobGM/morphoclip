@@ -32,14 +32,14 @@ from morphoclip.data.image_loader import (
 )
 from morphoclip.data.perturbation import extract_plate_barcode
 from morphoclip.data.progress import (
-    _COMPLETENESS_THRESHOLD,
-    _MAX_SITES_PER_PLATE,
+    COMPLETENESS_THRESHOLD,
+    MAX_SITES_PER_PLATE,
     PlateRecord,
     PlateStatus,
-    _utcnow,
     compute_config_hash,
     load_progress,
     save_progress,
+    utcnow,
 )
 from morphoclip.data.tiffs import count_tiffs, delete_tiffs
 from morphoclip.utils.console import console, make_progress
@@ -136,9 +136,7 @@ class PlateExtractionPipeline:
         model = None
         processor = None
         if not self._tensors_only:
-            console.print(f"\n[bold]Loading vision model: {self._model_name}[/bold]")
             model, processor = load_dinov3(self._model_name, device)
-            console.print(f"  [green]Model loaded on {device}[/green]")
 
         self._fetch_metadata()
 
@@ -162,7 +160,7 @@ class PlateExtractionPipeline:
             tensor_dir = self._tensors_root / barcode
             if self._check_output_complete(plate_name, feature_dir, tensor_dir):
                 record["status"] = PlateStatus.SKIPPED
-                record["completed_at"] = _utcnow()
+                record["completed_at"] = utcnow()
                 self._save_progress()
                 console.print("  [green]Output already complete, skipped[/green]")
                 skipped += 1
@@ -171,7 +169,7 @@ class PlateExtractionPipeline:
             image_dir = self._image_dir(plate_name)
             try:
                 record["status"] = PlateStatus.FETCHING
-                record["started_at"] = _utcnow()
+                record["started_at"] = utcnow()
                 record["error"] = None
                 self._save_progress()
 
@@ -201,7 +199,7 @@ class PlateExtractionPipeline:
 
                 record["status"] = PlateStatus.COMPLETED
                 record["sites_extracted"] = sites_count
-                record["completed_at"] = _utcnow()
+                record["completed_at"] = utcnow()
                 self._save_progress()
 
                 console.print(f"  [green]Completed: {sites_count} sites[/green]")
@@ -210,10 +208,9 @@ class PlateExtractionPipeline:
             except Exception as exc:
                 record["status"] = PlateStatus.FAILED
                 record["error"] = f"{type(exc).__name__}: {exc}"
-                record["completed_at"] = _utcnow()
+                record["completed_at"] = utcnow()
                 self._save_progress()
                 logger.exception("Plate %s failed: %s", plate_name, exc)
-                console.print(f"  [bold red]Failed: {exc}[/bold red]")
                 failed += 1
 
             finally:
@@ -243,10 +240,6 @@ class PlateExtractionPipeline:
             rclone_remote=self._rclone_remote,
             dry_run=self._dry_run,
         )
-
-    def _compute_config_hash(self) -> str:
-        """SHA-256 of the sorted plate list."""
-        return compute_config_hash(self._plates)
 
     def _get_record(self, plate_name: str) -> dict[str, Any]:
         """Get or create a plate record in the progress dict."""
@@ -308,7 +301,7 @@ class PlateExtractionPipeline:
         if actual == 0:
             return False
 
-        min_sites = int(_MAX_SITES_PER_PLATE * _COMPLETENESS_THRESHOLD)
+        min_sites = int(MAX_SITES_PER_PLATE * COMPLETENESS_THRESHOLD)
 
         # Enforce min_sites alongside recorded count to catch stale partial records
         record = self._progress.plates.get(plate_name)
@@ -398,24 +391,14 @@ class PlateExtractionPipeline:
         ``finally`` block never mask the original exception.
         """
         try:
-            if not image_dir.exists():
-                return
-
-            tiff_count = count_tiffs(image_dir)
-            if tiff_count == 0:
-                return
-
             deleted = delete_tiffs(image_dir, dry_run=self._dry_run)
             if deleted:
-                console.print(f"  Cleaned up {deleted} TIFFs")
                 logger.info("Cleanup: deleted %d TIFFs from %s", deleted, image_dir)
 
             if not self._dry_run:
-                if image_dir.exists() and not any(image_dir.iterdir()):
-                    image_dir.rmdir()
-                plate_dir = image_dir.parent
-                if plate_dir.exists() and not any(plate_dir.iterdir()):
-                    plate_dir.rmdir()
+                for directory in (image_dir, image_dir.parent):
+                    if directory.is_dir() and not any(directory.iterdir()):
+                        directory.rmdir()
 
         except Exception as exc:
             logger.warning("Cleanup failed for %s: %s", image_dir, exc)

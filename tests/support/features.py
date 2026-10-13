@@ -7,14 +7,10 @@ import torch
 import yaml
 
 from morphoclip.data.metadata import MetadataIndex
+from morphoclip.data.perturbation import row_col_from_well
 from morphoclip.training.config import EMBED_DIM, INPUT_CHANNELS, TEXT_INPUT_DIM
 
 BATCH = "2020_11_04_CPJUMP1"
-
-
-def well_to_row_col(well: str) -> tuple[int, int]:
-    """Turn ``"A01"`` into ``(1, 1)``."""
-    return ord(well[0].upper()) - 64, int(well[1:])
 
 
 def _tensor(plate: str, well: str, site: int, channels: int, dim: int) -> torch.Tensor:
@@ -48,7 +44,7 @@ def make_feature_root(
         plate_dir = root / plate
         plate_dir.mkdir(parents=True, exist_ok=True)
         for well in wells:
-            row, col = well_to_row_col(well)
+            row, col = row_col_from_well(well)
             n_sites = sites if isinstance(sites, int) else sites[well]
             for site in range(1, n_sites + 1):
                 path = plate_dir / f"r{row:02d}c{col:02d}f{site:02d}.pt"
@@ -92,7 +88,6 @@ def write_text_cache(
             "embeddings": torch.randn(len(ids), dim, generator=generator),
             "perturbation_ids": ids,
             "id_to_idx": {pid: i for i, pid in enumerate(ids)},
-            "raw": True,
         },
         path,
     )

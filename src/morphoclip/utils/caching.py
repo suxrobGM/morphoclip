@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from morphoclip.models.prompts import build_prompts
+from morphoclip.models.prompts import MODALITY_ALIASES, build_prompts
+from morphoclip.utils.console import make_progress
 
 if TYPE_CHECKING:
     from morphoclip.models.text_encoder import MorphoCLIPTextEncoder
@@ -24,8 +25,8 @@ def get_perturbation_id(metadata: dict) -> str:
     """
     if metadata.get("broad_sample"):
         return str(metadata["broad_sample"]).strip()
-    modality = (metadata.get("modality") or "").lower().strip()
-    if modality in ("negcon", "dmso", "control"):
+    modality = MODALITY_ALIASES.get((metadata.get("modality") or "").lower().strip())
+    if modality == "negcon":
         return "negcon"
     if modality == "compound":
         return (metadata.get("compound_name") or "unknown").strip()
@@ -52,22 +53,18 @@ def _precompute_raw_text_embeddings(
     encoder.eval()
 
     all_embs: list[torch.Tensor] = []
-    n = len(metadata_list)
-    iterator = range(0, n, batch_size)
-    if show_progress:
-        try:
-            from tqdm import tqdm
+    batch_starts = range(0, len(metadata_list), batch_size)
+    with make_progress() as progress:
+        task = progress.add_task(
+            "Encoding text (raw BERT)", total=len(batch_starts), visible=show_progress
+        )
+        for i in batch_starts:
+            batch_meta = metadata_list[i : i + batch_size]
 
-            iterator = tqdm(iterator, desc="Encoding text (raw BERT)", unit="batch")
-        except ImportError:
-            pass
-
-    for i in iterator:
-        batch_meta = metadata_list[i : i + batch_size]
-
-        prompts = build_prompts(batch_meta, encoder.templates)
-        embs = encoder.encode_texts_raw(prompts)  # [B, 768]
-        all_embs.append(embs.cpu())
+            prompts = build_prompts(batch_meta, encoder.templates)
+            embs = encoder.encode_texts_raw(prompts)  # [B, 768]
+            all_embs.append(embs.cpu())
+            progress.advance(task)
 
     return torch.cat(all_embs, dim=0)  # [N, 768]
 
@@ -90,7 +87,6 @@ def precompute_and_cache_text_embeddings(
         embeddings:       ``[N, 768]`` tensor (raw BERT [CLS])
         perturbation_ids: list of N unique IDs
         id_to_idx:        dict perturbation_id -> index
-        raw:              True
     """
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     for m in metadata_list:
@@ -111,7 +107,6 @@ def precompute_and_cache_text_embeddings(
         "embeddings": raw_embeddings,
         "perturbation_ids": perturbation_ids,
         "id_to_idx": id_to_idx,
-        "raw": True,
     }
     torch.save(cache, output_path)
     return cache
@@ -124,7 +119,6 @@ def load_cached_text_features(path: str | Path) -> dict:
         embeddings:       ``[N, 768]`` tensor
         perturbation_ids: list of N perturbation IDs
         id_to_idx:        dict perturbation_id -> index
-        raw:              True if embeddings are 768-d raw (no projection)
 
     Training-time usage::
 
@@ -134,10 +128,9 @@ def load_cached_text_features(path: str | Path) -> dict:
         text_emb = encoder.projection(raw_768.unsqueeze(0))  # [1, 512]
     """
     data = torch.load(path, map_location="cpu", weights_only=False)
-    if not isinstance(data, dict) or "embeddings" not in data:
+    required = ("embeddings", "perturbation_ids", "id_to_idx")
+    if not isinstance(data, dict) or any(key not in data for key in required):
         raise ValueError(
             "Cached file must be a dict with 'embeddings', 'perturbation_ids', and 'id_to_idx'"
         )
-    if "id_to_idx" not in data:
-        data["id_to_idx"] = {pid: i for i, pid in enumerate(data["perturbation_ids"])}
     return data

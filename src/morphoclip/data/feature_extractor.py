@@ -15,6 +15,7 @@ from pathlib import Path
 import torch
 from transformers import AutoImageProcessor, AutoModel
 
+from morphoclip.data.config import DEFAULT_DINO_MODEL as DEFAULT_MODEL
 from morphoclip.data.image_loader import (
     FLUORESCENCE_CHANNELS,
     IMAGENET_MEAN,
@@ -28,8 +29,6 @@ from morphoclip.utils.console import make_progress
 from morphoclip.utils.device import resolve_device
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_MODEL = "facebook/dinov3-vitl16-pretrain-lvd1689m"
 
 
 def infer_feature_width(model: torch.nn.Module) -> int:
@@ -246,9 +245,10 @@ def extract_plate_features(
     image_dir: Path,
     output_dir: Path,
     model_name: str = DEFAULT_MODEL,
+    *,
     device: str = "auto",
     batch_size: int = 32,
-    save_tensors: bool = True,
+    save_tensors: bool = False,
     tensor_output_dir: Path | None = None,
     tensor_size: int | None = None,
 ) -> dict[ImageKey, Path]:

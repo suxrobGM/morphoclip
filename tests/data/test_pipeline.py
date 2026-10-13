@@ -9,12 +9,12 @@ import pytest
 
 from morphoclip.data.config import CPJumpConfig
 from morphoclip.data.pipeline import PlateExtractionPipeline
-from morphoclip.data.progress import PlateStatus, _utcnow, compute_config_hash
+from morphoclip.data.progress import PlateStatus, compute_config_hash, utcnow
 
 PLATE = "BR00116991__2020-11-05T19_51_35-Measurement1"
 OTHER_PLATE = "BR00116992__2020-11-05T21_31_31-Measurement1"
 
-# int(_MAX_SITES_PER_PLATE * _COMPLETENESS_THRESHOLD) in morphoclip.data.progress:
+# int(MAX_SITES_PER_PLATE * COMPLETENESS_THRESHOLD) in morphoclip.data.progress:
 # the file count at which a plate directory is taken for finished.
 COMPLETE_SITES = 2764
 
@@ -23,7 +23,7 @@ def _record(status: str, *, sites: int = 0, error: str | None = None) -> dict[st
     return {
         "status": status,
         "barcode": "BR00116991",
-        "started_at": _utcnow(),
+        "started_at": utcnow(),
         "completed_at": None,
         "sites_extracted": sites,
         "error": error,
@@ -49,8 +49,8 @@ def make_pipeline(tmp_path: Path, progress_path: Path) -> Callable[..., PlateExt
                 json.dumps(
                     {
                         "schema_version": 1,
-                        "created_at": _utcnow(),
-                        "updated_at": _utcnow(),
+                        "created_at": utcnow(),
+                        "updated_at": utcnow(),
                         "config_hash": "",
                         "metadata_downloaded": False,
                         "plates": progress,

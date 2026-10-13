@@ -1,8 +1,10 @@
 """The one Rich console, and the logging setup that shares it.
 
-Only ``morphoclip.cli`` and dedicated reporting modules should write to stdout.
-Library code logs instead, and :func:`setup_logging` routes those records
-through the same console so output interleaves in order.
+Only ``morphoclip.cli`` and the long-running steps it drives (training, the
+extraction pipeline, S3 sync, reporting modules) print to this console, and
+progress bars draw on it. Other library code logs instead, and
+:func:`setup_logging` routes those records through the same console so output
+interleaves in order.
 """
 
 import logging
