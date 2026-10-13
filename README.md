@@ -20,10 +20,10 @@
 
 MorphoCLIP matches microscopy images of cells to text descriptions of the treatments applied to them. Given an image of cells treated with a drug or a genetic modification, it can identify the treatment. It does this by learning to align visual patterns in cell images with their text descriptions.
 
-It combines three ideas that no prior method uses together:
+It combines three ideas:
 
 - **Text supervision**: natural language descriptions guide learning
-- **Batch correction**: unwanted variation between experimental runs is removed
+- **Batch correction**: plate-level offsets are corrected during training to reduce variation between experimental runs
 - **Gene-inclusive training**: drug treatments and genetic modifications are learned together
 
 We evaluate on the [CPJUMP1 benchmark](https://github.com/jump-cellpainting/2024_Chandrasekaran_NatureMethods_CPJUMP1) (Chandrasekaran et al., 2024), where existing methods detect only 5-25% of expected drug-gene matches.
@@ -36,8 +36,8 @@ We evaluate on the [CPJUMP1 benchmark](https://github.com/jump-cellpainting/2024
 |---|---|---|
 | **Training data** | Drug treatments only | Drugs + genetic modifications (CRISPR, ORF) |
 | **Batch correction** | Applied after training | Built into the training process (CWA) |
-| **Vision backbone** | Custom ViT | DINOv3 (stronger pre-trained features) |
-| **Text encoder** | General BERT | BioClinical ModernBERT (biomedical-specialized) |
+| **Vision features** | Frozen pre-trained image features | Frozen DINOv3 ViT-L/16 features |
+| **Text encoder** | BERT (`bert-base-cased`) | BioClinical ModernBERT (biomedical) |
 
 This repo includes a local CellCLIP implementation (`src/cellclip/`) for direct comparison on the same data and evaluation pipeline.
 
@@ -74,13 +74,17 @@ See the [full documentation](https://morphoclip.suxrobgm.net) for detailed insta
 
 ```text
 src/morphoclip/
-  data/           # Dataset, metadata, image loading, splits
+  config.py       # Shared YAML config loading
+  data/           # Dataset, metadata, image loading, feature extraction
   models/         # Image and text encoders, channel aggregation, projection layers
-  training/       # Training engine, loss functions, batch correction, config
-  utils/          # Text caching, S3 transfer utilities
-src/benchmark/    # Benchmark evaluation (metrics, plotting)
+  splits/         # Train/val/test split strategies
+  training/       # Training engine, losses, batch correction, inference
+  benchmark/      # Profile export for the benchmark harness
+  utils/          # Text caching, device selection, transfer helpers
+  cli/            # `morphoclip` command-line interface
+src/benchmark/    # Standalone CPJUMP1 benchmark (mAP, fraction retrieved, plots)
 src/cellclip/     # CellCLIP baseline (separate from MorphoCLIP)
-scripts/          # CLI entry points organized by pipeline stage
+scripts/          # Inspection and diagnostic scripts
 configs/
   train/          # MorphoCLIP training configs
   cellclip/       # CellCLIP training configs

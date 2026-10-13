@@ -25,6 +25,7 @@ from morphoclip.data.image_loader import (
     prepare_channels_for_dino,
 )
 from morphoclip.utils.console import make_progress
+from morphoclip.utils.device import resolve_device
 
 logger = logging.getLogger(__name__)
 
@@ -71,11 +72,12 @@ def load_dinov3(
     logger.info("Loading vision model: %s", model_name)
     processor = AutoImageProcessor.from_pretrained(model_name)
     model = AutoModel.from_pretrained(model_name)
-    model = model.to(device)
+    resolved = resolve_device(device)
+    model = model.to(resolved)
     model.eval()
     for param in model.parameters():
         param.requires_grad = False
-    logger.info("Model loaded on %s", device)
+    logger.info("Model loaded on %s", resolved)
     return model, processor
 
 
@@ -97,7 +99,7 @@ def _processor_input_size(processor: AutoImageProcessor) -> int:
 def _extract_cls_tokens(
     model: torch.nn.Module,
     images: torch.Tensor,
-    device: str,
+    device: torch.device,
 ) -> torch.Tensor:
     """Extract CLS-like tokens ``(B, D)`` from preprocessed images ``(B, 3, H, W)``."""
     images = images.to(device)
@@ -177,6 +179,7 @@ def extract_plate_features_with_model(
     Returns:
         Dict mapping ``ImageKey -> Path`` to saved feature files.
     """
+    resolved = resolve_device(device)
     output_dir.mkdir(parents=True, exist_ok=True)
     if tensor_size is None:
         tensor_size = _processor_input_size(processor)
@@ -219,7 +222,7 @@ def extract_plate_features_with_model(
             sub_batch_size = batch_size * num_channels
             for i in range(0, preprocessed.shape[0], sub_batch_size):
                 sub = preprocessed[i : i + sub_batch_size]
-                cls = _extract_cls_tokens(model, sub, device)
+                cls = _extract_cls_tokens(model, sub, resolved)
                 all_cls.append(cls)
             all_cls_cat = torch.cat(all_cls, dim=0)  # (N*5, D)
 

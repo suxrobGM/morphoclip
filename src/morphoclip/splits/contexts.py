@@ -50,7 +50,7 @@ def resolve_metadata_path() -> Path:
     """
     path = _resolve_optional_metadata_path()
     if path is None:
-        raise AssertionError(
+        raise FileNotFoundError(
             f"Experiment metadata not found: {METADATA_PATH}, {FALLBACK_METADATA_PATH}, "
             f"or {REFERENCE_METADATA_PATH}"
         )
@@ -68,7 +68,7 @@ def resolve_official_split_metadata_path() -> Path:
     """Find the official CPJUMP1 split CSV."""
     if OFFICIAL_SPLIT_METADATA_PATH.exists():
         return OFFICIAL_SPLIT_METADATA_PATH
-    raise AssertionError(
+    raise FileNotFoundError(
         f"Official CPJUMP1 split metadata not found: {OFFICIAL_SPLIT_METADATA_PATH}"
     )
 

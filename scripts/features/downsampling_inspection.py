@@ -330,7 +330,7 @@ def main(
         reconstructed = restore_dtype(reconstructed_unit, original.dtype)
 
         suffix = output_suffix(original.dtype)
-        downsampled_path = downsampled_dir / f"{path.stem}_384x384{suffix}"
+        downsampled_path = downsampled_dir / f"{path.stem}_{target_size}x{target_size}{suffix}"
         downsampled_path.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(downsampled).save(downsampled_path)
 

@@ -58,8 +58,8 @@ def upload(
     if dry_run:
         for archive in archives:
             size_mb = archive.stat().st_size / (1024**2)
-            console.print(f"  [dim]{archive.name}[/dim] — {size_mb:.0f} MB")
-        console.print("[yellow]Dry run — no files uploaded.[/yellow]")
+            console.print(f"  [dim]{archive.name}[/dim]  {size_mb:.0f} MB")
+        console.print("[yellow]Dry run: no files uploaded.[/yellow]")
         return
 
     load_dotenv()
@@ -101,7 +101,7 @@ def download(
     if dry_run:
         for archive in archives:
             console.print(f"  [dim]{archive}[/dim]")
-        console.print("[yellow]Dry run — no files downloaded.[/yellow]")
+        console.print("[yellow]Dry run: no files downloaded.[/yellow]")
         return
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -115,6 +115,7 @@ def download(
         return
 
     console.print(f"[cyan]Downloading {len(pending)} archives with {workers} workers...[/cyan]")
+    failed = 0
     with make_progress() as progress_bar:
         overall = progress_bar.add_task("[green]Overall", total=len(pending))
         with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -134,9 +135,13 @@ def download(
                     result = future.result()
                     progress_bar.console.print(f"  [green]{result}[/green]")
                 except Exception as exc:
+                    failed += 1
                     progress_bar.console.print(f"  [red]{archive}: {exc}[/red]")
                 progress_bar.advance(overall)
 
+    if failed:
+        console.print(f"\n[bold red]{failed} archive(s) failed. Re-run to retry them.[/bold red]")
+        raise typer.Exit(1)
     console.print("\n[bold green]Download complete.[/bold green]")
     console.print(f"Features extracted to: {output_dir}")
 
@@ -189,7 +194,7 @@ def repack(
         )
         return
 
-    total_before, total_after = 0, 0
+    total_before, total_after, failed = 0, 0, 0
     with make_progress() as progress_bar:
         task = progress_bar.add_task("[green]Repacking", total=len(files))
         with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -201,6 +206,7 @@ def repack(
                     total_before += before
                     total_after += after
                 except Exception as exc:
+                    failed += 1
                     progress_bar.console.print(f"  [red]{path.name}: {exc}[/red]")
                 progress_bar.advance(task)
 
@@ -210,3 +216,6 @@ def repack(
         f"{total_before / 1024**3:.1f} GiB -> {total_after / 1024**3:.1f} GiB "
         f"(freed {saved / 1024**3:.1f} GiB)"
     )
+    if failed:
+        console.print(f"[bold red]{failed} file(s) failed to repack.[/bold red]")
+        raise typer.Exit(1)

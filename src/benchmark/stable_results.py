@@ -17,7 +17,7 @@ from benchmark.profile_ops import concat_profiles
 
 def _already_computed(df: pd.DataFrame, description: str) -> bool:
     """Whether *df* already contains rows for *description*."""
-    return not df.empty and bool(df.Description.str.contains(description).any())
+    return not df.empty and bool(df.Description.eq(description).any())
 
 
 def _write_pivot(df: pd.DataFrame, *, index: list[str], path: Path) -> None:

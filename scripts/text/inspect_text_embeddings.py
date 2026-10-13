@@ -2,8 +2,8 @@
 
 Usage:
     uv run poe inspect-text
-    python scripts/text/inspect_text_embeddings.py
     python scripts/text/inspect_text_embeddings.py --device mps
+    python scripts/text/inspect_text_embeddings.py --checkpoint path/to/best.pt
 """
 
 from pathlib import Path
@@ -15,7 +15,7 @@ import torch.nn.functional as F
 import typer
 from rich.console import Console
 
-from morphoclip.models.text_encoder import MorphoCLIPTextEncoder
+from morphoclip.training.inference import load_models_from_checkpoint
 from morphoclip.utils.device import resolve_device
 
 CACHE_PATH = "data/text/cached_text_features.pt"
@@ -66,8 +66,19 @@ def build_id_labels(metadata_dir: Path) -> dict[str, str]:
     return labels
 
 
+def _print_pairs(title: str, labels: list[str], sim: torch.Tensor) -> None:
+    console.print(f"\n[bold]{title}[/bold]")
+    for i in range(len(labels)):
+        for j in range(i + 1, len(labels)):
+            console.print(f"  {labels[i]:35s} vs {labels[j]:35s} : {sim[i, j]:.4f}")
+
+
 def main(
     device: Annotated[str, typer.Option(help="Torch device (default: auto).")] = "auto",
+    checkpoint: Annotated[
+        Path | None,
+        typer.Option(help="Run checkpoint whose trained text projection to apply."),
+    ] = None,
 ) -> None:
     """Inspect cached text embeddings."""
     resolved_device = resolve_device(device)
@@ -85,13 +96,6 @@ def main(
     emb_raw_norm = F.normalize(emb_raw_small, dim=-1)
     sim_raw = emb_raw_norm @ emb_raw_norm.T
 
-    # Projected similarities (projection head only, on cached raw features)
-    encoder = MorphoCLIPTextEncoder().eval().to(resolved_device)
-    with torch.no_grad():
-        proj = encoder.projection(emb_raw_small)  # [N, 512]
-        proj_norm = F.normalize(proj, dim=-1)
-        sim_proj = proj_norm @ proj_norm.T
-
     console.rule("[bold blue]Cached text feature inspection")
     console.print(f"Cache: {CACHE_PATH}")
     console.print(f"Device: {resolved_device}")
@@ -102,15 +106,14 @@ def main(
     for i, (pid, label) in enumerate(zip(ids_small, pretty, strict=False)):
         console.print(f"[{i}] {pid}  ->  {label}", markup=False)
 
-    console.print("\n[bold]Cosine similarities (projected 512-d)[/bold]")
-    for i in range(len(ids_small)):
-        for j in range(i + 1, len(ids_small)):
-            console.print(f"  {pretty[i]:35s} ↔ {pretty[j]:35s} : {sim_proj[i, j]:.4f}")
+    # An untrained projection head gives random similarities, so this section needs a run.
+    if checkpoint is not None:
+        loaded = load_models_from_checkpoint(checkpoint, resolved_device)
+        with torch.no_grad():
+            proj = loaded.text_projection(emb_raw_small)  # [N, 512], L2-normalized
+        _print_pairs("Cosine similarities (projected 512-d)", pretty, proj @ proj.T)
 
-    console.print("\n[bold]Cosine similarities (raw 768-d, no projection head)[/bold]")
-    for i in range(len(ids_small)):
-        for j in range(i + 1, len(ids_small)):
-            console.print(f"  {pretty[i]:35s} ↔ {pretty[j]:35s} : {sim_raw[i, j]:.4f}")
+    _print_pairs("Cosine similarities (raw 768-d, no projection head)", pretty, sim_raw)
 
 
 if __name__ == "__main__":

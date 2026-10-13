@@ -215,6 +215,15 @@ def test_plate_conditions_reject_a_plate_whose_wells_disagree(
         load_plate_conditions()
 
 
+def test_missing_official_split_csv_raises_the_error_the_manifest_tolerates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(split_contexts, "OFFICIAL_SPLIT_METADATA_PATH", tmp_path / "absent.csv")
+
+    with pytest.raises(FileNotFoundError):
+        split_contexts.load_official_split_contexts()
+
+
 def test_split_manifest_carries_one_row_per_well_with_its_context(
     representation_dataset: MorphoCLIPDataset,
 ) -> None:
