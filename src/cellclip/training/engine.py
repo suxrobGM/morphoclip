@@ -193,7 +193,6 @@ def _train_loop(
                     pert_info=batch["pert_info"],
                 )
 
-            # Skip gradient sync during accumulation
             sync_ctx = ExitStack()
             if is_accumulating and use_ddp:
                 sync_ctx.enter_context(cast(DDP, model).no_sync())

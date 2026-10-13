@@ -58,7 +58,6 @@ def evaluate_epoch(
     image_batches: list[torch.Tensor] = []
     text_batches: list[torch.Tensor] = []
 
-    # Unwrap DDP for encode_mil access
     raw_model = cast(CellCLIP, model.module if hasattr(model, "module") else model)
 
     with torch.no_grad():

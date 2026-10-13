@@ -1,10 +1,6 @@
-"""Shared config resolution for the CellCLIP export and pipeline commands.
+"""Resolve CLI overrides, YAML config and defaults for CellCLIP profile export.
 
-Both ``morphoclip cellclip export`` and ``morphoclip cellclip pipeline`` resolve
-the same CLI-override / YAML-config / default cascade for the visual-encoder
-export. :func:`resolve_export_settings` collapses that shared logic into one
-:class:`ExportSettings`. Divergent defaults (batch, device) stay in the command
-bodies and are passed in.
+Defaults that differ between commands (batch, device) are passed in by the caller.
 """
 
 import warnings

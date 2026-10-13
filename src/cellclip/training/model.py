@@ -162,7 +162,7 @@ class CellCLIPChemBERTa(CellCLIP):
         return self
 
     def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
-        """Support legacy FiLM checkpoints after the fusion-module rename."""
+        """Load state, accepting ``film.*`` keys as ``chem_fusion.*``."""
         if "chem_fusion.0.weight" not in state_dict and "film.0.weight" in state_dict:
             remapped = dict(state_dict)
             for key, value in list(state_dict.items()):
@@ -259,7 +259,7 @@ class CellCLIPChemBERTa(CellCLIP):
 
 
 class CellCLIPChemBERTaFiLM(CellCLIPChemBERTa):
-    """Backward-compatible alias for the FiLM ChemBERTa variant."""
+    """The ChemBERTa variant with FiLM fusion, under its own class name."""
 
 
 def build_cellclip_model(config: CellCLIPModelConfig) -> CellCLIP:

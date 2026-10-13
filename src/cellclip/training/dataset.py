@@ -183,7 +183,7 @@ def _resolve_site_cap(
     explicit: int | None,
     fallback: int | None,
 ) -> int | None:
-    """Resolve train/eval site caps with backward-compatible fallback."""
+    """Return the split-specific site cap, or *fallback* when it is unset."""
     if explicit is not None:
         return explicit
     return fallback
