@@ -6,13 +6,15 @@ Benchmark-layout profile CSVs come from `morphoclip export-profiles`.
 import json
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import pandas as pd
 import torch
 import typer
 from rich.table import Table
+from torch import nn
 
+from morphoclip.data.perturbation import PerturbationInfo
 from morphoclip.training.config import load_training_config
 from morphoclip.training.inference import (
     build_eval_dataloader,
@@ -25,25 +27,39 @@ from morphoclip.utils.caching import load_cached_text_features
 from morphoclip.utils.console import console, setup_logging
 from morphoclip.utils.device import autocast_context, resolve_device
 
+TEXT_PROJECTION_CHUNK = 256
+"""Cached text features projected per forward pass in match mode."""
+
+RECALL_KS = (1, 5, 10)
+
 
 class InferMode(StrEnum):
     match = "match"
     embed = "embed"
 
 
-def _build_unique_text_embeddings(text_projection, text_cache, *, device, amp):
+def _build_unique_text_embeddings(
+    text_projection: nn.Module,
+    text_cache: dict,
+    *,
+    device: torch.device,
+    amp: bool,
+) -> tuple[torch.Tensor, list[str]]:
     """Project all cached text embeddings through the trained projection head."""
     raw, ids = text_cache["embeddings"], text_cache["perturbation_ids"]
     projected = []
     with torch.no_grad():
-        for i in range(0, raw.shape[0], 256):
-            chunk = raw[i : i + 256].to(device, non_blocking=True)
+        for i in range(0, raw.shape[0], TEXT_PROJECTION_CHUNK):
+            chunk = raw[i : i + TEXT_PROJECTION_CHUNK].to(device, non_blocking=True)
             with autocast_context(device, amp):
                 projected.append(text_projection(chunk).cpu())
     return torch.cat(projected), ids
 
 
-def _find_gt_rank(similarities, pert_ids, ground_truth_id):
+def _find_gt_rank(
+    similarities: torch.Tensor, pert_ids: list[str], ground_truth_id: str
+) -> int | None:
+    """1-based rank of *ground_truth_id* over every cached perturbation, not just the top k."""
     order = torch.argsort(similarities, descending=True)
     for rank, idx in enumerate(order.tolist(), start=1):
         if pert_ids[idx] == ground_truth_id:
@@ -52,14 +68,23 @@ def _find_gt_rank(similarities, pert_ids, ground_truth_id):
 
 
 def _run_match(
-    image_embs, text_projection, text_cache, plates, wells, pert_infos, *, device, amp, top_k
-):
+    image_embs: torch.Tensor,
+    text_projection: nn.Module,
+    text_cache: dict,
+    plates: list[str],
+    wells: list[str],
+    pert_infos: list[PerturbationInfo],
+    *,
+    device: torch.device,
+    amp: bool,
+    top_k: int,
+) -> list[dict[str, Any]]:
     text_embs, pert_ids = _build_unique_text_embeddings(
         text_projection, text_cache, device=device, amp=amp
     )
     sim = image_embs @ text_embs.t()
 
-    results = []
+    results: list[dict[str, Any]] = []
     for i in range(sim.shape[0]):
         scores, indices = torch.topk(sim[i], min(top_k, sim.shape[1]))
         matches = [
@@ -79,7 +104,15 @@ def _run_match(
     return results
 
 
-def _run_embed(image_embs, text_embs, plates, wells, pert_infos, *, output_dir):
+def _run_embed(
+    image_embs: torch.Tensor,
+    text_embs: torch.Tensor,
+    plates: list[str],
+    wells: list[str],
+    pert_infos: list[PerturbationInfo],
+    *,
+    output_dir: Path,
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     torch.save(image_embs, output_dir / "image_embeddings.pt")
     torch.save(text_embs, output_dir / "text_embeddings.pt")
@@ -99,7 +132,7 @@ def _run_embed(image_embs, text_embs, plates, wells, pert_infos, *, output_dir):
     )
 
 
-def _print_match_summary(results, top_k):
+def _print_match_summary(results: list[dict[str, Any]]) -> None:
     ranks = [r["rank_of_gt"] for r in results if r["rank_of_gt"] is not None]
     if not ranks:
         console.print("[yellow]No ground truth matches found.[/yellow]")
@@ -113,9 +146,8 @@ def _print_match_summary(results, top_k):
     table.add_row("Wells with GT in cache", str(len(ranks)))
     table.add_row("Mean rank", f"{ranks_t.mean().item():.2f}")
     table.add_row("Median rank", f"{ranks_t.median().item():.1f}")
-    # Only k <= top_k is meaningful: ranks come from a top-k retrieval, so any
-    # larger k reports the same number as top_k and reads as free recall.
-    for k in [k for k in (1, 5, 10) if k <= top_k] or [top_k]:
+    # Ranks come from a full sort, so recall at any k is real, whatever --top-k is.
+    for k in RECALL_KS:
         table.add_row(f"R@{k}", f"{(ranks_t <= k).float().mean().item():.4f}")
     console.print(table)
 
@@ -200,7 +232,7 @@ def infer(
             amp=cfg.runtime.amp,
             top_k=top_k,
         )
-        _print_match_summary(results, top_k)
+        _print_match_summary(results)
         resolved_output_dir.mkdir(parents=True, exist_ok=True)
         output_path = resolved_output_dir / "matches.json"
         with open(output_path, "w", encoding="utf-8") as f:

@@ -8,10 +8,13 @@ from typing import Annotated, Any
 import torch
 import typer
 from rich.table import Table
+from torch import nn
+from torch.utils.data import DataLoader
 
 from morphoclip.splits.api import create_splits
 from morphoclip.splits.strategies import SplitParams
-from morphoclip.training.config import load_training_config
+from morphoclip.training.batch_correction import PlateOffsets
+from morphoclip.training.config import MorphoCLIPTrainingConfig, load_training_config
 from morphoclip.training.evaluate import evaluate_epoch
 from morphoclip.training.inference import (
     build_eval_dataloader,
@@ -34,7 +37,9 @@ class Split(StrEnum):
     test = "test"
 
 
-def _build_eval_loader(config, device, *, split):
+def _build_eval_loader(
+    config: MorphoCLIPTrainingConfig, device: torch.device, *, split: Split
+) -> tuple[DataLoader, int]:
     """Build a DataLoader for the requested split."""
     ds_cfg = config.dataset
     dataset = build_eval_dataset(config)
@@ -43,13 +48,20 @@ def _build_eval_loader(config, device, *, split):
         ds_cfg.split_strategy,
         SplitParams(val_fraction=ds_cfg.val_fraction, seed=config.runtime.seed),
     )
-    target = val_set if split == "val" else test_set
+    target = val_set if split is Split.val else test_set
 
     return build_eval_dataloader(target, config, device), len(target)
 
 
 def _compute_embedding_diagnostics(
-    image_encoder, text_projection, text_cache, loader, *, device, amp, plate_offsets
+    image_encoder: nn.Module,
+    text_projection: nn.Module,
+    text_cache: dict,
+    loader: DataLoader,
+    *,
+    device: torch.device,
+    amp: bool,
+    plate_offsets: PlateOffsets | None,
 ) -> dict[str, float]:
     """Compute alignment, uniformity, and intra-batch similarity."""
     encoded = encode_wells(
@@ -116,7 +128,7 @@ def evaluate(
     text_cache = load_cached_text_features(cfg.dataset.text_cache_path)
     console.print(f"Text cache: {text_cache['embeddings'].shape[0]:,} perturbations")
 
-    loader, n_wells = _build_eval_loader(cfg, device, split=split.value)
+    loader, n_wells = _build_eval_loader(cfg, device, split=split)
     console.print(f"{split.value.capitalize()} wells: {n_wells:,}\n")
 
     metrics: dict[str, Any] = dict(

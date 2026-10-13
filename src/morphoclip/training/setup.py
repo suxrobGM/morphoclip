@@ -3,7 +3,6 @@
 import math
 from typing import Any
 
-import numpy as np
 import torch
 from rich.console import Console
 from rich.table import Table
@@ -13,7 +12,12 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
 from morphoclip.training.config import MorphoCLIPTrainingConfig
-from morphoclip.training.distributed import DistributedState, LogitScaleModule
+from morphoclip.training.distributed import (
+    CLIP_INIT_LOGIT_SCALE,
+    DistributedState,
+    LogitScaleModule,
+    ddp_active,
+)
 from morphoclip.training.inference import build_models
 from morphoclip.training.optim import (
     build_optimizer,
@@ -21,9 +25,6 @@ from morphoclip.training.optim import (
     split_params,
 )
 from morphoclip.utils.device import build_grad_scaler
-
-# OpenAI CLIP initial temperature (tau=0.07 -> logit_scale = ln(1/0.07))
-CLIP_INIT_LOGIT_SCALE = float(np.log(1.0 / 0.07))
 
 
 def log_device_banner(
@@ -87,17 +88,15 @@ def build_and_wrap_models(
     config: MorphoCLIPTrainingConfig,
     device: torch.device,
     *,
-    use_ddp: bool,
     dist_state: DistributedState | None,
 ) -> tuple[nn.Module, nn.Module, nn.Module]:
-    """Build the image/text/logit-scale modules, wrapping in DDP when requested."""
+    """Build the image/text/logit-scale modules, wrapping in DDP across processes."""
     image_encoder: nn.Module
     text_projection: nn.Module
     image_encoder, text_projection = build_models(config, device)
     logit_scale: nn.Module = LogitScaleModule(init_value=CLIP_INIT_LOGIT_SCALE, device=device)
 
-    if use_ddp:
-        assert dist_state is not None  # implied by use_ddp
+    if ddp_active(dist_state):
         device_ids = [dist_state.local_rank]
         # Every trainable param takes part in the forward pass each step, so
         # find_unused_parameters is never needed.

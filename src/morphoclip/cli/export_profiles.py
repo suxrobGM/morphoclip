@@ -15,13 +15,13 @@ from morphoclip.benchmark.export import (
     export_plate_profiles,
     load_export_models,
 )
+from morphoclip.data.config import load_dataset_config
 from morphoclip.splits.contexts import OFFICIAL_SPLIT_METADATA_PATH
 from morphoclip.training.inference import discover_plates
 from morphoclip.utils.console import console, setup_logging
 
 DEFAULT_METADATA_CSV = OFFICIAL_SPLIT_METADATA_PATH
 DEFAULT_OUTPUT_ROOT = Path("data/profiles_morphoclip")
-DEFAULT_BATCH = "2020_11_04_CPJUMP1"
 
 
 def export_profiles(
@@ -36,7 +36,13 @@ def export_profiles(
     output_root: Annotated[
         Path, typer.Option(help="Root directory for exported profile CSVs.")
     ] = DEFAULT_OUTPUT_ROOT,
-    batch: Annotated[str, typer.Option(help="Batch name used in the output path.")] = DEFAULT_BATCH,
+    batch: Annotated[
+        str | None,
+        typer.Option(
+            help="Batch name used in the output path. Default: the batch in the "
+            "checkpoint's dataset config."
+        ),
+    ] = None,
     metadata_csv: Annotated[
         Path, typer.Option(help="Path to the CPJUMP1 reference metadata CSV.")
     ] = DEFAULT_METADATA_CSV,
@@ -58,6 +64,7 @@ def export_profiles(
         raise typer.Exit(1)
 
     models = load_export_models(checkpoint, device)
+    batch = batch or load_dataset_config(models.config.dataset.dataset_config_path).batch
     resolved_plates = plates or discover_plates(Path(models.config.dataset.feature_root))
     if not resolved_plates:
         console.print("[red]No plates to export.[/red]")

@@ -23,6 +23,7 @@ from morphoclip.training.distributed import (
     DistributedState,
     broadcast_flag,
     cleanup_distributed,
+    ddp_active,
     setup_distributed,
 )
 from morphoclip.training.engine import load_checkpoint, save_checkpoint, scale_param
@@ -90,15 +91,13 @@ def _train_loop(
 ) -> dict[str, Any]:
     dist_cfg = config.distributed
     opt_cfg = config.optimization
-    use_ddp = dist_state is not None and dist_state.world_size > 1
+    use_ddp = ddp_active(dist_state)
     accum_steps = dist_cfg.gradient_accumulation_steps
     world_size = dist_state.world_size if dist_state else 1
 
     if is_main:
         console.rule("[bold blue]MorphoCLIP Training")
         log_device_banner(console, device, use_ddp=use_ddp, world_size=world_size)
-
-    if is_main:
         console.print("\n[bold]Loading data...[/bold]")
     train_loader, val_loader, train_count, val_count, train_sampler = build_train_data(
         config,
@@ -120,11 +119,9 @@ def _train_loop(
     text_cache = load_cached_text_features(config.dataset.text_cache_path)
     if is_main:
         console.print(f"  Text cache: {text_cache['embeddings'].shape[0]:,} perturbations")
-
-    if is_main:
         console.print("\n[bold]Building models...[/bold]")
     image_encoder, text_projection, logit_scale = build_and_wrap_models(
-        config, device, use_ddp=use_ddp, dist_state=dist_state
+        config, device, dist_state=dist_state
     )
     if is_main:
         log_config_summary(console, config, image_encoder, text_projection)
@@ -209,7 +206,6 @@ def _train_loop(
         config=config,
         device=device,
         dist_state=dist_state,
-        use_ddp=use_ddp,
         accum_steps=accum_steps,
         is_main=is_main,
     )

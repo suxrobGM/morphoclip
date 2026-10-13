@@ -10,13 +10,17 @@ Usage with torchrun::
         --config configs/train/ddp.yaml --distributed
 """
 
+import math
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeGuard
 
 import torch
 import torch.distributed as dist
 from torch import nn
+
+# OpenAI CLIP initial temperature: tau = 0.07, so logit_scale = ln(1 / 0.07).
+CLIP_INIT_LOGIT_SCALE = math.log(1.0 / 0.07)
 
 
 @dataclass(slots=True, frozen=True)
@@ -90,9 +94,9 @@ def cleanup_distributed() -> None:
         dist.destroy_process_group()
 
 
-def is_distributed() -> bool:
-    """Return ``True`` if a distributed process group is active."""
-    return dist.is_initialized()
+def ddp_active(dist_state: DistributedState | None) -> TypeGuard[DistributedState]:
+    """Return ``True`` when *dist_state* spans more than one process."""
+    return dist_state is not None and dist_state.world_size > 1
 
 
 def all_reduce_scalar(value: float, *, op: str = "mean") -> float:
@@ -239,15 +243,15 @@ class LogitScaleModule(nn.Module):
     wrapper lets DDP sync the temperature gradient.
 
     Args:
-        init_value: Initial value for the log-scale parameter.
-            Default ``2.6593`` is ``ln(1/0.07)`` (CLIP default).
+        init_value: Initial value for the log-scale parameter. Defaults to
+            :data:`CLIP_INIT_LOGIT_SCALE`.
         device: Target device.
     """
 
     def __init__(
         self,
         *,
-        init_value: float = 2.6593,
+        init_value: float = CLIP_INIT_LOGIT_SCALE,
         device: torch.device | None = None,
     ) -> None:
         super().__init__()

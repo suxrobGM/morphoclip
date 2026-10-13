@@ -24,9 +24,8 @@ def split_params(
 ) -> list[dict[str, Any]]:
     """Split trainable parameters into decay and no-decay groups.
 
-    Biases, LayerNorm weights, and any parameter with fewer than two dimensions
-    get zero weight decay. That last rule already covers the 0-d learnable
-    temperature.
+    Every parameter with fewer than two dimensions gets zero weight decay. That
+    covers biases, norm weights and the 0-d learnable temperature.
 
     Args:
         modules: Modules whose parameters to split.
@@ -40,11 +39,10 @@ def split_params(
     decay: list[nn.Parameter] = []
     no_decay: list[nn.Parameter] = []
     for module in modules:
-        for name, param in module.named_parameters():
+        for param in module.parameters():
             if not param.requires_grad:
                 continue
-            lowered = name.lower()
-            if param.ndim < 2 or "bias" in lowered or "ln" in lowered or "norm" in lowered:
+            if param.ndim < 2:
                 no_decay.append(param)
             else:
                 decay.append(param)

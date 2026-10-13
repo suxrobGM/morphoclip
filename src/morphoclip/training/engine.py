@@ -7,22 +7,20 @@ import torch
 from torch import nn
 from torch.optim.lr_scheduler import LambdaLR
 
+from morphoclip.data.perturbation import target_gene_key
 from morphoclip.training.batch_correction import PlateOffsets
 from morphoclip.training.config import MorphoCLIPTrainingConfig
-from morphoclip.training.distributed import LogitScaleModule
+from morphoclip.training.distributed import (
+    DistributedState,
+    LogitScaleModule,
+    all_gather_tensors,
+    ddp_active,
+    gather_string_lists,
+)
+from morphoclip.training.forward import encode_batch
 from morphoclip.training.metrics import compute_grad_norm
 from morphoclip.training.optim import unwrap, unwrap_state_dict
 from morphoclip.utils.device import autocast_context
-
-
-def _get_logit_scale_data(logit_scale: nn.Parameter | nn.Module) -> torch.Tensor:
-    """Extract the raw logit_scale tensor from Parameter or LogitScaleModule."""
-    if isinstance(logit_scale, LogitScaleModule):
-        return logit_scale.scale.data
-    if hasattr(logit_scale, "module"):
-        # DDP-wrapped LogitScaleModule
-        return cast(LogitScaleModule, logit_scale.module).scale.data
-    return logit_scale.data
 
 
 def save_checkpoint(
@@ -53,7 +51,7 @@ def save_checkpoint(
         {
             "image_encoder": unwrap_state_dict(image_encoder),
             "text_projection": unwrap_state_dict(text_projection),
-            "logit_scale": _get_logit_scale_data(logit_scale),
+            "logit_scale": scale_param(logit_scale).data,
             "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict(),
             "epoch": epoch,
@@ -101,23 +99,18 @@ def load_checkpoint(
     img_target.load_state_dict(ckpt["image_encoder"])
     txt_target.load_state_dict(ckpt["text_projection"])
 
-    scale_data = ckpt["logit_scale"]
-    if isinstance(logit_scale, LogitScaleModule):
-        logit_scale.scale.data.copy_(scale_data)
-    elif hasattr(logit_scale, "module"):
-        cast(LogitScaleModule, logit_scale.module).scale.data.copy_(scale_data)
-    else:
-        logit_scale.data.copy_(scale_data)
+    scale_param(logit_scale).data.copy_(ckpt["logit_scale"])
 
     optimizer.load_state_dict(ckpt["optimizer"])
     scheduler.load_state_dict(ckpt["scheduler"])
     return ckpt["epoch"], ckpt["steps"], ckpt["best_eval_loss"]
 
 
-def scale_param(logit_scale: nn.Module) -> nn.Parameter:
-    """Get the raw scale parameter, unwrapping DDP if needed."""
-    inner = cast(LogitScaleModule, unwrap(logit_scale))
-    return inner.scale
+def scale_param(logit_scale: nn.Parameter | nn.Module) -> nn.Parameter:
+    """Get the raw scale parameter from a Parameter or a (DDP-wrapped) LogitScaleModule."""
+    if isinstance(logit_scale, nn.Parameter):
+        return logit_scale
+    return cast(LogitScaleModule, unwrap(logit_scale)).scale
 
 
 def forward_step(
@@ -129,8 +122,7 @@ def forward_step(
     device: torch.device,
     amp: bool,
     plate_offsets: PlateOffsets | None,
-    use_ddp: bool,
-    dist_state: Any,
+    dist_state: DistributedState | None,
     target_weight: float = 0.0,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[str], list[str] | None]:
     """Forward pass + optional CWA + gather across GPUs.
@@ -140,28 +132,23 @@ def forward_step(
     are ``None`` unless *target_weight* is positive, which skips both the
     per-well gene parsing and an extra all-gather.
     """
-    # Lazy imports to avoid circular dependency (engine <-> evaluate)
-    from morphoclip.data.perturbation import target_gene_key
-    from morphoclip.training.distributed import all_gather_tensors, gather_string_lists
-    from morphoclip.training.evaluate import lookup_text_embeddings
-
-    features = batch["features"].to(device, non_blocking=True)
-    site_mask = batch["site_mask"].to(device, non_blocking=True)
     pert_infos = batch["pert_info"]
 
     with autocast_context(device, amp):
-        image_emb = image_encoder(features, site_mask)
-        raw_text = lookup_text_embeddings(pert_infos, text_cache, device)
-        text_emb = text_projection(raw_text)
-
-        if plate_offsets is not None:
-            image_emb = plate_offsets.apply(image_emb, batch["plates"])
+        image_emb, text_emb = encode_batch(
+            batch,
+            image_encoder,
+            text_projection,
+            text_cache,
+            device=device,
+            plate_offsets=plate_offsets,
+        )
 
         broad_samples = [info.broad_sample for info in pert_infos]
         target_keys = (
             [target_gene_key(info) for info in pert_infos] if target_weight > 0.0 else None
         )
-        if use_ddp:
+        if ddp_active(dist_state):
             # with_grad keeps gradients flowing through all_gather, so negatives
             # on remote GPUs still contribute to the contrastive loss.
             all_image = all_gather_tensors(image_emb, with_grad=True)

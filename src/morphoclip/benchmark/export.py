@@ -245,7 +245,7 @@ def export_plate_profiles(
     *,
     metadata_csv: Path,
     output_root: Path,
-    batch: str = "2020_11_04_CPJUMP1",
+    batch: str,
     negcon_center: bool = True,
     batch_size: int | None = None,
 ) -> Path:

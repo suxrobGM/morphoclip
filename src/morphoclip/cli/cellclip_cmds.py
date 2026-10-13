@@ -26,7 +26,7 @@ from cellclip.benchmark.pipeline import (
     summarize_results,
 )
 from cellclip.benchmark.settings import resolve_export_settings
-from cellclip.training.config import load_training_config
+from cellclip.training.config import CellCLIPTrainingConfig, load_training_config
 from cellclip.training.engine import train_cellclip
 from cellclip.training.reporting import render_train_config, render_train_summary
 from morphoclip.data.config import load_dataset_config
@@ -47,12 +47,11 @@ DATASET_CONFIG_PATH = Path("configs/dataset.yml")
 CELLCLIP_DEFAULT_MODEL = "facebook/dinov2-giant"
 
 
-def _resolve_run_dir(config, *, run_name: str | None, output_dir: Path | None) -> Path:
-    base_output = output_dir or (Path.cwd() / config.runtime.output_root)
-    resolved_name = run_name or config.runtime.run_name
+def _resolve_run_dir(config: CellCLIPTrainingConfig) -> Path:
+    resolved_name = config.runtime.run_name
     if resolved_name is None:
         resolved_name = datetime.now().astimezone().strftime("cellclip_%Y%m%d_%H%M%S")
-    return base_output / resolved_name
+    return Path.cwd() / config.runtime.output_root / resolved_name
 
 
 @app.command()
@@ -80,7 +79,7 @@ def train(
     if split_manifest is not None:
         cfg.dataset.split_manifest_path = str(split_manifest)
 
-    run_dir = _resolve_run_dir(cfg, run_name=run_name, output_dir=output_dir)
+    run_dir = _resolve_run_dir(cfg)
     run_dir.mkdir(parents=True, exist_ok=True)
     with open(run_dir / "resolved_config.yaml", "w", encoding="utf-8") as f:
         yaml.safe_dump(cfg.to_dict(), f, sort_keys=False)
@@ -110,9 +109,7 @@ def export(
     checkpoint_filename: OptStr = None,
     download_dir: OptStr = None,
     device: OptStr = None,
-    model_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
     input_dim: OptInt = None,
-    loss_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
 ) -> None:
     """Export benchmark-ready CPJUMP1 profiles using a pretrained CellCLIP model."""
     project_root = Path.cwd()
@@ -120,7 +117,10 @@ def export(
     export_config = load_yaml_section(config, "cellclip_export")
 
     resolved_batch = (
-        batch or export_config.get("batch") or benchmark_config.get("batch", "2020_11_04_CPJUMP1")
+        batch
+        or export_config.get("batch")
+        or benchmark_config.get("batch")
+        or load_dataset_config(DATASET_CONFIG_PATH).batch
     )
     settings = resolve_export_settings(
         project_root=project_root,
@@ -140,8 +140,8 @@ def export(
         download_dir=download_dir,
         device=device,
         input_dim=input_dim,
-        model_type=model_type,
-        loss_type=loss_type,
+        model_type=None,
+        loss_type=None,
     )
 
     if plates:
@@ -154,20 +154,18 @@ def export(
             timelines=settings.timelines,
         )
 
-    print("=" * 60)
-    print("CellCLIP Profile Export")
-    print("=" * 60)
-    print(f"Checkpoint:      {settings.checkpoint_path}")
-    print(f"Input dim:       {settings.input_dim}")
-    print(f"Device:          {settings.device}")
-    print(f"Feature root:    {settings.features}")
-    print(f"Source profiles: {settings.source_profiles}")
-    print(f"Output profiles: {settings.output_profiles}")
-    print(f"Batch:           {resolved_batch}")
-    print(f"Cell filter:     {settings.cell_filter or 'all'}")
-    print(f"Timelines:       {', '.join(settings.timelines)}")
-    print(f"Plates:          {len(resolved_plates)}")
-    print("=" * 60)
+    console.rule("[bold blue]CellCLIP Profile Export")
+    console.print(f"Checkpoint:      {settings.checkpoint_path}")
+    console.print(f"Input dim:       {settings.input_dim}")
+    console.print(f"Device:          {settings.device}")
+    console.print(f"Feature root:    {settings.features}")
+    console.print(f"Source profiles: {settings.source_profiles}")
+    console.print(f"Output profiles: {settings.output_profiles}")
+    console.print(f"Batch:           {resolved_batch}")
+    console.print(f"Cell filter:     {settings.cell_filter or 'all'}")
+    console.print(f"Timelines:       {', '.join(settings.timelines)}")
+    console.print(f"Plates:          {len(resolved_plates)}")
+    console.rule()
 
     model = load_cellclip_visual_encoder(
         model_path=settings.checkpoint_path,
@@ -177,7 +175,7 @@ def export(
 
     exported_paths: list[Path] = []
     for index, plate in enumerate(resolved_plates, start=1):
-        print(f"[{index}/{len(resolved_plates)}] Exporting {plate}")
+        console.print(f"\\[{index}/{len(resolved_plates)}] Exporting {plate}")
         output_path = export_plate(
             model=model,
             device=settings.device,
@@ -188,11 +186,9 @@ def export(
             plate=plate,
         )
         exported_paths.append(output_path)
-        print(f"Saved: {output_path}")
+        console.print(f"Saved: {output_path}")
 
-    print("=" * 60)
-    print(f"Export complete: {len(exported_paths)} plate profile files")
-    print("=" * 60)
+    console.rule(f"[bold green]Export complete: {len(exported_paths)} plate profile files")
 
 
 @app.command()
@@ -221,9 +217,7 @@ def pipeline(
     checkpoint_repo_id: OptStr = None,
     checkpoint_filename: OptStr = None,
     download_dir: OptStr = None,
-    model_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
     input_dim: OptInt = None,
-    loss_type: Annotated[str | None, typer.Option(help="Ignored (image-only export).")] = None,
     force_export: OptFlag = False,
     keep_features: OptFlag = False,
     keep_tensors: OptFlag = False,
@@ -260,8 +254,8 @@ def pipeline(
         download_dir=download_dir,
         device=device,
         input_dim=input_dim,
-        model_type=model_type,
-        loss_type=loss_type,
+        model_type=None,
+        loss_type=None,
     )
 
     compressed = resolve_dataset_path(

@@ -13,6 +13,7 @@ the biology the prompts describe.
 """
 
 import logging
+from collections.abc import Iterable
 
 import torch
 import torch.nn.functional as F
@@ -151,7 +152,7 @@ def compute_plate_offsets(
 
 def refresh_plate_offsets(
     image_encoder: nn.Module,
-    loader,
+    loader: Iterable[dict],
     plate_conditions: dict[str, str],
     *,
     device: torch.device,

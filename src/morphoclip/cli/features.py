@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from morphoclip.cli.data import Backend
 from morphoclip.cli.transfer import download, repack, upload
 from morphoclip.data.config import load_dataset_config
+from morphoclip.data.extraction import prepare_plate_output, resolve_image_dir, select_plates
 from morphoclip.data.feature_extractor import (
     extract_plate_features,
     verify_plate_features,
@@ -26,17 +27,6 @@ from morphoclip.utils.s3 import choose_backend
 app = typer.Typer(no_args_is_help=True, help="DINOv3 feature extraction and transfer.")
 
 CONFIG_PATH = Path("configs/dataset.yml")
-
-
-def _clear_pt_files(directory: Path) -> int:
-    """Remove saved ``.pt`` files from a directory if it exists."""
-    if not directory.exists():
-        return 0
-    removed = 0
-    for path in directory.glob("*.pt"):
-        path.unlink()
-        removed += 1
-    return removed
 
 
 @app.command()
@@ -72,11 +62,7 @@ def extract(
     resolved_features_root = features_root or cfg.local.features
     resolved_tensors_root = tensors_root or cfg.local.tensors
 
-    plates = cfg.plates
-    if plate:
-        plates = [p for p in plates if extract_plate_barcode(p) == plate or p == plate]
-        if not plates:
-            plates = [plate]
+    plates = select_plates(cfg.plates, plate)
 
     console.rule("[bold blue]DINOv3 Feature Extraction")
     console.print(f"  Model:      {resolved_model}")
@@ -84,15 +70,13 @@ def extract(
     console.print(f"  Batch size: {resolved_batch_size}")
     console.print(f"  Plates:     {len(plates)}")
 
-    batch = cfg.batch
     for plate_name in plates:
         barcode = extract_plate_barcode(plate_name)
 
-        image_dir = resolved_compressed_root / batch / plate_name / "Images"
-        if not image_dir.exists():
-            image_dir = resolved_compressed_root / plate_name / "Images"
-        if not image_dir.exists():
-            console.print(f"\n[bold red]Image directory not found: {image_dir}")
+        image_dir = resolve_image_dir(resolved_compressed_root, cfg.batch, plate_name)
+        if image_dir is None:
+            missing_dir = resolved_compressed_root / plate_name / "Images"
+            console.print(f"\n[bold red]Image directory not found: {missing_dir}")
             continue
 
         feature_dir = resolved_features_root / barcode
@@ -112,24 +96,22 @@ def extract(
         console.print(f"  Images:   {image_dir}")
         console.print(f"  Features: {feature_dir}")
 
-        extracted, expected, missing = verify_plate_features(feature_dir, image_dir)
-        if extracted == expected and not missing:
+        state = prepare_plate_output(image_dir, feature_dir, None if no_tensors else tensor_dir)
+        if state.complete:
             console.print(
-                f"  [yellow]Skipping[/yellow] existing complete batch ({extracted}/{expected})"
+                "  [yellow]Skipping[/yellow] existing complete batch "
+                f"({state.extracted}/{state.expected})"
             )
             continue
 
-        if extracted > 0:
+        if state.extracted > 0:
             console.print(
                 "  [yellow]Incomplete output detected[/yellow] "
-                f"({extracted}/{expected}); clearing and re-extracting batch"
+                f"({state.extracted}/{state.expected}); clearing and re-extracting batch"
             )
-            removed_features = _clear_pt_files(feature_dir)
-            console.print(f"  Cleared {removed_features} existing feature files")
-            if not no_tensors:
-                removed_tensors = _clear_pt_files(tensor_dir)
-                if removed_tensors:
-                    console.print(f"  Cleared {removed_tensors} existing tensor files")
+            console.print(f"  Cleared {state.cleared_features} existing feature files")
+            if state.cleared_tensors:
+                console.print(f"  Cleared {state.cleared_tensors} existing tensor files")
 
         saved = extract_plate_features(
             image_dir=image_dir,
@@ -194,7 +176,7 @@ def pipeline(
     if tensors_root is not None:
         cfg.local.tensors = tensors_root
 
-    backend_name = choose_backend(str(backend.value if backend else cfg.fetch.backend))
+    backend_name = choose_backend(backend.value if backend else cfg.fetch.backend)
 
     log_path = log_file or Path(f"data/pipeline_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}.log")
     setup_logging(log_path=log_path)

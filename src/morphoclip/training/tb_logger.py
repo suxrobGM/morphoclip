@@ -8,7 +8,7 @@ weight histograms, and similarity heatmaps. Silent no-op when
 import logging
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import torch
 import yaml
@@ -59,6 +59,12 @@ _CUSTOM_SCALARS_LAYOUT = {
 }
 
 
+class SerializableConfig(Protocol):
+    """Any training config that can dump itself, MorphoCLIP's or CellCLIP's."""
+
+    def to_dict(self) -> dict[str, Any]: ...
+
+
 class TrainingLogger:
     """Training logger with a TensorBoard backend.
 
@@ -73,7 +79,6 @@ class TrainingLogger:
     ) -> None:
         self._enabled = rank == 0
         self._flush_every = FLUSH_EVERY_STEPS
-        self._histogram_every = HISTOGRAM_EVERY_EPOCHS
         self._writer: SummaryWriter | None = None
 
         if self._enabled:
@@ -81,15 +86,14 @@ class TrainingLogger:
             log_dir.mkdir(parents=True, exist_ok=True)
             self._writer = SummaryWriter(log_dir=str(log_dir))
 
-    def log_config(self, config: Any) -> None:
+    def log_config(self, config: SerializableConfig) -> None:
         """Write training config and custom scalars layout."""
         w = self._writer
         if w is None:
             return
-        config_dict = config.to_dict() if hasattr(config, "to_dict") else {}
         w.add_text(
             "config",
-            f"```yaml\n{yaml.dump(config_dict, default_flow_style=False)}```",
+            f"```yaml\n{yaml.dump(config.to_dict(), default_flow_style=False)}```",
             global_step=0,
         )
         try:

@@ -121,10 +121,8 @@ def fetch(
     no_sign_request = cpjump.fetch.aws_no_sign_request
     rclone_remote = cpjump.fetch.rclone_remote
 
-    backend_name = choose_backend(str(backend.value if backend else cpjump.fetch.backend))
-    on_existing = str(
-        on_existing_plate.value if on_existing_plate else cpjump.fetch.on_existing_plate
-    )
+    backend_name = choose_backend(backend.value if backend else cpjump.fetch.backend)
+    on_existing = on_existing_plate.value if on_existing_plate else cpjump.fetch.on_existing_plate
 
     console.rule("[bold blue]CPJUMP1 Dataset Fetch")
     console.print(f"  Backend: {backend_name} | Plates: {len(plates)} | Dry run: {dry_run}")
@@ -171,9 +169,6 @@ def fetch(
     console.print(f"\n[bold green]Done.[/bold green] Downloaded: {downloaded}/{len(plates)} plates")
 
 
-S3_BASE = "s3://cellpainting-gallery/cpg0000-jump-pilot/source_4/images/2020_11_04_CPJUMP1/images/"
-"""Base S3 URI for the CPJUMP1 images. Plates are subdirectories under this path."""
-
 MAX_WORKERS = 10
 
 
@@ -193,9 +188,9 @@ def _run_aws(args: list[str]) -> str:
     return result.stdout
 
 
-def _list_plates() -> list[str]:
-    """List plate directories under the S3 base path."""
-    output = _run_aws(["ls", S3_BASE])
+def _list_plates(images_uri: str) -> list[str]:
+    """List plate directories under the S3 images path."""
+    output = _run_aws(["ls", f"{images_uri}/"])
     plates = []
     for line in output.strip().splitlines():
         parts = line.split()
@@ -204,9 +199,9 @@ def _list_plates() -> list[str]:
     return sorted(plates)
 
 
-def _scan_plate(plate: str) -> tuple[int, int]:
+def _scan_plate(images_uri: str, plate: str) -> tuple[int, int]:
     """Return (total_bytes, file_count) for a plate."""
-    output = _run_aws(["ls", "--recursive", "--summarize", f"{S3_BASE}{plate}/"])
+    output = _run_aws(["ls", "--recursive", "--summarize", f"{images_uri}/{plate}/"])
     total_bytes = 0
     file_count = 0
     for line in output.splitlines():
@@ -235,7 +230,9 @@ def check_plates() -> None:
     """Scan S3 plate directories and summarize sizes/file counts (dry-run estimate)."""
     console.log("Scanning plates...")
 
-    plates = _list_plates()
+    cpjump = load_dataset_config(CONFIG_PATH)
+    images_uri = cpjump.s3_uri(cpjump.images)
+    plates = _list_plates(images_uri)
     console.log(
         f"Found [bold]{len(plates)}[/bold] plates, scanning in parallel (workers={MAX_WORKERS})..."
     )
@@ -250,7 +247,7 @@ def check_plates() -> None:
     ) as progress:
         task = progress.add_task("Scanning plates", total=len(plates))
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = {executor.submit(_scan_plate, plate): plate for plate in plates}
+            futures = {executor.submit(_scan_plate, images_uri, plate): plate for plate in plates}
             for future in as_completed(futures):
                 plate = futures[future]
                 size_bytes, file_count = future.result()

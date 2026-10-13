@@ -12,7 +12,8 @@ from morphoclip.data.perturbation import extract_plate_barcode
 from morphoclip.splits.api import create_splits
 from morphoclip.splits.strategies import SplitParams
 from morphoclip.training.config import MorphoCLIPTrainingConfig
-from morphoclip.training.distributed import DistributedState
+from morphoclip.training.distributed import DistributedState, ddp_active
+from morphoclip.training.inference import build_eval_dataloader, discover_plates
 from morphoclip.training.samplers import PerturbationBatchSampler, resolve_base_dataset
 from morphoclip.utils.device import loader_workers, supports_pin_memory
 
@@ -71,12 +72,11 @@ def build_train_data(
     ds_cfg = config.dataset
     metadata = MetadataIndex.from_config(Path(ds_cfg.dataset_config_path))
     feature_root = Path(ds_cfg.feature_root)
-    plates = sorted(d.name for d in feature_root.iterdir() if d.is_dir() and any(d.glob("*.pt")))
 
     dataset = MorphoCLIPDataset(
         feature_dir=feature_root,
         metadata=metadata,
-        plates=plates,
+        plates=discover_plates(feature_root),
         mode="features",
         text_level=ds_cfg.text_level,
         exclude_controls=ds_cfg.exclude_controls,
@@ -93,9 +93,8 @@ def build_train_data(
         dataset.preload(indices=used_indices)
 
     dist_sampler: DistributedSampler | None = None
-    use_ddp = dist_state is not None and dist_state.world_size > 1
-    if use_ddp:
-        assert dist_state is not None  # implied by use_ddp
+    use_ddp = ddp_active(dist_state)
+    if ddp_active(dist_state):
         dist_sampler = DistributedSampler(
             train_set,
             num_replicas=dist_state.world_size,
@@ -145,13 +144,6 @@ def build_train_data(
             num_workers=num_workers,
             pin_memory=pin,
         )
-    val_loader = DataLoader(
-        val_set,
-        batch_size=ds_cfg.eval_batch_size,
-        shuffle=False,
-        collate_fn=collate_fn,
-        num_workers=num_workers,
-        pin_memory=pin,
-    )
+    val_loader = build_eval_dataloader(val_set, config, device, preloaded=ds_cfg.preload)
     train_sampler: EpochSampler | None = batch_sampler or dist_sampler
     return train_loader, val_loader, len(train_set), len(val_set), train_sampler

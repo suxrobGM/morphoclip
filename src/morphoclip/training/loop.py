@@ -15,6 +15,7 @@ from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
+from torch.utils.data import DataLoader
 
 from morphoclip.training.batch_correction import PlateOffsets
 from morphoclip.training.config import (
@@ -22,7 +23,7 @@ from morphoclip.training.config import (
     LOGIT_SCALE_MAX,
     MorphoCLIPTrainingConfig,
 )
-from morphoclip.training.distributed import DistributedState, all_reduce_scalar
+from morphoclip.training.distributed import DistributedState, all_reduce_scalar, ddp_active
 from morphoclip.training.engine import forward_step, optimizer_step, scale_param
 from morphoclip.training.losses import compute_training_loss
 from morphoclip.training.metrics import compute_logit_stats
@@ -46,9 +47,13 @@ class TrainContext:
     config: MorphoCLIPTrainingConfig
     device: torch.device
     dist_state: DistributedState | None
-    use_ddp: bool
     accum_steps: int
     is_main: bool
+
+    @property
+    def use_ddp(self) -> bool:
+        """Whether the run spans more than one process."""
+        return ddp_active(self.dist_state)
 
 
 @dataclass
@@ -81,7 +86,7 @@ def accumulate_components(
 
 def run_epoch(
     ctx: TrainContext,
-    train_loader,
+    train_loader: DataLoader,
     *,
     global_step: int,
     total_steps: int,
@@ -135,7 +140,6 @@ def run_epoch(
                 device=device,
                 amp=config.runtime.amp,
                 plate_offsets=plate_offsets,
-                use_ddp=use_ddp,
                 dist_state=ctx.dist_state,
                 target_weight=opt_cfg.target_weight,
             )

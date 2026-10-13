@@ -1,43 +1,23 @@
 """Evaluation loop and retrieval metrics for MorphoCLIP training."""
 
+from collections.abc import Iterable
+
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
 
 from morphoclip.data.perturbation import PerturbationInfo, target_gene_key
 from morphoclip.training.batch_correction import PlateOffsets
+from morphoclip.training.forward import encode_batch
 from morphoclip.training.losses import compute_loss
 from morphoclip.training.retrieval import compute_retrieval_metrics
 from morphoclip.utils.device import autocast_context
-
-
-def lookup_text_embeddings(
-    pert_infos: list[PerturbationInfo],
-    text_cache: dict,
-    device: torch.device,
-) -> torch.Tensor:
-    """Look up cached 768-d BERT features for a batch of perturbations.
-
-    Args:
-        pert_infos: PerturbationInfo for each sample in the batch.
-        text_cache: Dict from ``load_cached_text_features`` with
-            ``embeddings`` and ``id_to_idx``.
-        device: Target device.
-
-    Returns:
-        Raw BERT features ``(B, 768)`` on *device*.
-    """
-    id_to_idx = text_cache["id_to_idx"]
-    embeddings = text_cache["embeddings"]
-    indices = [id_to_idx[info.broad_sample] for info in pert_infos]
-    return embeddings[indices].to(device, non_blocking=True)
 
 
 def evaluate_epoch(
     image_encoder: nn.Module,
     text_projection: nn.Module,
     text_cache: dict,
-    loader: DataLoader,
+    loader: Iterable[dict],
     *,
     device: torch.device,
     logit_scale: nn.Parameter,
@@ -77,17 +57,17 @@ def evaluate_epoch(
 
     with torch.no_grad():
         for batch in loader:
-            features = batch["features"].to(device, non_blocking=True)
-            site_mask = batch["site_mask"].to(device, non_blocking=True)
             pert_infos: list[PerturbationInfo] = batch["pert_info"]
 
             with autocast_context(device, amp):
-                image_emb = image_encoder(features, site_mask)
-                raw_text = lookup_text_embeddings(pert_infos, text_cache, device)
-                text_emb = text_projection(raw_text)
-
-                if plate_offsets is not None:
-                    image_emb = plate_offsets.apply(image_emb, batch["plates"])
+                image_emb, text_emb = encode_batch(
+                    batch,
+                    image_encoder,
+                    text_projection,
+                    text_cache,
+                    device=device,
+                    plate_offsets=plate_offsets,
+                )
 
                 broad_samples = [info.broad_sample for info in pert_infos]
                 loss = compute_loss(

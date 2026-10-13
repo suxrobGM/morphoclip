@@ -5,12 +5,13 @@ rebuild a model from a checkpoint and then run it over a set of wells. This is
 the one place that does either.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from morphoclip.data.dataset import MorphoCLIPDataset, collate_fn
 from morphoclip.data.metadata import MetadataIndex
@@ -26,6 +27,7 @@ from morphoclip.training.config import (
     MorphoCLIPTrainingConfig,
     training_config_from_dict,
 )
+from morphoclip.training.forward import encode_batch
 from morphoclip.utils.device import autocast_context, loader_workers, supports_pin_memory
 
 
@@ -117,7 +119,7 @@ def build_eval_dataset(
 
 
 def build_eval_dataloader(
-    dataset,
+    dataset: Dataset,
     config: MorphoCLIPTrainingConfig,
     device: torch.device,
     *,
@@ -199,7 +201,7 @@ class EncodedWells:
 @torch.no_grad()
 def encode_wells(
     image_encoder: nn.Module,
-    loader,
+    loader: Iterable[dict],
     *,
     device: torch.device,
     text_projection: nn.Module | None = None,
@@ -217,7 +219,7 @@ def encode_wells(
             populate ``EncodedWells.text``.
         text_cache: Cached text features. When given, wells whose
             ``broad_sample`` is missing from it are dropped and counted in
-            ``EncodedWells.skipped``.
+            ``EncodedWells.skipped``. Required with *text_projection*.
         amp: Run the forward pass under autocast. Defaults off, because
             profile export writes its embeddings to disk and fp16 there would
             move every downstream benchmark number.
@@ -229,9 +231,11 @@ def encode_wells(
         The concatenated embeddings and the per-well metadata that survived.
 
     Raises:
-        ValueError: If *loader* yields no wells at all.
+        ValueError: If *loader* yields no wells at all, or *text_projection*
+            is given without *text_cache*.
     """
-    from morphoclip.training.evaluate import lookup_text_embeddings
+    if text_projection is not None and text_cache is None:
+        raise ValueError("text_cache is required when text_projection is given")
 
     image_embs: list[torch.Tensor] = []
     text_embs: list[torch.Tensor] = []
@@ -246,16 +250,18 @@ def encode_wells(
         if not pert_infos:
             continue
 
-        features = batch["features"].to(device, non_blocking=True)
-        site_mask = batch["site_mask"].to(device, non_blocking=True)
         with autocast_context(device, amp):
-            image_emb = image_encoder(features, site_mask)
-            if plate_offsets is not None:
-                image_emb = plate_offsets.apply(image_emb, batch["plates"])
+            image_emb, text_emb = encode_batch(
+                batch,
+                image_encoder,
+                text_projection,
+                text_cache,
+                device=device,
+                plate_offsets=plate_offsets,
+            )
             image_embs.append(image_emb.cpu())
-            if text_projection is not None:
-                raw_text = lookup_text_embeddings(pert_infos, text_cache or {}, device)
-                text_embs.append(text_projection(raw_text).cpu())
+            if text_emb is not None:
+                text_embs.append(text_emb.cpu())
 
         result.plates.extend(batch["plates"])
         result.wells.extend(batch["wells"])
