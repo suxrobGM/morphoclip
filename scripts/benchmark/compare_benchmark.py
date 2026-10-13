@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 """Compare two or more benchmark output directories."""
 
+import sys
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
 
-from benchmark.plot import RunSpec, generate_benchmark_comparison
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from benchmark.plot import RunSpec, generate_benchmark_comparison  # noqa: E402
 
 console = Console()
 

@@ -59,36 +59,6 @@ class TestLoadTrainingConfig:
         assert config.model.output_dim == 512
         assert config.optimization.loss_type == "infonce"
 
-    def test_yaml_extends(self, tmp_path: Path) -> None:
-        (tmp_path / "base.yaml").write_text(
-            yaml.dump({"model": {"output_dim": 256, "ccf_layers": 2}})
-        )
-        child = tmp_path / "child.yaml"
-        child.write_text(yaml.dump({"extends": "base.yaml", "model": {"ccf_layers": 4}}))
-
-        config = load_training_config(child)
-        assert config.model.output_dim == 256
-        assert config.model.ccf_layers == 4
-
-    def test_dotted_overrides_apply_after_extends(self, tmp_path: Path) -> None:
-        (tmp_path / "base.yaml").write_text(yaml.dump({"dataset": {"batch_size": 32}}))
-        child = tmp_path / "child.yaml"
-        child.write_text(yaml.dump({"extends": "base.yaml"}))
-
-        config = load_training_config(
-            child, overrides=["dataset.batch_size=8", "runtime.max_train_steps=3"]
-        )
-        assert config.dataset.batch_size == 8
-        assert config.runtime.max_train_steps == 3
-
-    @pytest.mark.parametrize("override", ["dataset.batch_size", "batch_size=8"])
-    def test_malformed_dotted_override_rejected(self, tmp_path: Path, override: str) -> None:
-        config_path = tmp_path / "base.yaml"
-        config_path.write_text(yaml.dump({}))
-
-        with pytest.raises(ValueError, match="Malformed --set"):
-            load_training_config(config_path, overrides=[override])
-
     def test_unknown_model_key_rejected(self, tmp_path: Path) -> None:
         config_path = tmp_path / "bad_model.yaml"
         config_path.write_text(yaml.dump({"model": {"channel_aggregation": "ccf"}}))

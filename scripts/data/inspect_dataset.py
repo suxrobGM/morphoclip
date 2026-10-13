@@ -12,22 +12,31 @@ Examples:
 import inspect
 import json
 import statistics
+import sys
 import tempfile
 from collections import Counter
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
 
+import torch
 import typer
 from rich.console import Console
 
-from morphoclip.data import dataset as dataset_module
-from morphoclip.data import metadata as metadata_module
-from morphoclip.data import perturbation
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from text_level import TextLevel
+
 from morphoclip.data.config import load_dataset_config
-from morphoclip.data.perturbation import PerturbationType
-from morphoclip.splits import api as splits_api
-from morphoclip.splits import contexts as split_contexts
+from morphoclip.data.dataset import MorphoCLIPDataset, MorphoCLIPSample, collate_fn
+from morphoclip.data.metadata import MetadataIndex
+from morphoclip.data.perturbation import (
+    PerturbationType,
+    extract_plate_barcode,
+    row_col_from_well,
+)
+from morphoclip.splits.api import build_split_groups, create_splits
+from morphoclip.splits.contexts import METADATA_PATH
 
 console = Console()
 
@@ -37,19 +46,13 @@ class Mode(StrEnum):
     tensors = "tensors"
 
 
-class TextLevel(StrEnum):
-    name_only = "name_only"
-    name_target = "name_target"
-    full = "full"
-
-
 class SplitStrategy(StrEnum):
     cpjump1_official_representation = "cpjump1_official_representation"
     cpjump1_official_gene_compound = "cpjump1_official_gene_compound"
     cellclip_cpjump_style = "cellclip_cpjump_style"
 
 
-def _normalize_plates(raw_plates: list[str], extract_plate_barcode: Any) -> list[str]:
+def _normalize_plates(raw_plates: list[str]) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
     for plate in raw_plates:
@@ -66,12 +69,7 @@ def _auto_detect_plates(feature_dir: Path) -> list[str]:
     return sorted(path.name for path in feature_dir.iterdir() if path.is_dir())
 
 
-def _create_demo_dataset(
-    root: Path,
-    mode: str,
-    row_col_from_well: Any,
-    torch: Any,
-) -> list[str]:
+def _create_demo_dataset(root: Path, mode: str) -> list[str]:
     demo_layout = {
         "BR00116991": {"A01": 2, "A02": 1, "A03": 2, "A04": 3},
         "BR00117000": {"A01": 2, "A02": 2, "A03": 1, "A04": 2},
@@ -129,7 +127,7 @@ def _build_metadata_only_dataset(
     return _IndexOnlyDataset(metadata=metadata, index_entries=index_entries)
 
 
-def _summarize_dataset(dataset: Any, extract_plate_barcode: Any) -> dict[str, Any]:
+def _summarize_dataset(dataset: Any) -> dict[str, Any]:
     entries = dataset.index_entries
     plates = [plate for plate, _, _ in entries]
     wells = [well for _, well, _ in entries]
@@ -210,8 +208,6 @@ def _summarize_splits(train: Any, val: Any, test: Any) -> dict[str, Any]:
 def _summarize_groups(
     dataset: Any,
     strategy: str,
-    build_split_groups: Any,
-    extract_plate_barcode: Any,
     group_limit: int,
     member_limit: int,
     show_all: bool,
@@ -442,17 +438,6 @@ def main(
     ] = False,
 ) -> None:
     """Inspect MorphoCLIPDataset indexing, sample loading, and split behavior."""
-    extract_plate_barcode = perturbation.extract_plate_barcode
-    row_col_from_well = perturbation.row_col_from_well
-    MetadataIndex = metadata_module.MetadataIndex
-    MorphoCLIPDataset = dataset_module.MorphoCLIPDataset
-    MorphoCLIPSample = dataset_module.MorphoCLIPSample
-    collate_fn = dataset_module.collate_fn
-
-    create_splits = splits_api.create_splits
-    build_split_groups = splits_api.build_split_groups
-    metadata_path = split_contexts.METADATA_PATH
-
     pert_types_set = set(pert_types) if pert_types is not None else None
 
     cfg = load_dataset_config(config)
@@ -462,11 +447,11 @@ def main(
     batch_value = batch or cfg.batch
 
     if plates is not None:
-        resolved_plates = _normalize_plates(plates, extract_plate_barcode)
+        resolved_plates = _normalize_plates(plates)
     else:
         resolved_plates = _auto_detect_plates(feature_dir)
         if not resolved_plates and not feature_dir.exists():
-            resolved_plates = _normalize_plates(cfg.plates, extract_plate_barcode)
+            resolved_plates = _normalize_plates(cfg.plates)
 
     payload: dict[str, Any] = {
         "class_schema": {
@@ -489,7 +474,7 @@ def main(
             "plates": resolved_plates,
             "demo": demo,
             "inspection_basis": "feature_index",
-            "experiment_metadata_path": str(metadata_path),
+            "experiment_metadata_path": str(METADATA_PATH),
         },
         "dataset_summary": {},
         "sample_index": sample_index,
@@ -501,10 +486,9 @@ def main(
     }
 
     with tempfile.TemporaryDirectory(prefix="inspect_dataset_") as tmpdir:
-        torch = dataset_module.torch
         if demo:
             feature_dir = Path(tmpdir)
-            resolved_plates = _create_demo_dataset(feature_dir, mode, row_col_from_well, torch)
+            resolved_plates = _create_demo_dataset(feature_dir, mode)
             payload["inputs"]["feature_dir"] = str(feature_dir)
             payload["inputs"]["plates"] = resolved_plates
 
@@ -523,7 +507,7 @@ def main(
         inspection_dataset = dataset
         if len(dataset) == 0 and (split_strategy is not None or list_groups is not None):
             if not resolved_plates:
-                resolved_plates = _normalize_plates(cfg.plates, extract_plate_barcode)
+                resolved_plates = _normalize_plates(cfg.plates)
             if not resolved_plates:
                 resolved_plates = metadata.plates()
 
@@ -536,7 +520,7 @@ def main(
                 pert_types=pert_types_set,
             )
 
-        payload["dataset_summary"] = _summarize_dataset(inspection_dataset, extract_plate_barcode)
+        payload["dataset_summary"] = _summarize_dataset(inspection_dataset)
 
         if sample_index is not None:
             if not (0 <= sample_index < len(dataset)):
@@ -568,8 +552,6 @@ def main(
                 _summarize_groups(
                     inspection_dataset,
                     strategy=strategy,
-                    build_split_groups=build_split_groups,
-                    extract_plate_barcode=extract_plate_barcode,
                     group_limit=group_limit,
                     member_limit=group_member_limit,
                     show_all=show_all,

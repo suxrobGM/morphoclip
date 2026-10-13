@@ -19,8 +19,6 @@ The dev loop (tests, lint, types) runs through [poe](https://poethepoet.natn.io/
 | Run inference                   | `uv run morphoclip infer --checkpoint <path>`                         |
 | Run tests, lint and type checks | `uv run poe check`                                                    |
 
-`uv run poe train` is shorthand for the training row, which is the one command with a default config.
-
 ## Training Pipeline
 
 ```bash
@@ -30,8 +28,8 @@ uv run morphoclip features download
 # 2. Pre-compute text embeddings (once)
 uv run morphoclip text precompute
 
-# 3. Train MorphoCLIP (default config configs/train/base.yaml)
-uv run poe train
+# 3. Train MorphoCLIP
+uv run morphoclip train --config configs/train/base.yaml
 
 # 4. Evaluate a trained checkpoint
 uv run morphoclip eval --checkpoint output/morphoclip_runs/default/checkpoints/best.pt
@@ -62,7 +60,7 @@ Alternative configs:
 
 ## Multi-GPU Training
 
-Replace `poe train` with a direct `torchrun` invocation and add `--distributed`:
+Launch the `train` command through `torchrun` and add `--distributed`:
 
 ```bash
 # MorphoCLIP on 4 GPUs

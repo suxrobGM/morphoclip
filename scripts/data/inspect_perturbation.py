@@ -7,13 +7,17 @@ Examples:
 """
 
 import json
+import sys
 from dataclasses import fields
-from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 from rich.console import Console
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from text_level import TextLevel
 
 from morphoclip.data.perturbation import (
     PerturbationInfo,
@@ -22,12 +26,6 @@ from morphoclip.data.perturbation import (
 )
 
 console = Console()
-
-
-class Level(StrEnum):
-    name_only = "name_only"
-    name_target = "name_target"
-    full = "full"
 
 
 def _type_name(value: Any) -> str:
@@ -161,8 +159,9 @@ def main(
     plate: Annotated[str | None, typer.Option(help="Plate barcode, e.g. BR00116991.")] = None,
     well: Annotated[str | None, typer.Option(help="Well position, e.g. A01.")] = None,
     level: Annotated[
-        Level, typer.Option(help="Text generation level used for examples and metadata lookup.")
-    ] = Level.full,
+        TextLevel,
+        typer.Option(help="Text generation level used for examples and metadata lookup."),
+    ] = TextLevel.full,
     example_type: Annotated[
         PerturbationType | None,
         typer.Option(help="Restrict template output to one perturbation type."),
@@ -187,8 +186,7 @@ def main(
                 "pert_type": pert_type.value,
                 "info": _info_to_dict(info),
                 "text_by_level": {
-                    text_level: generate_text(info, level=text_level)
-                    for text_level in ("name_only", "name_target", "full")
+                    text_level: generate_text(info, level=text_level) for text_level in TextLevel
                 },
             }
         )

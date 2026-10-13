@@ -67,7 +67,7 @@ def _check_imports() -> tuple[bool, list[str]]:
         try:
             importlib.import_module(module_name)
             messages.append(f"[OK] import {module_name}")
-        except Exception as exc:
+        except ImportError as exc:
             all_ok = False
             messages.append(f"[FAIL] import {module_name}: {exc}")
     return all_ok, messages
@@ -79,7 +79,7 @@ def _check_optional_imports() -> list[str]:
         try:
             importlib.import_module(module_name)
             messages.append(f"[OK] import {module_name}")
-        except Exception:
+        except ImportError:
             messages.append(f"[WARN] import {module_name}: not installed (optional)")
     return messages
 
@@ -107,7 +107,7 @@ def _check_torch(device_mode: str, expected_cuda: str | None) -> tuple[bool, lis
     messages: list[str] = []
     try:
         import torch
-    except Exception as exc:
+    except ImportError as exc:
         return False, [f"[FAIL] import torch: {exc}"]
 
     ok = True

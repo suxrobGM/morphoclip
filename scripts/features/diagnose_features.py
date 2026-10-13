@@ -17,6 +17,7 @@ Usage:
 
 import json
 import random
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -29,6 +30,8 @@ import torch
 import typer
 from rich.console import Console
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
 from morphoclip.data.config import load_dataset_config
 from morphoclip.data.image_loader import CHANNEL_NAMES, FLUORESCENCE_CHANNELS
 
@@ -37,6 +40,7 @@ console = Console()
 # Short labels for plots
 CH_LABELS: list[str] = [CHANNEL_NAMES[ch] for ch in FLUORESCENCE_CHANNELS]
 CH_SHORT: list[str] = ["Mito", "Actin", "Golgi/PM", "ER", "DNA"]
+CH_COLORS: list[str] = ["#c44e52", "#dd8452", "#55a868", "#ccb974", "#4c72b0"]
 
 
 def load_features(
@@ -44,24 +48,18 @@ def load_features(
     *,
     max_sites: int = 500,
     seed: int = 42,
-) -> tuple[torch.Tensor, list[str]]:
+) -> torch.Tensor:
     """Load feature .pt files, randomly sampling if needed.
 
     Returns:
-        ``(features, names)``, features shaped ``(N, 5, D)``.
+        Features shaped ``(N, 5, D)``.
     """
     pt_files = sorted(feature_dir.glob("*.pt"))
     if len(pt_files) > max_sites:
         random.seed(seed)
         pt_files = sorted(random.sample(pt_files, max_sites))
 
-    features = []
-    names = []
-    for f in pt_files:
-        features.append(torch.load(f, weights_only=True))
-        names.append(f.stem)
-
-    return torch.stack(features), names
+    return torch.stack([torch.load(f, weights_only=True) for f in pt_files])
 
 
 def cosine_sim(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -252,12 +250,11 @@ def plot_similarity_heatmap(metrics: dict, output_dir: Path) -> Path:
 def plot_norm_distributions(features: torch.Tensor, output_dir: Path) -> Path:
     """Save L2 norm histograms per channel."""
     n_channels = features.shape[1]
-    colors = ["#c44e52", "#dd8452", "#55a868", "#ccb974", "#4c72b0"]
 
     fig, axes = plt.subplots(1, n_channels, figsize=(3.2 * n_channels, 3), sharey=True)
-    for i, (_ch, ax) in enumerate(zip(FLUORESCENCE_CHANNELS, axes, strict=True)):
+    for i, ax in enumerate(axes):
         norms = features[:, i, :].norm(dim=-1).numpy()
-        ax.hist(norms, bins=40, color=colors[i], edgecolor="white", alpha=0.85)
+        ax.hist(norms, bins=40, color=CH_COLORS[i], edgecolor="white", alpha=0.85)
         ax.set_title(CH_SHORT[i], fontsize=10)
         ax.set_xlabel("L2 Norm")
         ax.axvline(
@@ -298,11 +295,12 @@ def plot_pca_channels(features: torch.Tensor, output_dir: Path, *, seed: int = 4
     _, _s, v = torch.svd_lowrank(flat_centered, q=10)
     proj = (flat_centered @ v[:, :2]).numpy()
 
-    colors = ["#c44e52", "#dd8452", "#55a868", "#ccb974", "#4c72b0"]
     fig, ax = plt.subplots(figsize=(7, 6))
     for i in range(n_channels):
         mask = ch_labels == i
-        ax.scatter(proj[mask, 0], proj[mask, 1], s=8, alpha=0.4, color=colors[i], label=CH_SHORT[i])
+        ax.scatter(
+            proj[mask, 0], proj[mask, 1], s=8, alpha=0.4, color=CH_COLORS[i], label=CH_SHORT[i]
+        )
 
     ax.legend(markerscale=3, fontsize=9)
     ax.set_xlabel("PC1")
@@ -405,7 +403,7 @@ def main(
         n_files = len(list(feature_dir.glob("*.pt")))
         console.rule(f"[bold blue]Diagnosing {plate} ({n_files} sites)")
 
-        features, _names = load_features(feature_dir, max_sites=max_sites)
+        features = load_features(feature_dir, max_sites=max_sites)
         console.print(f"  Loaded {features.shape[0]} sites, shape: {tuple(features.shape)}")
 
         console.print("  Computing metrics...")
@@ -417,17 +415,13 @@ def main(
         console.print(f"  [dim]{metrics_path}[/dim]")
 
         console.print("  Generating plots...")
-        for plot_fn in [
-            plot_similarity_heatmap,
-            plot_norm_distributions,
-            plot_pca_channels,
-            plot_pca_variance,
-            plot_variance_decomp,
-        ]:
-            if plot_fn in (plot_norm_distributions, plot_pca_channels):
-                path = plot_fn(features, out_dir)
-            else:
-                path = plot_fn(metrics, out_dir)
+        for path in (
+            plot_similarity_heatmap(metrics, out_dir),
+            plot_norm_distributions(features, out_dir),
+            plot_pca_channels(features, out_dir),
+            plot_pca_variance(metrics, out_dir),
+            plot_variance_decomp(metrics, out_dir),
+        ):
             console.print(f"  [dim]{path}[/dim]")
 
         console.print()

@@ -103,8 +103,6 @@ format-check = "ruff format --check ."
 typecheck = "mypy src"
 check = ["format-check", "lint", "typecheck", "test"]
 
-train = "morphoclip train --config configs/train/base.yaml"
-benchmark = "morphoclip benchmark --config configs/benchmark.yml"
 tensorboard = "python -m tensorboard.main --logdir output/morphoclip_runs"
 
 report = "latexmk -pdf -r report/.latexmkrc -cd report/main.tex"
@@ -138,7 +136,7 @@ warn_unused_ignores = true
 strict_equality = true
 
 [[tool.mypy.overrides]]
-module = ["copairs.*", "cv2.*", "seaborn.*", "skimage.*", "sklearn.*", "torchvision.*", "tqdm.*"]
+module = ["copairs.*", "cv2.*", "seaborn.*", "skimage.*", "sklearn.*", "torchvision.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -1,5 +1,5 @@
 # Multi-GPU DDP training configuration.
-# Launch with: uv run torchrun--nproc_per_node=NUM_GPUS -m morphoclip.cli train --config configs/train/ddp.yaml --distributed
+# Launch with: uv run torchrun --nproc_per_node=NUM_GPUS -m morphoclip.cli train --config configs/train/ddp.yaml --distributed
 
 extends: base.yaml
 
@@ -9,5 +9,4 @@ dataset:
 
 distributed:
   enabled: true
-  gradient_accumulation_steps: 1
   # backend resolves to "nccl" automatically (cuda is required for DDP here).

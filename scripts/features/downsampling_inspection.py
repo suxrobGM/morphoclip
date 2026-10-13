@@ -2,8 +2,7 @@
 
 import csv
 import random
-from collections.abc import Iterable
-from enum import StrEnum
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -13,98 +12,26 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
-import torch.nn.functional as F
 import typer
 from PIL import Image
 from rich.console import Console
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from image_sources import (
+    InterpMode,
+    Source,
+    load_grayscale_array,
+    resize_float_image,
+    resolve_input_dir,
+    to_unit_float,
+)
+
 from morphoclip.data.image_loader import FLUORESCENCE_CHANNELS, parse_filename
 
 DEFAULT_OUTPUT_DIR = Path("output/downsampling_inspection")
-DEFAULT_RAW_ROOTS = (Path("data/raw/images"), Path("data/raw"))
-DEFAULT_COMPRESSED_ROOTS = (Path("data/raw_compressed"),)
 
 console = Console()
-
-
-class Source(StrEnum):
-    auto = "auto"
-    raw = "raw"
-    raw_compressed = "raw_compressed"
-
-
-class InterpMode(StrEnum):
-    nearest = "nearest"
-    bilinear = "bilinear"
-    bicubic = "bicubic"
-
-
-def has_valid_images(image_dir: Path, channels: set[int]) -> bool:
-    try:
-        for path in image_dir.iterdir():
-            if not path.is_file():
-                continue
-            parsed = parse_filename(path.name)
-            if parsed is None:
-                continue
-            _, channel = parsed
-            if channel in channels:
-                return True
-    except FileNotFoundError as exc:
-        raise FileNotFoundError(f"Image directory does not exist: {image_dir}") from exc
-    return False
-
-
-def iter_candidate_image_dirs(root: Path, plate: str | None) -> Iterable[Path]:
-    if not root.exists():
-        return
-    for image_dir in root.rglob("Images"):
-        if not image_dir.is_dir():
-            continue
-        if plate and plate not in image_dir.as_posix():
-            continue
-        yield image_dir
-
-
-def resolve_input_dir(
-    source: str,
-    input_dir: Path | None,
-    plate: str | None,
-    channels: set[int],
-) -> tuple[str, Path]:
-    if input_dir is not None:
-        if not input_dir.exists():
-            raise FileNotFoundError(f"Input directory not found: {input_dir}")
-        inferred_source = "raw_compressed" if "raw_compressed" in input_dir.as_posix() else "raw"
-        if not has_valid_images(input_dir, channels):
-            raise FileNotFoundError(f"No matching images found in {input_dir}")
-        return inferred_source, input_dir
-
-    search_order: list[tuple[str, tuple[Path, ...]]] = []
-    if source == "auto":
-        search_order = [
-            ("raw_compressed", DEFAULT_COMPRESSED_ROOTS),
-            ("raw", DEFAULT_RAW_ROOTS),
-        ]
-    elif source == "raw":
-        search_order = [("raw", DEFAULT_RAW_ROOTS)]
-    else:
-        search_order = [("raw_compressed", DEFAULT_COMPRESSED_ROOTS)]
-
-    for resolved_source, roots in search_order:
-        for root in roots:
-            for image_dir in iter_candidate_image_dirs(root, plate):
-                if has_valid_images(image_dir, channels):
-                    return resolved_source, image_dir
-
-    if plate:
-        raise FileNotFoundError(
-            f"No Images/ directory with matching files found for plate '{plate}'."
-        )
-    raise FileNotFoundError(
-        "No Images/ directory with matching files found under the configured roots."
-    )
 
 
 def discover_images(image_dir: Path, channels: set[int]) -> list[Path]:
@@ -158,40 +85,6 @@ def sample_demo_images(paths: list[Path], num_images: int, seed: int) -> list[Pa
             break
 
     return sampled
-
-
-def load_grayscale_array(path: Path) -> np.ndarray:
-    arr = np.asarray(Image.open(path))
-    if arr.ndim != 2:
-        raise ValueError(f"Expected grayscale image at {path}, got shape {arr.shape}")
-    return arr
-
-
-def to_unit_float(arr: np.ndarray) -> np.ndarray:
-    if arr.size == 0:
-        raise ValueError("Cannot resize an empty image.")
-
-    arr_float = arr.astype(np.float32)
-    if np.issubdtype(arr.dtype, np.integer):
-        max_value = float(np.iinfo(arr.dtype).max)
-        if max_value <= 0:
-            raise ValueError(f"Unsupported integer dtype for normalization: {arr.dtype}")
-        return arr_float / max_value
-
-    arr_min = float(arr_float.min())
-    arr_max = float(arr_float.max())
-    if arr_max <= arr_min:
-        return np.zeros_like(arr_float, dtype=np.float32)
-    return (arr_float - arr_min) / (arr_max - arr_min)
-
-
-def resize_float_image(arr: np.ndarray, height: int, width: int, mode: str) -> np.ndarray:
-    tensor = torch.from_numpy(arr).unsqueeze(0).unsqueeze(0)
-    kwargs: dict[str, object] = {"mode": mode}
-    if mode in {"bilinear", "bicubic"}:
-        kwargs["align_corners"] = False
-    resized = F.interpolate(tensor, size=(height, width), **kwargs)
-    return resized.squeeze(0).squeeze(0).numpy()
 
 
 def restore_dtype(arr: np.ndarray, dtype: np.dtype) -> np.ndarray:

@@ -134,7 +134,6 @@ def main(
     per_plate_grouped: list[pd.DataFrame] = []
     for plate_folder in plate_folders:
         plate_code = plate_folder.name.split("_")[0]
-        console.print(plate_code)
         plate_df = parse_plate_images(plate_folder, plate_code)
         if plate_df.empty:
             continue

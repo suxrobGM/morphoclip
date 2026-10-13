@@ -6,63 +6,37 @@ Usage:
     python scripts/text/inspect_text_embeddings.py --checkpoint path/to/best.pt
 """
 
+import sys
 from pathlib import Path
 from typing import Annotated
 
-import pandas as pd
 import torch
 import torch.nn.functional as F
 import typer
 from rich.console import Console
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from morphoclip.data.metadata import MetadataIndex
+from morphoclip.models.prompts import prompt_metadata_from_info
 from morphoclip.training.inference import load_models_from_checkpoint
+from morphoclip.utils.caching import get_perturbation_id
 from morphoclip.utils.device import resolve_device
 
 CACHE_PATH = "data/text/cached_text_features.pt"
-METADATA_DIR = Path("data/metadata/external_metadata")
+DATASET_CONFIG = Path("configs/dataset.yml")
 N = 5  # how many perturbations to inspect
 
 console = Console()
 
 
-def build_id_labels(metadata_dir: Path) -> dict[str, str]:
-    """Map perturbation_id (broad_sample / negcon) -> human-readable label."""
+def build_id_labels(index: MetadataIndex) -> dict[str, str]:
+    """Map each cached perturbation id to a readable "name (type)" label."""
     labels: dict[str, str] = {}
-
-    compound_path = metadata_dir / "JUMP-Target-1_compound_metadata_targets.tsv"
-    if not compound_path.exists():
-        compound_path = metadata_dir / "JUMP-Target-1_compound_metadata.tsv"
-    if compound_path.exists():
-        df = pd.read_csv(compound_path, sep="\t")
-        name_col = "pert_iname" if "pert_iname" in df.columns else "broad_sample"
-        for _, row in df.iterrows():
-            pid = str(row.get("broad_sample", "")).strip()
-            if not pid:
-                continue
-            name = str(row.get(name_col, pid)).strip()
-            labels[pid] = f"{name} (compound)"
-
-    crispr_path = metadata_dir / "JUMP-Target-1_crispr_metadata.tsv"
-    if crispr_path.exists():
-        df = pd.read_csv(crispr_path, sep="\t")
-        for _, row in df.iterrows():
-            pid = str(row.get("broad_sample", "")).strip()
-            if not pid:
-                continue
-            gene = str(row.get("gene", "")).strip() or pid
-            labels[pid] = f"{gene} (crispr)"
-
-    orf_path = metadata_dir / "JUMP-Target-1_orf_metadata.tsv"
-    if orf_path.exists():
-        df = pd.read_csv(orf_path, sep="\t")
-        for _, row in df.iterrows():
-            pid = str(row.get("broad_sample", "")).strip()
-            if not pid:
-                continue
-            gene = str(row.get("gene", "")).strip() or pid
-            labels[pid] = f"{gene} (orf)"
-
-    labels.setdefault("negcon", "negcon (control)")
+    for info in index.unique_perturbations():
+        pid = get_perturbation_id(prompt_metadata_from_info(info))
+        name = info.pert_iname or info.gene or pid
+        labels[pid] = f"{name} ({info.pert_type.value})"
     return labels
 
 
@@ -90,7 +64,7 @@ def main(
     emb_raw_small = emb_raw[:N].to(resolved_device)
     ids_small = ids[:N]
 
-    id_labels = build_id_labels(METADATA_DIR)
+    id_labels = build_id_labels(MetadataIndex.from_config(DATASET_CONFIG))
     pretty = [id_labels.get(pid, pid) for pid in ids_small]
 
     emb_raw_norm = F.normalize(emb_raw_small, dim=-1)

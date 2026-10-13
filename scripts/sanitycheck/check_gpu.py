@@ -161,7 +161,7 @@ def main(
     """Check GPU availability and VRAM statistics."""
     try:
         import torch
-    except Exception as exc:
+    except ImportError as exc:
         console.print(f"[FAIL] Could not import torch: {exc}", style="red", markup=False)
         raise typer.Exit(1) from exc
 
