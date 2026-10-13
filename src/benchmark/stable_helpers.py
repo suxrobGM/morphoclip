@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 
 from benchmark.data import ProfileLoader
 from benchmark.metrics import compute_fraction_retrieved, compute_map
-from benchmark.profiles import feature_columns
+from benchmark.profiles import feature_columns, metadata_columns
 
 
 def load_profiles_for_plates(
@@ -93,13 +93,11 @@ def fit_batch_correction(
     assert feature_cols is not None
     control_df = pd.concat(control_frames, ignore_index=True, join="inner")
     control_values = _coerce_feature_matrix(control_df, feature_cols)
-    control_count = int(control_values.shape[0])
+    control_count = control_values.shape[0]
     if control_count < 2:
         raise ValueError("Batch correction requires at least 2 control wells to fit KernelPCA.")
 
-    effective_n_components = min(
-        int(n_components), control_values.shape[0], control_values.shape[1]
-    )
+    effective_n_components = min(n_components, control_count, control_values.shape[1])
     if effective_n_components < 1:
         raise ValueError("Batch correction resolved to zero PCA components.")
 
@@ -115,7 +113,7 @@ def fit_batch_correction(
         ),
         kernel_pca=kernel_pca,
         scaler=scaler,
-        requested_n_components=int(n_components),
+        requested_n_components=n_components,
         effective_n_components=effective_n_components,
         control_count=control_count,
     )
@@ -139,8 +137,7 @@ def apply_batch_correction(
     projected = transform.kernel_pca.transform(feature_values)
     corrected_values = transform.scaler.transform(projected)
 
-    metadata_cols = [col for col in corrected.columns if col.startswith("Metadata")]
-    metadata_df = corrected.loc[:, metadata_cols].copy()
+    metadata_df = corrected.loc[:, metadata_columns(corrected)].copy()
     corrected_df = pd.DataFrame(
         corrected_values,
         columns=list(transform.output_feature_cols),
@@ -164,8 +161,6 @@ def run_with_unpaired_guard[**P](
     try:
         return func(*args, **kwargs)
     except Exception as exc:  # pragma: no cover - depends on runtime copairs behavior
-        if "old copairs API" in str(exc):
-            raise
         if type(exc).__name__ != "UnpairedException" and str(exc) != "dict_pairs empty":
             raise
         print(f"Warning: skipping run with no valid pairs ({exc}).")

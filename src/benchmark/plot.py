@@ -103,7 +103,6 @@ def collect_fraction_retrieved(
         df = load_fraction_retrieved(run.run_dir, spec)
         if df.empty:
             continue
-        df = df.copy()
         df["profile"] = run.label
         df["profile_slug"] = run.slug
         df["task"] = spec.name
@@ -150,7 +149,7 @@ def build_wide_comparison(
     if df.empty:
         return pd.DataFrame(columns=[*spec.key_columns, "task", "task_title", "plot_label"])
 
-    key_columns = [*list(spec.key_columns), "task", "task_title", "plot_label"]
+    key_columns = [*spec.key_columns, "task", "task_title", "plot_label"]
     wide = df.pivot_table(
         index=key_columns,
         columns="profile_slug",
@@ -284,8 +283,7 @@ def _plot_task_comparison(
         ax=ax,
     )
 
-    max_fr = float(plot_df["fr"].max()) if not plot_df["fr"].empty else 0.0
-    ax.set_xlim(0, max(1.05, max_fr + 0.1))
+    ax.set_xlim(0, max(1.05, float(plot_df["fr"].max()) + 0.1))
     ax.set_xlabel("Fraction Retrieved")
     ax.set_ylabel("")
     ax.set_title(str(plot_df["task_title"].iat[0]))
@@ -366,11 +364,10 @@ def generate_benchmark_comparison(
     output_dir: str | Path,
 ) -> tuple[dict[str, pd.DataFrame], dict[str, Path], dict[str, Path]]:
     """Generate merged comparison tables and plots for two or more benchmark runs."""
-    normalized_runs = [RunSpec(label=spec.label, run_dir=Path(spec.run_dir)) for spec in run_specs]
-    if len(normalized_runs) < 2:
+    if len(run_specs) < 2:
         raise ValueError("At least two benchmark runs are required for comparison")
 
-    comparisons = collect_all_fraction_retrieved(normalized_runs)
+    comparisons = collect_all_fraction_retrieved(run_specs)
     table_paths = save_comparison_tables(comparisons, output_dir)
     plot_paths = plot_benchmark_comparison(
         comparisons=comparisons,

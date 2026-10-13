@@ -20,6 +20,10 @@ CONFIG_PATH = Path("configs/benchmark.yml")
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+class BenchmarkInputError(ValueError):
+    """A missing input file, bad config or empty selection the user can fix."""
+
+
 def load_benchmark_config(path: Path) -> dict:
     """Load benchmark defaults from YAML if present."""
     if not path.exists():
@@ -29,22 +33,12 @@ def load_benchmark_config(path: Path) -> dict:
         raw = yaml.safe_load(f) or {}
 
     if not isinstance(raw, dict):
-        raise ValueError(f"Benchmark config must be a mapping: {path}")
+        raise BenchmarkInputError(f"Benchmark config must be a mapping: {path}")
 
     config = raw.get("benchmark", raw)
     if not isinstance(config, dict):
-        raise ValueError(f"Benchmark config section must be a mapping: {path}")
+        raise BenchmarkInputError(f"Benchmark config section must be a mapping: {path}")
     return config
-
-
-def resolve_path(project_root: Path, value: str | None) -> Path | None:
-    """Resolve an optional CLI/config path relative to the project root."""
-    if value is None:
-        return None
-    path = Path(value)
-    if path.is_absolute():
-        return path
-    return project_root / path
 
 
 @dataclass(frozen=True)
@@ -111,17 +105,19 @@ def resolve_params(
 
     project_root = _PROJECT_ROOT
     output_path = project_root / output_dir_arg
-    split_manifest_path = resolve_path(project_root, split_manifest_arg)
+    split_manifest_path = project_root / split_manifest_arg if split_manifest_arg else None
     subset = None
     manifest = None
 
     if split_manifest_path is not None:
         if split_subset_arg is None:
-            raise ValueError("--split-subset is required when --split-manifest is provided")
+            raise BenchmarkInputError(
+                "--split-subset is required when --split-manifest is provided"
+            )
         subset = normalize_subset_label(split_subset_arg)
         manifest = load_split_manifest(split_manifest_path, subset)
     elif split_subset_arg is not None:
-        raise ValueError("--split-subset requires --split-manifest")
+        raise BenchmarkInputError("--split-subset requires --split-manifest")
 
     return BenchmarkParams(
         project_root=project_root,

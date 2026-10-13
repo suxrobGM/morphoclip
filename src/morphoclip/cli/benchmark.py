@@ -39,18 +39,23 @@ def benchmark(
 ) -> None:
     """Run CPJUMP1 benchmark evaluation (stable copairs mode)."""
     from benchmark.stable import run_stable_benchmark
+    from benchmark.stable_config import BenchmarkInputError
 
-    run_stable_benchmark(
-        config=config,
-        profiles_dir=profiles_dir,
-        output_dir=output_dir,
-        batch=batch,
-        test_mode=test_mode,
-        cell_filter=cell_filter,
-        batch_correction=batch_correction,
-        pca_kernel=pca_kernel,
-        pca_n_components=pca_n_components,
-        split_manifest=split_manifest,
-        split_subset=split_subset,
-        timelines=timelines,
-    )
+    try:
+        run_stable_benchmark(
+            config=config,
+            profiles_dir=profiles_dir,
+            output_dir=output_dir,
+            batch=batch,
+            test_mode=test_mode,
+            cell_filter=cell_filter,
+            batch_correction=batch_correction,
+            pca_kernel=pca_kernel,
+            pca_n_components=pca_n_components,
+            split_manifest=split_manifest,
+            split_subset=split_subset,
+            timelines=timelines,
+        )
+    except BenchmarkInputError as exc:
+        typer.echo(f"ERROR: {exc}", err=True)
+        raise typer.Exit(1) from exc

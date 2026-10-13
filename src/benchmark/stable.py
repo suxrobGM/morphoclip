@@ -7,7 +7,6 @@ handling in :mod:`benchmark.stable_results`. The ``morphoclip benchmark`` CLI is
 thin wrapper over :func:`run_stable_benchmark`.
 """
 
-import sys
 import warnings
 from pathlib import Path
 
@@ -18,14 +17,16 @@ from benchmark.data import (
     filter_experiment_metadata_to_split_subset,
 )
 from benchmark.stable_compound import evaluate_compound
-from benchmark.stable_config import CONFIG_PATH, BenchmarkParams, resolve_params
+from benchmark.stable_config import (
+    CONFIG_PATH,
+    BenchmarkInputError,
+    BenchmarkParams,
+    resolve_params,
+)
 from benchmark.stable_genetic import evaluate_genetic
 from benchmark.stable_helpers import fit_batch_correction
 from benchmark.stable_results import StableResults
 from benchmark.timelines import get_timepoint_label
-
-warnings.simplefilter(action="ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 def _print_run_header(params: BenchmarkParams) -> None:
@@ -55,8 +56,9 @@ def _print_run_header(params: BenchmarkParams) -> None:
 def _load_experiment_metadata(params: BenchmarkParams) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Load and filter experiment metadata + target annotations.
 
-    Exits the process (``sys.exit(1)``) when required input files are missing or
-    no experiments survive the timeline/cell filters.
+    Raises:
+        BenchmarkInputError: If the experiment metadata or target annotations are missing,
+            or no experiments survive the timeline/cell filters.
     """
     exp_meta_path = params.project_root / "output/benchmark/input/experiment-metadata.tsv"
     target_ann_path = (
@@ -65,11 +67,9 @@ def _load_experiment_metadata(params: BenchmarkParams) -> tuple[pd.DataFrame, pd
     )
 
     if not exp_meta_path.exists():
-        print(f"ERROR: Missing experiment metadata: {exp_meta_path}")
-        sys.exit(1)
+        raise BenchmarkInputError(f"Missing experiment metadata: {exp_meta_path}")
     if not target_ann_path.exists():
-        print(f"ERROR: Missing target annotations: {target_ann_path}")
-        sys.exit(1)
+        raise BenchmarkInputError(f"Missing target annotations: {target_ann_path}")
 
     experiment_df = (
         pd.read_csv(exp_meta_path, sep="\t")
@@ -92,11 +92,10 @@ def _load_experiment_metadata(params: BenchmarkParams) -> tuple[pd.DataFrame, pd
     )
 
     if experiment_df.empty:
-        print(
-            "ERROR: No experiments matched the selected timeline(s): "
+        raise BenchmarkInputError(
+            "No experiments matched the selected timeline(s): "
             f"{', '.join(params.timelines)} for batch {params.batch}"
         )
-        sys.exit(1)
 
     target1_metadata = pd.read_csv(
         target_ann_path, sep="\t", usecols=["broad_sample", "target_list"]
@@ -113,8 +112,7 @@ def _load_experiment_metadata(params: BenchmarkParams) -> tuple[pd.DataFrame, pd
         experiment_df = experiment_df.query(f"Cell_type=='{params.cell_filter}'")
 
     if experiment_df.empty:
-        print("ERROR: No experiments remained after applying filters.")
-        sys.exit(1)
+        raise BenchmarkInputError("No experiments remained after applying filters.")
 
     return experiment_df, target1_metadata
 
@@ -138,6 +136,10 @@ def run_stable_benchmark(
 
     All arguments are optional CLI overrides; unset values fall back to the
     ``benchmark`` section of the YAML config at *config*.
+
+    Raises:
+        BenchmarkInputError: If a required input file is missing, the overrides
+            are inconsistent, or no experiments survive the filters.
     """
     params = resolve_params(
         config=config,
@@ -154,6 +156,16 @@ def run_stable_benchmark(
         timelines=timelines,
     )
 
+    # The pinned copairs stack and seaborn flood FutureWarning/RuntimeWarning,
+    # burying the progress output.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=FutureWarning)
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        _run(params)
+
+
+def _run(params: BenchmarkParams) -> None:
+    """Evaluate every selected cell/timepoint and write tables and figures."""
     params.output_path.mkdir(parents=True, exist_ok=True)
     params.figures_dir.mkdir(parents=True, exist_ok=True)
     params.tables_dir.mkdir(parents=True, exist_ok=True)

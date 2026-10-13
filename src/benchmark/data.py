@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 def normalize_subset_label(subset: str) -> str:
     """Normalize subset aliases to manifest labels."""
+    # Manifest cells read by pandas can be NaN floats, not strings.
     normalized = str(subset).strip().lower()
     if normalized == "val":
         return "validate"
@@ -168,15 +169,16 @@ def compute_consensus(
 
     Returns:
         DataFrame with one consensus profile per group.
-    """
-    metadata_df = metadata_frame(df).drop_duplicates(subset=[group_col])
-    assert metadata_df is not None, "metadata_df should not be None"
-    feature_cols = [group_col, *feature_columns(df)]
 
-    if agg_func == "median":
-        consensus_df = df[feature_cols].groupby(group_col).median().reset_index()
-    else:
-        consensus_df = df[feature_cols].groupby(group_col).mean().reset_index()
+    Raises:
+        ValueError: If *agg_func* is not 'median' or 'mean'.
+    """
+    if agg_func not in {"median", "mean"}:
+        raise ValueError(f"Unknown agg_func {agg_func!r}; expected 'median' or 'mean'")
+
+    metadata_df = metadata_frame(df).drop_duplicates(subset=[group_col])
+    feature_cols = [group_col, *feature_columns(df)]
+    consensus_df = df[feature_cols].groupby(group_col).agg(agg_func).reset_index()
 
     return metadata_df.merge(consensus_df, on=group_col)
 

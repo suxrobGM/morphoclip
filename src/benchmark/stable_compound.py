@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from benchmark.data import (
+    ProfileLoader,
     add_negcon_indicator,
     compute_consensus,
     filter_profiles_to_split_subset,
@@ -22,7 +23,6 @@ from benchmark.metrics import evaluate_matching, evaluate_replicability
 from benchmark.stable_config import BenchmarkParams
 from benchmark.stable_helpers import (
     BatchCorrectionTransform,
-    ProfileLoader,
     apply_batch_correction,
     load_profiles_for_plates,
     run_with_unpaired_guard,
@@ -63,13 +63,12 @@ def evaluate_compound(
     Returns the compound consensus context for the genetic step, or ``None`` when
     the modality has no data or no replicable pairs (caller should skip).
     """
-    modality_1_perturbation = MODALITY_1_PERTURBATION
     modality_1_timepoint_df = modality_1_experiments_df.query("Time==@modality_1_timepoint")
     modality_1_df = load_profiles_for_plates(
         loader=loader,
         batch=params.batch,
         plates=list(modality_1_timepoint_df.Assay_Plate_Barcode.unique()),
-        modality=modality_1_perturbation,
+        modality=MODALITY_1_PERTURBATION,
     )
     modality_1_df = filter_profiles_to_split_subset(
         modality_1_df,
@@ -78,15 +77,15 @@ def evaluate_compound(
     )
 
     if modality_1_df.empty:
-        print(f"Skipping {modality_1_perturbation}_{cell}_{modality_1_timepoint}h - no data")
+        print(f"Skipping {MODALITY_1_PERTURBATION}_{cell}_{modality_1_timepoint}h - no data")
         return None
 
     modality_1_df = apply_batch_correction(modality_1_df, correction_transform)
     modality_1_df[REPLICATE_FEATURE] = modality_1_df[REPLICATE_FEATURE].fillna("DMSO")
     modality_1_df = remove_empty_wells(modality_1_df)
 
-    _time = get_timepoint_label(modality_1_perturbation, modality_1_timepoint)
-    description = f"{modality_1_perturbation}_{cell}_{_time}"
+    _time = get_timepoint_label(MODALITY_1_PERTURBATION, modality_1_timepoint)
+    description = f"{MODALITY_1_PERTURBATION}_{cell}_{_time}"
     print(f"[{count}] Computing {description} replicability")
 
     result = run_with_unpaired_guard(
@@ -105,7 +104,7 @@ def evaluate_compound(
         group_cols=[REPLICATE_FEATURE],
         metadata={
             "Description": description,
-            "Modality": modality_1_perturbation,
+            "Modality": MODALITY_1_PERTURBATION,
             "Cell": cell,
             "time": _time,
             "timepoint": modality_1_timepoint,
@@ -128,7 +127,7 @@ def evaluate_compound(
     )
 
     modality_1_consensus_df = (
-        modality_1_consensus_df.merge(target1_metadata, on="Metadata_broad_sample", how="left")
+        modality_1_consensus_df.merge(target1_metadata, on=REPLICATE_FEATURE, how="left")
         .assign(Metadata_matching_target=lambda x: x.Metadata_target_list.str.split("|"))
         .drop(["Metadata_target_list"], axis=1)
     )
@@ -154,7 +153,7 @@ def evaluate_compound(
             group_cols=["Metadata_matching_target"],
             metadata={
                 "Description": description,
-                "Modality": modality_1_perturbation,
+                "Modality": MODALITY_1_PERTURBATION,
                 "Cell": cell,
                 "time": _time,
                 "timepoint": modality_1_timepoint,
@@ -165,5 +164,5 @@ def evaluate_compound(
         modality_1_consensus_df=modality_1_consensus_df,
         time_label=_time,
         timepoint=modality_1_timepoint,
-        perturbation=modality_1_perturbation,
+        perturbation=MODALITY_1_PERTURBATION,
     )

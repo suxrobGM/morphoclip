@@ -18,8 +18,7 @@ def _is_multiprocessing_permission_error(exc: Exception) -> bool:
     if isinstance(exc, PermissionError):
         return True
 
-    cause = getattr(exc, "__cause__", None)
-    if isinstance(cause, PermissionError):
+    if isinstance(exc.__cause__, PermissionError):
         return True
 
     message = str(exc).lower()
@@ -38,7 +37,7 @@ def _get_legacy_modules():
             results_to_dframe,
         )
         from copairs.matching import Matcher, MatcherMultilabel, dict_to_dframe
-    except Exception as exc:  # pragma: no cover - depends on installed copairs version
+    except ImportError as exc:  # pragma: no cover - depends on installed copairs version
         raise RuntimeError(STABLE_COPAIRS_ERROR) from exc
 
     return {

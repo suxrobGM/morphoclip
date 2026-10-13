@@ -148,11 +148,10 @@ def evaluate_replicability(
     )
 
     if negcon_col not in result.columns:
+        result = result.copy()
         if negcon_col in meta.columns and len(meta) == len(result):
-            result = result.copy()
             result[negcon_col] = meta[negcon_col].to_numpy()
         else:
-            result = result.copy()
             result[negcon_col] = 0
 
     return result.query(f"{negcon_col}==0").reset_index(drop=True)

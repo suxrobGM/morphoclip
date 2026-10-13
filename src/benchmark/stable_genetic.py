@@ -9,6 +9,7 @@ copairs/scikit-learn transitively, so it is only imported when the benchmark run
 import pandas as pd
 
 from benchmark.data import (
+    ProfileLoader,
     add_negcon_indicator,
     compute_consensus,
     filter_profiles_to_split_subset,
@@ -26,12 +27,11 @@ from benchmark.stable_compound import REPLICATE_FEATURE, CompoundContext
 from benchmark.stable_config import BenchmarkParams
 from benchmark.stable_helpers import (
     BatchCorrectionTransform,
-    ProfileLoader,
     apply_batch_correction,
     load_profiles_for_plates,
     run_with_unpaired_guard,
 )
-from benchmark.stable_results import StableResults, _already_computed
+from benchmark.stable_results import StableResults, already_computed
 from benchmark.timelines import get_timepoint_label
 
 
@@ -86,7 +86,7 @@ def evaluate_genetic(
             _time_2 = get_timepoint_label(modality_2_perturbation, modality_2_timepoint)
             description_2 = f"{modality_2_perturbation}_{cell}_{_time_2}"
 
-            if not _already_computed(results.replicability_map, description_2):
+            if not already_computed(results.replicability_map, description_2):
                 print(f"[{count}] Computing {description_2} replicability")
 
                 result = run_with_unpaired_guard(
@@ -114,7 +114,7 @@ def evaluate_genetic(
 
             modality_2_df = remove_negcon_wells(modality_2_df)
 
-            modality_2_consensus_df = compute_consensus(modality_2_df, "Metadata_broad_sample")
+            modality_2_consensus_df = compute_consensus(modality_2_df, REPLICATE_FEATURE)
 
             replicable_genes = list(
                 results.replicability_map[
@@ -136,7 +136,7 @@ def evaluate_genetic(
                 ~modality_2_consensus_df["Metadata_gene"].isin(genes_without_sister)
             ].reset_index(drop=True)
 
-            if modality_2_perturbation == "crispr" and not _already_computed(
+            if modality_2_perturbation == "crispr" and not already_computed(
                 results.matching_map, description_2
             ):
                 print(f"[{count}] Computing {description_2} matching")
@@ -201,14 +201,9 @@ def _evaluate_cross_modality(
     modality, then runs cross-modality matching and appends the result. Returns
     early (no-op) when there are no overlapping targets or no valid pairs.
     """
-    modality_1_consensus_df = compound.modality_1_consensus_df
-    modality_1_perturbation = compound.perturbation
-    _time = compound.time_label
-    modality_1_timepoint = compound.timepoint
-
     perturbed_genes = list(set(modality_2_consensus_df.Metadata_matching_target))
     modality_1_targets_df = (
-        modality_1_consensus_df[["Metadata_broad_sample", "Metadata_matching_target"]]
+        compound.modality_1_consensus_df[[REPLICATE_FEATURE, "Metadata_matching_target"]]
         .copy()
         .explode("Metadata_matching_target")
     )
@@ -218,16 +213,16 @@ def _evaluate_cross_modality(
             modality_1_targets_df["Metadata_matching_target"].isin(perturbed_genes)
         ]
         .reset_index(drop=True)
-        .groupby(["Metadata_broad_sample"])
+        .groupby([REPLICATE_FEATURE])
         .Metadata_matching_target.apply(list)
         .reset_index()
     )
 
-    modality_1_consensus_filtered_df = modality_1_consensus_df.drop(
+    modality_1_consensus_filtered_df = compound.modality_1_consensus_df.drop(
         columns=["Metadata_matching_target"]
     ).merge(
         modality_1_filtered_genes_df,
-        on="Metadata_broad_sample",
+        on=REPLICATE_FEATURE,
         how="inner",
     )
 
@@ -236,7 +231,8 @@ def _evaluate_cross_modality(
         return
 
     description_cross = (
-        f"{modality_1_perturbation}_{cell}_{_time}-{modality_2_perturbation}_{cell}_{time_2}"
+        f"{compound.perturbation}_{cell}_{compound.time_label}"
+        f"-{modality_2_perturbation}_{cell}_{time_2}"
     )
     print(f"[{count}] Computing {description_cross} matching")
 
@@ -262,12 +258,12 @@ def _evaluate_cross_modality(
         group_cols=["Metadata_matching_target"],
         metadata={
             "Description": description_cross,
-            "Modality1": modality_1_perturbation,
+            "Modality1": compound.perturbation,
             "Modality2": modality_2_perturbation,
             "Cell": cell,
-            "time1": _time,
+            "time1": compound.time_label,
             "time2": time_2,
-            "timepoint1": modality_1_timepoint,
+            "timepoint1": compound.timepoint,
             "timepoint2": modality_2_timepoint,
         },
     )
