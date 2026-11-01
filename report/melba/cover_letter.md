@@ -4,7 +4,7 @@ Before submitting: fill in the date and arXiv ID, confirm the AI-use and conflic
 with all co-authors, then paste the text into Scholastica or attach it as a PDF.
 -->
 
-[DATE]
+October 31, 2026
 
 Dear Editor,
 
@@ -37,7 +37,7 @@ We acknowledge that:
 
 This is an original submission and there is no other paper (published or under review) with
 significant overlapping content. A preprint of this manuscript is available on arXiv
-([arXiv ID]); it has not been peer reviewed.
+(arXiv:2608.22690); it has not been peer reviewed.
 
 Use of generative AI: AI writing assistants were used to edit the manuscript for language and
 clarity. They were not used for unsupervised content creation. All methods, experiments, analyses

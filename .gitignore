@@ -45,6 +45,7 @@ data/.cache/
 .idea/
 *.swp
 *.swo
+.playwright-mcp/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -70,3 +71,5 @@ output/
 # LaTeX build output. `.latexmkrc` sends every artifact, including main.pdf and
 # the arXiv tarball, into this one directory.
 report/build/
+
+.playwright-mcp/
